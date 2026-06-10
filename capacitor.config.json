@@ -1,0 +1,9 @@
+{
+  "appId": "com.foodhouse.app",
+  "appName": "플레이팅",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  }
+}
