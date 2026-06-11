@@ -12,17 +12,25 @@ const multer = require("multer");
 const app = express();
 const port = process.env.PORT || 4000;
 
-// 정적 파일 서빙 설정 (현재 폴더 d:/food 서빙)
-app.use(express.static(__dirname));
+// Render.com 등 리버스 프록시 환경에서 HTTPS 인식을 위한 설정
+app.set('trust proxy', 1);
+
+// 정적 파일 서빙 설정 (www 폴더만 서빙 - 보안을 위해 루트 전체 노출 방지)
+app.use(express.static(path.join(__dirname, "www")));
 app.use(express.json()); // JSON 파싱을 위해 추가
 app.use("/uploads", express.static(path.join(__dirname, "uploads"))); // 로컬 업로드 서빙
 
 app.use(
   session({
-    secret: "your session secret",
+    secret: process.env.SESSION_SECRET || "your session secret",
     resave: false,
     saveUninitialized: true,
-    cookie: { secure: false },
+    cookie: {
+      secure: true,       // HTTPS 환경에서만 쿠키 전송
+      sameSite: "lax",    // CSRF 보호
+      httpOnly: true,     // JS에서 쿠키 접근 차단
+      maxAge: 24 * 60 * 60 * 1000 // 24시간
+    },
   })
 );
 
