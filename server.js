@@ -377,6 +377,126 @@ app.get("/unlink", async function (req, res) {
   res.json({ success: true, detail: rtn });
 });
 
+// 실시간 링크 메타데이터 파싱 API (Naver Map 리다이렉트 및 플레이트 API 자동 추적 연동)
+app.get("/api/link-meta", async (req, res) => {
+  const { url } = req.query;
+  if (!url || !url.startsWith("http")) {
+    return res.status(400).json({ success: false, message: "올바르지 않은 URL입니다." });
+  }
+
+  const lowerUrl = url.toLowerCase();
+  let host = "";
+  try {
+    host = new URL(url).hostname.replace("www.", "");
+  } catch (e) {}
+
+  // 1. 네이버 지도 단축 링크/상세 주소 판별 및 네이버 내부 플레이스 summary API 호출
+  if (lowerUrl.includes("naver.me") || lowerUrl.includes("map.naver")) {
+    try {
+      const redirectRes = await axios.get(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+        },
+        maxRedirects: 5
+      });
+      const finalUrl = redirectRes.request.res.responseUrl || url;
+      
+      let placeId = null;
+      const placeMatch = finalUrl.match(/place\/(\d+)/);
+      if (placeMatch) {
+        placeId = placeMatch[1];
+      } else {
+        const pinIdMatch = finalUrl.match(/pinId=(\d+)/);
+        if (pinIdMatch) {
+          placeId = pinIdMatch[1];
+        }
+      }
+
+      if (placeId) {
+        const summaryUrl = `https://map.naver.com/p/api/place/summary/${placeId}?lang=ko`;
+        const summaryRes = await axios.get(summaryUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+            "Referer": "https://map.naver.com/"
+          }
+        });
+        if (summaryRes.status === 200 && summaryRes.data && summaryRes.data.data) {
+          const detail = summaryRes.data.data.placeDetail;
+          if (detail) {
+            let imgUrl = "https://ssl.pstatic.net/static/maps/m/navermap_80_80.png";
+            if (detail.images && detail.images.images && detail.images.images.length > 0) {
+              imgUrl = detail.images.images[0].origin;
+            }
+            return res.json({
+              success: true,
+              title: detail.name || "네이버 지도 장소",
+              image: imgUrl,
+              host: "naver.map"
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.error("네이버 지도 파싱 에러:", err.message);
+    }
+  }
+
+  // 2. 일반 사이트 크롤링 (Axios로 HTML 받아서 og 태그 파싱)
+  try {
+    const htmlRes = await axios.get(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+      },
+      timeout: 5000
+    });
+    
+    if (htmlRes.status === 200) {
+      const html = htmlRes.data;
+      
+      const ogTitleMatch = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i) ||
+                           html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i);
+      const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i) ||
+                           html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
+                           
+      let title = ogTitleMatch ? ogTitleMatch[1] : "";
+      let image = ogImageMatch ? ogImageMatch[1] : "";
+      
+      if (!title) {
+        const titleTagMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+        if (titleTagMatch) title = titleTagMatch[1];
+      }
+      
+      if (!image) {
+        const imgTagMatch = html.match(/<img[^>]*src=["']([^"']+)["']/i);
+        if (imgTagMatch) image = imgTagMatch[1];
+      }
+      
+      if (image && !image.startsWith("http")) {
+        try {
+          image = new URL(image, url).href;
+        } catch (e) {}
+      }
+
+      return res.json({
+        success: true,
+        title: title ? title.trim() : "상세 링크",
+        image: image || "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+        host: host
+      });
+    }
+  } catch (err) {
+    console.error("일반 링크 크롤링 에러:", err.message);
+  }
+
+  // Fallback
+  return res.json({
+    success: true,
+    title: "상세 링크",
+    image: "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+    host: host
+  });
+});
+
 app.listen(port, () => {
   console.log(`Server is running at ${domain}`);
 });

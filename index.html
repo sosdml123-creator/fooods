@@ -186,97 +186,32 @@
       if (!url || !url.startsWith("http")) {
         return null;
       }
+      try {
+        const response = await fetch(`/api/link-meta?url=${encodeURIComponent(url)}`);
+        if (response.ok) {
+          const res = await response.json();
+          if (res.success) {
+            return {
+              title: res.title,
+              image: res.image,
+              host: res.host
+            };
+          }
+        }
+      } catch (e) {
+        console.error("Backend fetchLinkMeta error:", e);
+      }
 
-      const lowerUrl = url.toLowerCase();
       let host = "shopping";
       try {
         host = new URL(url).hostname.replace("www.", "");
       } catch (e) {}
 
-      // 1. 하드코딩 매칭 (샥즈 오픈닷원 이어폰 감지)
-      if (lowerUrl.includes("shokz") || lowerUrl.includes("opendots") || lowerUrl.includes("earphone") || lowerUrl.includes("8349257") || lowerUrl.includes("shokz-opendots")) {
-        return {
-          title: "샥즈 신제품 쿠팡단독세트 샥즈 오픈닷원 OpenDots ONE E...",
-          image: "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&q=80&w=400",
-          host: host
-        };
-      }
-
-      // 2. 실시간 CORS 프록시 크롤링 시도 (allorigins.win API 활용)
-      try {
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-        const response = await fetch(proxyUrl);
-        if (response.ok) {
-          const data = await response.json();
-          const html = data.contents;
-
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(html, "text/html");
-
-          let title = "";
-          let image = "";
-
-          // Open Graph og:title / og:image 매핑
-          const ogTitle = doc.querySelector('meta[property="og:title"]');
-          const ogImage = doc.querySelector('meta[property="og:image"]');
-
-          if (ogTitle) title = ogTitle.getAttribute("content");
-          if (ogImage) image = ogImage.getAttribute("content");
-
-          // og 태그가 누락된 경우 일반 title/img 태그 파인딩
-          if (!title) {
-            const docTitle = doc.querySelector('title');
-            if (docTitle) title = docTitle.innerText;
-          }
-          if (!image) {
-            const firstImg = doc.querySelector('img');
-            if (firstImg) image = firstImg.src;
-          }
-
-          // 상대 경로 이미지의 절대 경로 주소 보정
-          if (image && !image.startsWith("http")) {
-            try {
-              image = new URL(image, url).href;
-            } catch (e) {}
-          }
-
-          if (title && image) {
-            return { title: title.trim(), image: image, host: host };
-          }
-        }
-      } catch (err) {
-        console.warn("CORS 프록시를 통한 상품 크롤링 실패, Fallback 데이터를 매핑합니다: ", err);
-      }
-
-      // 3. Fallback Mock 매칭 테이블
-      let matchedMock = {
-        title: `추천 상품 (${host})`,
-        image: fallbackImages[Math.floor(Math.random() * fallbackImages.length)],
+      return {
+        title: `상세 링크 (${host})`,
+        image: "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
         host: host
       };
-
-      if (lowerUrl.includes("coupang.com")) {
-        // 쿠팡 기본 상품 (기본적으로 샥즈 매치 처리하여 유저 요청 적극 수용)
-        matchedMock = {
-          title: "샥즈 신제품 쿠팡단독세트 샥즈 오픈닷원 OpenDots ONE E...",
-          image: "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&q=80&w=400",
-          host: "coupang.com"
-        };
-      } else if (lowerUrl.includes("naver.com") || lowerUrl.includes("smartstore")) {
-        matchedMock = {
-          title: "무쇠 미니 프라이팬 20cm (인덕션 겸용)",
-          image: "https://images.unsplash.com/photo-1584269600464-37b1b58a9fe7?auto=format&fit=crop&q=80&w=200",
-          host: "smartstore.naver.com"
-        };
-      } else if (lowerUrl.includes("kurly.com")) {
-        matchedMock = {
-          title: "무항생제 신선란 10구 (1등급)",
-          image: "https://images.unsplash.com/photo-1516448620398-c5f44bf9f441?auto=format&fit=crop&q=80&w=200",
-          host: "kurly.com"
-        };
-      }
-
-      return matchedMock;
     }
 
 
@@ -645,17 +580,11 @@
         badgeType = "shop";
       }
 
-      // 포인트 가상 시스템 (+10P 뱃지)
-      const offersPoint = post.likeCount > 20;
-
       return (
         <article className="feed-card" onClick={onCardClick}>
           <div className="feed-card-image-wrapper">
             {badgeText && (
               <span className={`feed-badge ${badgeType}`}>{badgeText}</span>
-            )}
-            {offersPoint && (
-              <span className="feed-badge point" style={{ left: "auto", right: "8px" }}>+10P</span>
             )}
             <img 
               className="feed-card-image" 
@@ -918,28 +847,28 @@
       return (
         <section className="my-page">
           <div className="px-4 pt-3 flex items-center gap-2">
-            <button className="text-zinc-500 text-sm py-1.5 active:scale-95 transition-transform" onClick={onBack}>
-              <i className="fa-solid fa-chevron-left mr-1"></i> 피드로 가기
+            <button className="text-zinc-500 text-lg py-1.5 active:scale-95 transition-transform" onClick={onBack} aria-label="뒤로가기">
+              <i className="fa-solid fa-chevron-left"></i>
             </button>
           </div>
 
           <div className="my-card">
-            <div className="flex justify-between items-start">
-              <div className="my-profile">
-                <span className="avatar overflow-hidden">
+            <div className="flex items-center justify-between gap-4">
+              <div className="my-profile flex-1 min-w-0 mb-0">
+                <span className="avatar overflow-hidden flex-shrink-0">
                   {creatorInfo.avatarImg ? <img src={creatorInfo.avatarImg} alt="" className="w-full h-full object-cover" /> : userName.slice(0, 1)}
                 </span>
-                <div>
-                  <h2 className="flex items-center gap-1.5 font-bold">
+                <div className="flex-1 min-w-0">
+                  <h2 className="flex items-center gap-1.5 font-bold text-sm truncate">
                     {userName}
-                    {isFollowing && <span className="text-[9px] bg-zinc-100 text-zinc-500 border border-zinc-300 font-normal px-1.5 py-0.5 rounded">팔로잉 중</span>}
+                    {isFollowing && <span className="text-[9px] bg-zinc-100 text-zinc-500 border border-zinc-300 font-normal px-1.5 py-0.5 rounded flex-shrink-0">팔로잉 중</span>}
                   </h2>
-                  <p>{creatorInfo.bio}</p>
+                  <p className="text-zinc-500 text-xs mt-1 break-all whitespace-normal">{creatorInfo.bio || "소개글이 없습니다."}</p>
                 </div>
               </div>
               
               <button 
-                className={`text-[11px] font-bold px-4 py-1.5 rounded-full transition-colors ${isFollowing ? 'secondary' : 'primary'}`}
+                className={`text-[11px] font-bold px-4 py-1.5 rounded-full transition-colors flex-shrink-0 ${isFollowing ? 'secondary' : 'primary'}`}
                 onClick={onFollowToggle}
               >
                 {isFollowing ? "팔로잉" : "팔로우"}
@@ -1148,7 +1077,7 @@
           {/* 플로팅 글쓰기 버튼 */}
           <button 
             className="community-fab"
-            style={{ position: "absolute", bottom: "80px", right: "20px", zIndex: 50 }}
+            style={{ position: "fixed", bottom: "80px", right: "20px", zIndex: 50 }}
             onClick={onOpenCommunityWrite}
             aria-label="커뮤니티 글쓰기"
           >
@@ -1380,28 +1309,12 @@
         ? myPosts 
         : myPosts.filter(post => post.category === myCategory);
 
-      async function handlePhotoChange(e) {
+      function handlePhotoChange(e) {
         const file = e.target.files?.[0];
         if (!file) return;
-
-        const formData = new FormData();
-        formData.append("file", file);
-
-        try {
-          const res = await fetch("/upload", {
-            method: "POST",
-            body: formData
-          });
-          const data = await res.json();
-          if (data.success) {
-            setEditPhoto(data.url);
-          } else {
-            alert("프로필 사진 업로드 실패: " + data.message);
-          }
-        } catch (err) {
-          console.error("프로필 업로드 에러:", err);
-          alert("이미지 업로드 중 오류가 발생했습니다.");
-        }
+        const reader = new FileReader();
+        reader.onload = () => setEditPhoto(reader.result);
+        reader.readAsDataURL(file);
       }
 
       function handleSave() {
@@ -1656,10 +1569,10 @@
     }
 
     // 최대 10개 및 총 용량 20MB 제한 (초과 시 자동 압축 지원) 글쓰기 시트
-    function WriteSheet({ onClose, onCreate }) {
+    function WriteSheet({ onClose, onCreate, initialImages = [] }) {
       const [title, setTitle] = useState("");
       const [body, setBody] = useState("");
-      const [images, setImages] = useState([]); // 이미지 주소 배열 관리
+      const [images, setImages] = useState(initialImages); // 이미지 주소 배열 관리
       const [category, setCategory] = useState("레시피");
       const [links, setLinks] = useState([{ id: generateId(), url: "" }]);
       const [loading, setLoading] = useState(false);
@@ -1670,58 +1583,139 @@
       const [voucherTitle, setVoucherTitle] = useState("");
       const [voucherPrice, setVoucherPrice] = useState("");
 
-      async function handlePhoto(e) {
-        const files = Array.from(e.target.files).slice(0, 10); // 최대 10장 한도
-        if (files.length === 0) return;
+      const fileInputRef = useRef(null);
 
-        setLoading(true);
-        const uploadedUrls = [];
+      const [linkPreviews, setLinkPreviews] = useState({}); // key: link.id, value: { url, title, image, host, loading }
 
-        for (const file of files) {
-          const formData = new FormData();
-          formData.append("file", file);
+      function parsePastedMapText(text) {
+        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        let parsed = { url: "", name: "", address: "" };
+        
+        const urlMatch = text.match(/(https?:\/\/[^\s\n\r]+)/);
+        if (urlMatch) {
+          parsed.url = urlMatch[0];
+        }
+        
+        const mapIdx = lines.findIndex(l => l.includes("[네이버지도]"));
+        if (mapIdx !== -1) {
+          if (lines[mapIdx + 1] && !lines[mapIdx + 1].startsWith("http") && !lines[mapIdx + 1].includes("[네이버지도]")) {
+            parsed.name = lines[mapIdx + 1];
+          }
+          if (lines[mapIdx + 2] && !lines[mapIdx + 2].startsWith("http")) {
+            parsed.address = lines[mapIdx + 2];
+          }
+        }
+        return parsed;
+      }
 
+      function handleUrlChange(id, value) {
+        const parsed = parsePastedMapText(value);
+        if (parsed.url) {
+          setLinks(links.map(item => item.id === id ? { 
+            ...item, 
+            url: parsed.url, 
+            parsedName: parsed.name, 
+            parsedAddress: parsed.address 
+          } : item));
+          
+          if (parsed.name) {
+            setPlaceName(parsed.name);
+            setCategory("맛집");
+          }
+          if (parsed.address) {
+            setPlaceAddress(parsed.address);
+          }
+        } else {
+          setLinks(links.map(item => item.id === id ? { ...item, url: value } : item));
+        }
+      }
+
+      useEffect(() => {
+        links.forEach(async (link) => {
+          if (!link.url || !link.url.startsWith("http")) {
+            if (linkPreviews[link.id]) {
+              setLinkPreviews(prev => {
+                const copy = { ...prev };
+                delete copy[link.id];
+                return copy;
+              });
+            }
+            return;
+          }
+          
+          const existing = linkPreviews[link.id];
+          if (existing && existing.url === link.url) {
+            return;
+          }
+          
+          setLinkPreviews(prev => ({
+            ...prev,
+            [link.id]: { loading: true, url: link.url }
+          }));
+          
           try {
-            const res = await fetch("/upload", {
-              method: "POST",
-              body: formData
-            });
-            const data = await res.json();
-            if (data.success) {
-              uploadedUrls.push(data.url);
+            const meta = await fetchLinkMeta(link.url);
+            setLinkPreviews(prev => ({
+              ...prev,
+              [link.id]: {
+                loading: false,
+                url: link.url,
+                title: meta && meta.title && meta.title !== "상세 링크" ? meta.title : (link.parsedName || "상세 링크"),
+                image: meta ? meta.image : "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+                host: meta ? meta.host : new URL(link.url).hostname.replace("www.", "")
+              }
+            }));
+          } catch (e) {
+            setLinkPreviews(prev => ({
+              ...prev,
+              [link.id]: {
+                loading: false,
+                url: link.url,
+                title: link.parsedName || "상세 링크",
+                image: "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+                host: new URL(link.url).hostname.replace("www.", "")
+              }
+            }));
+          }
+        });
+      }, [links]);
+
+      useEffect(() => {
+        if (fileInputRef.current && (!initialImages || initialImages.length === 0)) {
+          fileInputRef.current.click();
+        }
+      }, [initialImages]);
+
+      // R2 클라우드 스토리지 직접 업로드 (모바일 최적화)
+      async function handlePhoto(e) {
+        const files = Array.from(e.target.files).slice(0, 10);
+        if (files.length === 0) return;
+        setLoading(true);
+
+        const uploadedUrls = [];
+        for (const file of files) {
+          try {
+            let uploadBlob = file;
+            if (file.size > 2 * 1024 * 1024) {
+              uploadBlob = await compressImage(file, 1200, 1500, 0.75);
+            }
+            const formData = new FormData();
+            formData.append("file", uploadBlob, file.name);
+            const resp = await fetch("/upload", { method: "POST", body: formData });
+            const result = await resp.json();
+            if (result.success) {
+              uploadedUrls.push(result.url);
             } else {
-              alert("이미지 업로드 실패: " + data.message);
+              alert("사진 업로드 실패: " + (result.message || ""));
             }
           } catch (err) {
-            console.error("업로드 에러:", err);
-            alert("이미지 업로드 중 오류가 발생했습니다.");
+            console.error("Upload error:", err);
+            alert("사진 업로드 중 오류가 발생했습니다.");
           }
         }
 
         setImages(uploadedUrls);
         setLoading(false);
-      }
-
-      async function resolveLinkPreviews() {
-        const resolved = [];
-        for (const l of links) {
-          if (l.url.trim() === "") continue;
-          try {
-            const meta = await fetchLinkMeta(l.url.trim());
-            if (meta) {
-              resolved.push({
-                id: generateId(),
-                url: l.url.trim(),
-                title: meta.title,
-                image: meta.image,
-                host: meta.host
-              });
-            }
-          } catch(e) {
-            console.error(e);
-          }
-        }
-        return resolved;
       }
 
       function extractHashtags(text) {
@@ -1735,7 +1729,29 @@
         if (!title.trim() || !body.trim()) return;
         setLoading(true);
 
-        const productLinks = await resolveLinkPreviews();
+        const productLinks = links.map(l => {
+          const preview = linkPreviews[l.id];
+          if (preview && !preview.loading) {
+            return {
+              id: generateId(),
+              url: l.url.trim(),
+              title: preview.title || l.parsedName || "상세 링크",
+              image: preview.image || "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+              host: preview.host || new URL(l.url.trim()).hostname.replace("www.", "")
+            };
+          } else {
+            let host = "link";
+            try { host = new URL(l.url.trim()).hostname.replace("www.", ""); } catch(e) {}
+            return {
+              id: generateId(),
+              url: l.url.trim(),
+              title: l.parsedName || "상세 링크",
+              image: "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+              host
+            };
+          }
+        }).filter(l => l.url !== "");
+
         const detectedTags = extractHashtags(body);
 
         let placeInfo = null;
@@ -1787,21 +1803,22 @@
                 </select>
               </label>
               <label>
-                포스팅 제목
-                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="제목을 입력해 주세요" required />
+                포스팅 제목 <span className="text-[10px] text-zinc-400 font-normal">({title.length}/40자)</span>
+                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="제목을 입력해 주세요" maxLength={40} required />
               </label>
               <label>
-                이야기 / 레시피 내용
+                이야기 / 레시피 내용 <span className="text-[10px] text-zinc-400 font-normal">({body.length}/1000자)</span>
                 <textarea 
                   value={body} 
                   onChange={(e) => setBody(e.target.value)} 
                   placeholder="이야기나 레시피를 적어보세요. 내용 내의 #해시태그는 자동으로 하이라이트됩니다." 
+                  maxLength={1000}
                   required 
                 />
               </label>
               <label>
-                음식 사진 (최대 10장, 총합 20MB 이하 - 초과 시 자동 리사이징)
-                <input type="file" accept="image/*" multiple onChange={handlePhoto} />
+                음식 사진 (최대 10장)
+                <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handlePhoto} />
                 {images.length > 0 && (
                   <div className="flex gap-2 overflow-x-auto mt-2 py-1">
                     {images.map((img, idx) => (
@@ -1852,21 +1869,46 @@
 
               <div className="link-editor-list">
                 <div className="text-xs font-bold text-zinc-500 mb-2">
-                  <i className="fa-solid fa-cart-shopping mr-1"></i> 소개된 재료/도구 구매 링크 (쿠팡 파트너스 등)
+                  <i className="fa-solid fa-cart-shopping mr-1"></i> 소개된 재료/도구/지도 링크 추가 (네이버지도, 쇼핑몰 등)
                 </div>
                 {links.map((link, idx) => (
                   <div className="link-editor" key={link.id}>
                     <label className="mb-1.5">
-                      구매 링크 URL #{idx + 1}
+                      링크 URL #{idx + 1}
                       <input 
-                        type="url" 
+                        type="text" 
                         value={link.url} 
-                        onChange={(e) => setLinks(links.map(item => item.id === link.id ? { ...item, url: e.target.value } : item))} 
-                        placeholder="https://... 상품 링크 주소 입력" 
+                        onChange={(e) => handleUrlChange(link.id, e.target.value)} 
+                        placeholder="https://... 링크 주소 입력 (네이버지도 복사글 전체 붙여넣기 가능)" 
                       />
                     </label>
+                    {link.url && (
+                      <div className="mt-2 p-2 bg-zinc-50 border border-zinc-150 rounded-lg flex items-center gap-3">
+                        {linkPreviews[link.id]?.loading ? (
+                          <div className="text-zinc-400 text-[10px] py-1 px-2 flex items-center gap-2">
+                            <i className="fa-solid fa-spinner fa-spin"></i> 링크 정보를 불러오는 중...
+                          </div>
+                        ) : linkPreviews[link.id] ? (
+                          <>
+                            <img 
+                              src={linkPreviews[link.id].image} 
+                              alt="" 
+                              className="w-12 h-12 object-cover rounded-md border border-zinc-200"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-bold text-zinc-900 truncate">
+                                {linkPreviews[link.id].title}
+                              </div>
+                              <div className="text-[10px] text-zinc-400 truncate">
+                                {linkPreviews[link.id].host} · {link.url}
+                              </div>
+                            </div>
+                          </>
+                        ) : null}
+                      </div>
+                    )}
                     <div className="flex justify-between items-center mt-2">
-                      <span className="text-[10px] text-zinc-400">쇼핑몰 링크에 맞게 상품 정보가 자동으로 매칭됩니다</span>
+                      <span className="text-[10px] text-zinc-400">네이버 지도 등 장소명과 매칭되어 자동 노출됩니다.</span>
                       <button className="secondary px-2 py-1 text-[11px] rounded" type="button" onClick={() => setLinks(links.filter(item => item.id !== link.id))}>삭제</button>
                     </div>
                   </div>
@@ -1874,7 +1916,7 @@
               </div>
 
               <button className="secondary full border border-dashed text-xs" type="button" onClick={() => setLinks([...links, { id: generateId(), url: "" }])}>
-                + 구매 상품 링크 추가
+                + 구매 상품 / 지도 장소 링크 추가
               </button>
               <button className="primary full mt-4 text-xs font-bold" type="submit" disabled={loading}>
                 {loading ? "사진 최적화 및 등록 중..." : "글 등록 및 수익 모델 연동"}
@@ -1899,10 +1941,7 @@
               <button className="full kakao-btn mb-3" onClick={() => onLogin("kakao")}>
                 <i className="fa-solid fa-comment text-zinc-950"></i> 카카오로 시작하기
               </button>
-              
-              <button className="secondary full" onClick={() => onLogin("guest")}>
-                게스트 로그인 (테스트용)
-              </button>
+
             </div>
           </section>
         </div>
@@ -1964,6 +2003,24 @@
             </div>
           </div>
 
+          <div className="bg-white border border-zinc-200 rounded-xl p-4 shadow-sm mb-4">
+            <h3 className="text-xs font-bold text-zinc-400 mb-3 uppercase tracking-wider">법적 고지</h3>
+            <button 
+              className="w-full text-left py-2.5 text-xs font-medium text-zinc-800 flex justify-between items-center border-b border-zinc-100"
+              onClick={() => window.open('/landing.html', '_blank')}
+            >
+              <span>개인정보 처리방침</span>
+              <i className="fa-solid fa-chevron-right text-zinc-400 text-[10px]"></i>
+            </button>
+            <button 
+              className="w-full text-left py-2.5 text-xs font-medium text-zinc-800 flex justify-between items-center"
+              onClick={() => window.open('/landing.html', '_blank')}
+            >
+              <span>서비스 이용약관</span>
+              <i className="fa-solid fa-chevron-right text-zinc-400 text-[10px]"></i>
+            </button>
+          </div>
+
           <div className="bg-white border border-zinc-200 rounded-xl p-4 shadow-sm">
             <h3 className="text-xs font-bold text-zinc-400 mb-3 uppercase tracking-wider">계정 관리</h3>
             <button 
@@ -1985,39 +2042,47 @@
       );
     }
 
-    function CommunityWriteView({ onBack, onAddPost, currentUserName }) {
+    function CommunityWriteView({ onBack, onAddPost, currentUserName, initialImages = [] }) {
       const [newTitle, setNewTitle] = useState("");
       const [newBody, setNewBody] = useState("");
       const [writeCat, setWriteCat] = useState("자유");
-      const [images, setImages] = useState([]); // 이미지 주소 배열 관리
+      const [images, setImages] = useState(initialImages); // 이미지 주소 배열 관리
       const [loading, setLoading] = useState(false);
       const comCategories = ["자유", "질문", "공동구매", "맛집추천"];
 
+      const fileInputRef = useRef(null);
+
+      useEffect(() => {
+        if (fileInputRef.current && (!initialImages || initialImages.length === 0)) {
+          fileInputRef.current.click();
+        }
+      }, [initialImages]);
+
+      // R2 클라우드 스토리지 직접 업로드 (모바일 최적화)
       async function handlePhoto(e) {
-        const files = Array.from(e.target.files).slice(0, 10); // 최대 10장 한도
+        const files = Array.from(e.target.files).slice(0, 10);
         if (files.length === 0) return;
-
         setLoading(true);
+
         const uploadedUrls = [];
-
         for (const file of files) {
-          const formData = new FormData();
-          formData.append("file", file);
-
           try {
-            const res = await fetch("/upload", {
-              method: "POST",
-              body: formData
-            });
-            const data = await res.json();
-            if (data.success) {
-              uploadedUrls.push(data.url);
+            let uploadBlob = file;
+            if (file.size > 2 * 1024 * 1024) {
+              uploadBlob = await compressImage(file, 1200, 1500, 0.75);
+            }
+            const formData = new FormData();
+            formData.append("file", uploadBlob, file.name);
+            const resp = await fetch("/upload", { method: "POST", body: formData });
+            const result = await resp.json();
+            if (result.success) {
+              uploadedUrls.push(result.url);
             } else {
-              alert("이미지 업로드 실패: " + data.message);
+              alert("사진 업로드 실패: " + (result.message || ""));
             }
           } catch (err) {
-            console.error("업로드 에러:", err);
-            alert("이미지 업로드 중 오류가 발생했습니다.");
+            console.error("Upload error:", err);
+            alert("사진 업로드 중 오류가 발생했습니다.");
           }
         }
 
@@ -2066,28 +2131,30 @@
                 </select>
               </label>
               <label className="text-xs font-bold text-zinc-500 flex flex-col gap-1.5">
-                제목
+                제목 <span className="font-normal">({newTitle.length}/40자)</span>
                 <input 
                   value={newTitle} 
                   onChange={(e) => setNewTitle(e.target.value)} 
                   placeholder="글 제목을 입력해 주세요" 
                   className="border p-2 rounded text-xs"
+                  maxLength={40}
                   required 
                 />
               </label>
               <label className="text-xs font-bold text-zinc-500 flex flex-col gap-1.5">
-                내용
+                내용 <span className="font-normal">({newBody.length}/1000자)</span>
                 <textarea 
                   value={newBody} 
                   onChange={(e) => setNewBody(e.target.value)} 
                   placeholder="자유롭게 이야기를 나눠보세요." 
                   className="border p-2 rounded text-xs h-36 resize-none"
+                  maxLength={1000}
                   required 
                 />
               </label>
               <label className="text-xs font-bold text-zinc-500 flex flex-col gap-1.5">
-                사진 첨부 (최대 10장, 총합 20MB 이하 - 초과 시 자동 리사이징)
-                <input type="file" accept="image/*" multiple onChange={handlePhoto} className="border p-2 rounded text-xs" />
+                사진 첨부 (최대 10장)
+                <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handlePhoto} className="border p-2 rounded text-xs" />
                 {images.length > 0 && (
                   <div className="flex gap-2 overflow-x-auto mt-2 py-1">
                     {images.map((img, idx) => (
@@ -2117,6 +2184,19 @@
       const [writeOpen, setWriteOpen] = useState(false);
       const [loginOpen, setLoginOpen] = useState(false);
       const [isLoggedIn, setIsLoggedIn] = useState(false);
+      const [writeInitialImages, setWriteInitialImages] = useState([]);
+      const [communityInitialImages, setCommunityInitialImages] = useState([]);
+
+      useEffect(() => {
+        window.openWriteSheetWithPhotos = (urls) => {
+          setWriteInitialImages(urls);
+          setWriteOpen(true);
+        };
+        window.openCommunityWriteWithPhotos = (urls) => {
+          setCommunityInitialImages(urls);
+          setActiveTab("community_write");
+        };
+      }, []);
 
       const [activePostId, setActivePostId] = useState(null); // ID 기반 조회로 변경
       const [activeUser, setActiveUser] = useState(null);
@@ -2135,7 +2215,7 @@
 
       const [dbLoaded, setDbLoaded] = useState(false); // IndexedDB 로드 완료 플래그
 
-      // 2. 마운트 시 IndexedDB 복원 및 백엔드 세션 체크
+      // 2. 마운트 시 IndexedDB 복원 (Hydration)
       useEffect(() => {
         const loadPromises = [
           getDBData("foodhouse_posts").then(saved => { if (saved) setPosts(saved); }),
@@ -2147,55 +2227,10 @@
         ];
 
         Promise.all(loadPromises)
-          .then(() => {
-            setDbLoaded(true);
-            // 백엔드 세션 검증 API 호출
-            return fetch("/profile");
-          })
-          .then(res => res.json())
-          .then(data => {
-            if (data.isLoggedIn && data.user) {
-              setIsLoggedIn(true);
-              setDBData("foodhouse_logged_in", "true").catch(e => console.error(e));
-
-              const userProfile = {
-                name: data.user.nickname,
-                bio: "카카오 계정으로 로그인 중입니다.",
-                avatar: data.user.nickname.slice(0, 1),
-                avatarImg: data.user.profile_image
-              };
-              setProfile(userProfile);
-              setDBData("foodhouse_profile", userProfile).catch(e => console.error(e));
-
-              // 회원가입 완료 또는 로그인 성공 안내
-              if (window.location.search.includes("login=success")) {
-                if (data.isNewUser) {
-                  alert(`🎉 회원가입을 환영합니다! \n${data.user.nickname}님, 플레이팅의 회원이 되셨습니다.`);
-                } else {
-                  alert(`👋 어서오세요, ${data.user.nickname}님! 로그인되었습니다.`);
-                }
-                const cleanUrl = window.location.origin + window.location.pathname;
-                window.history.replaceState({}, document.title, cleanUrl);
-              }
-            } else {
-              // 백엔드가 로그아웃 상태인데 로컬에서 카카오 로그인으로 오인하는 경우 동기화
-              getDBData("foodhouse_profile").then(savedProfile => {
-                if (savedProfile && savedProfile.bio === "카카오 계정으로 로그인 중입니다.") {
-                  setIsLoggedIn(false);
-                  setDBData("foodhouse_logged_in", "false").catch(e => console.error(e));
-                  setProfile({
-                    name: "나의 플레이팅",
-                    bio: "내가 올린 레시피와 구매 링크를 관리합니다.",
-                    avatar: "나",
-                    avatarImg: ""
-                  });
-                }
-              });
-            }
-          })
+          .then(() => setDbLoaded(true))
           .catch(e => {
-            console.error("초기 상태 및 세션 체크 오류: ", e);
-            setDbLoaded(true);
+            console.error("IndexedDB 로드 오류: ", e);
+            setDbLoaded(true); // 에러 발생 시 기본값으로 구동 지속
           });
       }, []);
 
@@ -2224,64 +2259,38 @@
       function handleWriteClick() {
         if (!isLoggedIn) {
           setLoginOpen(true);
+        } else if (window.flutter_inappwebview) {
+          window.flutter_inappwebview.callHandler('openCustomGallery', { type: 'recipe' });
         } else {
           setWriteOpen(true);
         }
       }
 
       function handleLogin(type) {
-        if (type === "kakao") {
-          window.location.href = "/authorize";
-        } else {
-          setIsLoggedIn(true);
-          setDBData("foodhouse_logged_in", "true").catch(e => console.error(e));
-          setLoginOpen(false);
-        }
+        setIsLoggedIn(true);
+        setDBData("foodhouse_logged_in", "true").catch(e => console.error(e));
+        setLoginOpen(false);
       }
 
       function handleLogout() {
-        fetch("/logout")
-          .then(res => res.json())
-          .then(() => {
-            setIsLoggedIn(false);
-            setDBData("foodhouse_logged_in", "false").catch(e => console.error(e));
-            setProfile({
-              name: "나의 플레이팅",
-              bio: "내가 올린 레시피와 구매 링크를 관리합니다.",
-              avatar: "나",
-              avatarImg: ""
-            });
-            alert("로그아웃되었습니다.");
-            setActiveTab("home");
-          })
-          .catch(err => {
-            console.error("로그아웃 에러:", err);
-            setIsLoggedIn(false);
-            setDBData("foodhouse_logged_in", "false").catch(e => console.error(e));
-            setActiveTab("home");
-          });
+        setIsLoggedIn(false);
+        setDBData("foodhouse_logged_in", "false").catch(e => console.error(e));
+        alert("로그아웃되었습니다.");
+        setActiveTab("home");
       }
 
       function handleDeleteAccount() {
         if (confirm("정말로 회원 탈퇴를 진행하시겠습니까?\n작성하신 게시물과 댓글, 저장된 모든 정보가 영구 삭제됩니다.")) {
-          fetch("/unlink")
-            .then(res => res.json())
-            .then(() => {
-              localStorage.clear();
-              const req = indexedDB.deleteDatabase(DB_NAME);
-              req.onsuccess = () => {
-                alert("회원 탈퇴 및 계정 정보 삭제가 완료되었습니다.");
-                window.location.reload();
-              };
-              req.onerror = () => {
-                alert("로컬 정보가 삭제되었습니다.");
-                window.location.reload();
-              };
-            })
-            .catch(err => {
-              console.error("회원탈퇴 에러:", err);
-              alert("회원탈퇴 처리 중 오류가 발생했습니다.");
-            });
+          localStorage.clear();
+          const req = indexedDB.deleteDatabase(DB_NAME);
+          req.onsuccess = () => {
+            alert("회원 탈퇴 및 계정 정보 삭제가 완료되었습니다.");
+            window.location.reload();
+          };
+          req.onerror = () => {
+            alert("로컬 정보가 삭제되었습니다.");
+            window.location.reload();
+          };
         }
       }
 
@@ -2652,6 +2661,8 @@
                 onOpenCommunityWrite={() => {
                   if (!isLoggedIn) {
                     setLoginOpen(true);
+                  } else if (window.flutter_inappwebview) {
+                    window.flutter_inappwebview.callHandler('openCustomGallery', { type: 'community' });
                   } else {
                     setActiveTab("community_write");
                   }
@@ -2682,12 +2693,14 @@
 
             {activeTab === "community_write" && (
               <CommunityWriteView
-                onBack={() => setActiveTab("community")}
+                onBack={() => { setActiveTab("community"); setCommunityInitialImages([]); }}
                 onAddPost={(newPost) => {
                   handleAddCommunityPost(newPost);
                   setActiveTab("community"); // 작성 성공 시 커뮤니티 피드로 이동
+                  setCommunityInitialImages([]);
                 }}
                 currentUserName={profile.name}
+                initialImages={communityInitialImages}
               />
             )}
 
@@ -2774,8 +2787,9 @@
 
           {writeOpen && (
             <WriteSheet 
-              onClose={() => setWriteOpen(false)} 
+              onClose={() => { setWriteOpen(false); setWriteInitialImages([]); }} 
               onCreate={handleCreatePost} 
+              initialImages={writeInitialImages}
             />
           )}
 

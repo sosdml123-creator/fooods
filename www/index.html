@@ -186,97 +186,32 @@
       if (!url || !url.startsWith("http")) {
         return null;
       }
+      try {
+        const response = await fetch(`/api/link-meta?url=${encodeURIComponent(url)}`);
+        if (response.ok) {
+          const res = await response.json();
+          if (res.success) {
+            return {
+              title: res.title,
+              image: res.image,
+              host: res.host
+            };
+          }
+        }
+      } catch (e) {
+        console.error("Backend fetchLinkMeta error:", e);
+      }
 
-      const lowerUrl = url.toLowerCase();
       let host = "shopping";
       try {
         host = new URL(url).hostname.replace("www.", "");
       } catch (e) {}
 
-      // 1. 하드코딩 매칭 (샥즈 오픈닷원 이어폰 감지)
-      if (lowerUrl.includes("shokz") || lowerUrl.includes("opendots") || lowerUrl.includes("earphone") || lowerUrl.includes("8349257") || lowerUrl.includes("shokz-opendots")) {
-        return {
-          title: "샥즈 신제품 쿠팡단독세트 샥즈 오픈닷원 OpenDots ONE E...",
-          image: "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&q=80&w=400",
-          host: host
-        };
-      }
-
-      // 2. 실시간 CORS 프록시 크롤링 시도 (allorigins.win API 활용)
-      try {
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-        const response = await fetch(proxyUrl);
-        if (response.ok) {
-          const data = await response.json();
-          const html = data.contents;
-
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(html, "text/html");
-
-          let title = "";
-          let image = "";
-
-          // Open Graph og:title / og:image 매핑
-          const ogTitle = doc.querySelector('meta[property="og:title"]');
-          const ogImage = doc.querySelector('meta[property="og:image"]');
-
-          if (ogTitle) title = ogTitle.getAttribute("content");
-          if (ogImage) image = ogImage.getAttribute("content");
-
-          // og 태그가 누락된 경우 일반 title/img 태그 파인딩
-          if (!title) {
-            const docTitle = doc.querySelector('title');
-            if (docTitle) title = docTitle.innerText;
-          }
-          if (!image) {
-            const firstImg = doc.querySelector('img');
-            if (firstImg) image = firstImg.src;
-          }
-
-          // 상대 경로 이미지의 절대 경로 주소 보정
-          if (image && !image.startsWith("http")) {
-            try {
-              image = new URL(image, url).href;
-            } catch (e) {}
-          }
-
-          if (title && image) {
-            return { title: title.trim(), image: image, host: host };
-          }
-        }
-      } catch (err) {
-        console.warn("CORS 프록시를 통한 상품 크롤링 실패, Fallback 데이터를 매핑합니다: ", err);
-      }
-
-      // 3. Fallback Mock 매칭 테이블
-      let matchedMock = {
-        title: `추천 상품 (${host})`,
-        image: fallbackImages[Math.floor(Math.random() * fallbackImages.length)],
+      return {
+        title: `상세 링크 (${host})`,
+        image: "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
         host: host
       };
-
-      if (lowerUrl.includes("coupang.com")) {
-        // 쿠팡 기본 상품 (기본적으로 샥즈 매치 처리하여 유저 요청 적극 수용)
-        matchedMock = {
-          title: "샥즈 신제품 쿠팡단독세트 샥즈 오픈닷원 OpenDots ONE E...",
-          image: "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&q=80&w=400",
-          host: "coupang.com"
-        };
-      } else if (lowerUrl.includes("naver.com") || lowerUrl.includes("smartstore")) {
-        matchedMock = {
-          title: "무쇠 미니 프라이팬 20cm (인덕션 겸용)",
-          image: "https://images.unsplash.com/photo-1584269600464-37b1b58a9fe7?auto=format&fit=crop&q=80&w=200",
-          host: "smartstore.naver.com"
-        };
-      } else if (lowerUrl.includes("kurly.com")) {
-        matchedMock = {
-          title: "무항생제 신선란 10구 (1등급)",
-          image: "https://images.unsplash.com/photo-1516448620398-c5f44bf9f441?auto=format&fit=crop&q=80&w=200",
-          host: "kurly.com"
-        };
-      }
-
-      return matchedMock;
     }
 
 
@@ -1639,7 +1574,7 @@
       const [body, setBody] = useState("");
       const [images, setImages] = useState(initialImages); // 이미지 주소 배열 관리
       const [category, setCategory] = useState("레시피");
-      const [links, setLinks] = useState([{ id: generateId(), url: "", title: "", image: "" }]);
+      const [links, setLinks] = useState([{ id: generateId(), url: "" }]);
       const [loading, setLoading] = useState(false);
 
       const [placeName, setPlaceName] = useState("");
@@ -1650,26 +1585,100 @@
 
       const fileInputRef = useRef(null);
 
-      function handleUrlChange(id, value) {
-        const trimmed = value.trim();
-        const urlMatch = trimmed.match(/(https?:\/\/[^\s\n\r]+)/);
-        if (urlMatch && (trimmed.includes("\n") || trimmed.includes("[") || trimmed.includes("]"))) {
-          const url = urlMatch[0];
-          const lines = trimmed.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
-          let title = "";
-          if (lines.length > 0) {
-            let firstLine = lines[0];
-            if (firstLine.includes("[네이버지도]")) {
-              title = firstLine.replace("[네이버지도]", "").trim();
-            } else if (!firstLine.startsWith("http")) {
-              title = firstLine;
-            }
+      const [linkPreviews, setLinkPreviews] = useState({}); // key: link.id, value: { url, title, image, host, loading }
+
+      function parsePastedMapText(text) {
+        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        let parsed = { url: "", name: "", address: "" };
+        
+        const urlMatch = text.match(/(https?:\/\/[^\s\n\r]+)/);
+        if (urlMatch) {
+          parsed.url = urlMatch[0];
+        }
+        
+        const mapIdx = lines.findIndex(l => l.includes("[네이버지도]"));
+        if (mapIdx !== -1) {
+          if (lines[mapIdx + 1] && !lines[mapIdx + 1].startsWith("http") && !lines[mapIdx + 1].includes("[네이버지도]")) {
+            parsed.name = lines[mapIdx + 1];
           }
-          setLinks(links.map(item => item.id === id ? { ...item, url: url, title: title } : item));
+          if (lines[mapIdx + 2] && !lines[mapIdx + 2].startsWith("http")) {
+            parsed.address = lines[mapIdx + 2];
+          }
+        }
+        return parsed;
+      }
+
+      function handleUrlChange(id, value) {
+        const parsed = parsePastedMapText(value);
+        if (parsed.url) {
+          setLinks(links.map(item => item.id === id ? { 
+            ...item, 
+            url: parsed.url, 
+            parsedName: parsed.name, 
+            parsedAddress: parsed.address 
+          } : item));
+          
+          if (parsed.name) {
+            setPlaceName(parsed.name);
+            setCategory("맛집");
+          }
+          if (parsed.address) {
+            setPlaceAddress(parsed.address);
+          }
         } else {
           setLinks(links.map(item => item.id === id ? { ...item, url: value } : item));
         }
       }
+
+      useEffect(() => {
+        links.forEach(async (link) => {
+          if (!link.url || !link.url.startsWith("http")) {
+            if (linkPreviews[link.id]) {
+              setLinkPreviews(prev => {
+                const copy = { ...prev };
+                delete copy[link.id];
+                return copy;
+              });
+            }
+            return;
+          }
+          
+          const existing = linkPreviews[link.id];
+          if (existing && existing.url === link.url) {
+            return;
+          }
+          
+          setLinkPreviews(prev => ({
+            ...prev,
+            [link.id]: { loading: true, url: link.url }
+          }));
+          
+          try {
+            const meta = await fetchLinkMeta(link.url);
+            setLinkPreviews(prev => ({
+              ...prev,
+              [link.id]: {
+                loading: false,
+                url: link.url,
+                title: meta && meta.title && meta.title !== "상세 링크" ? meta.title : (link.parsedName || "상세 링크"),
+                image: meta ? meta.image : "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+                host: meta ? meta.host : new URL(link.url).hostname.replace("www.", "")
+              }
+            }));
+          } catch (e) {
+            setLinkPreviews(prev => ({
+              ...prev,
+              [link.id]: {
+                loading: false,
+                url: link.url,
+                title: link.parsedName || "상세 링크",
+                image: "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+                host: new URL(link.url).hostname.replace("www.", "")
+              }
+            }));
+          }
+        });
+      }, [links]);
 
       useEffect(() => {
         if (fileInputRef.current && (!initialImages || initialImages.length === 0)) {
@@ -1709,37 +1718,6 @@
         setLoading(false);
       }
 
-      async function resolveLinkPreviews() {
-        const resolved = [];
-        for (const l of links) {
-          if (l.url.trim() === "") continue;
-          try {
-            // 사용자가 이미지와 이름을 직접 수동 지정한 경우 크롤링 스킵하고 즉시 사용
-            if (l.title && l.title.trim() && l.image && l.image.trim()) {
-              resolved.push({
-                id: generateId(),
-                url: l.url.trim(),
-                title: l.title.trim(),
-                image: l.image.trim(),
-                host: new URL(l.url.trim()).hostname.replace("www.", "")
-              });
-              continue;
-            }
-            const meta = await fetchLinkMeta(l.url.trim());
-            resolved.push({
-              id: generateId(),
-              url: l.url.trim(),
-              title: (l.title && l.title.trim()) ? l.title.trim() : (meta ? meta.title : "상세 링크"),
-              image: (l.image && l.image.trim()) ? l.image.trim() : (meta ? meta.image : "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400"),
-              host: meta ? meta.host : new URL(l.url.trim()).hostname.replace("www.", "")
-            });
-          } catch(e) {
-            console.error(e);
-          }
-        }
-        return resolved;
-      }
-
       function extractHashtags(text) {
         const matches = text.match(/#\S+/g);
         if (!matches) return [];
@@ -1751,7 +1729,29 @@
         if (!title.trim() || !body.trim()) return;
         setLoading(true);
 
-        const productLinks = await resolveLinkPreviews();
+        const productLinks = links.map(l => {
+          const preview = linkPreviews[l.id];
+          if (preview && !preview.loading) {
+            return {
+              id: generateId(),
+              url: l.url.trim(),
+              title: preview.title || l.parsedName || "상세 링크",
+              image: preview.image || "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+              host: preview.host || new URL(l.url.trim()).hostname.replace("www.", "")
+            };
+          } else {
+            let host = "link";
+            try { host = new URL(l.url.trim()).hostname.replace("www.", ""); } catch(e) {}
+            return {
+              id: generateId(),
+              url: l.url.trim(),
+              title: l.parsedName || "상세 링크",
+              image: "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+              host
+            };
+          }
+        }).filter(l => l.url !== "");
+
         const detectedTags = extractHashtags(body);
 
         let placeInfo = null;
@@ -1872,79 +1872,50 @@
                   <i className="fa-solid fa-cart-shopping mr-1"></i> 소개된 재료/도구/지도 링크 추가 (네이버지도, 쇼핑몰 등)
                 </div>
                 {links.map((link, idx) => (
-                  <div className="link-editor p-3 border border-zinc-200 rounded-lg bg-zinc-50 mb-3" key={link.id}>
-                    <div className="flex gap-3">
-                      <div className="flex-1 flex flex-col gap-2">
-                        <label className="text-[10px] font-bold text-zinc-500 m-0 flex flex-col gap-1">
-                          링크 URL #{idx + 1}
-                          <input 
-                            type="url" 
-                            value={link.url} 
-                            onChange={(e) => handleUrlChange(link.id, e.target.value)} 
-                            placeholder="주소 입력 (네이버지도 복사글 전체 붙여넣기 가능)" 
-                            className="w-full bg-white border border-zinc-300 rounded p-2 text-xs"
-                          />
-                        </label>
-                        <label className="text-[10px] font-bold text-zinc-500 m-0 flex flex-col gap-1">
-                          링크 이름/장소명 (선택)
-                          <input 
-                            type="text" 
-                            value={link.title || ""} 
-                            onChange={(e) => setLinks(links.map(item => item.id === link.id ? { ...item, title: e.target.value } : item))} 
-                            placeholder="표시될 이름 입력 (예: 육회공작소 영등포점)" 
-                            className="w-full bg-white border border-zinc-300 rounded p-2 text-xs"
-                          />
-                        </label>
-                      </div>
-
-                      {/* 링크용 대표 이미지 개별 등록 */}
-                      <div className="flex flex-col items-center justify-center border border-dashed border-zinc-300 rounded-lg w-20 h-20 bg-white relative flex-shrink-0 cursor-pointer overflow-hidden mt-4">
-                        {link.image ? (
+                  <div className="link-editor" key={link.id}>
+                    <label className="mb-1.5">
+                      링크 URL #{idx + 1}
+                      <input 
+                        type="text" 
+                        value={link.url} 
+                        onChange={(e) => handleUrlChange(link.id, e.target.value)} 
+                        placeholder="https://... 링크 주소 입력 (네이버지도 복사글 전체 붙여넣기 가능)" 
+                      />
+                    </label>
+                    {link.url && (
+                      <div className="mt-2 p-2 bg-zinc-50 border border-zinc-150 rounded-lg flex items-center gap-3">
+                        {linkPreviews[link.id]?.loading ? (
+                          <div className="text-zinc-400 text-[10px] py-1 px-2 flex items-center gap-2">
+                            <i className="fa-solid fa-spinner fa-spin"></i> 링크 정보를 불러오는 중...
+                          </div>
+                        ) : linkPreviews[link.id] ? (
                           <>
-                            <img src={link.image} alt="" className="w-full h-full object-cover" />
-                            <button 
-                              type="button" 
-                              onClick={() => setLinks(links.map(item => item.id === link.id ? { ...item, image: "" } : item))}
-                              className="absolute top-0.5 right-0.5 bg-black/60 text-white rounded-full w-4 h-4 flex items-center justify-center text-[8px] border-none"
-                            >
-                              ×
-                            </button>
-                          </>
-                        ) : (
-                          <label className="flex flex-col items-center justify-center cursor-pointer m-0 w-full h-full text-center">
-                            <i className="fa-solid fa-camera text-zinc-400 text-sm mb-0.5"></i>
-                            <span className="text-[8px] text-zinc-400 font-normal scale-90">사진 등록</span>
-                            <input 
-                              type="file" 
-                              accept="image/*" 
-                              className="hidden" 
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0];
-                                if (!file) return;
-                                const formData = new FormData();
-                                formData.append("file", file);
-                                const resp = await fetch("/upload", { method: "POST", body: formData });
-                                const res = await resp.json();
-                                if (res.success) {
-                                  setLinks(links.map(item => item.id === link.id ? { ...item, image: res.url } : item));
-                                } else {
-                                  alert("이미지 업로드 실패");
-                                }
-                              }} 
+                            <img 
+                              src={linkPreviews[link.id].image} 
+                              alt="" 
+                              className="w-12 h-12 object-cover rounded-md border border-zinc-200"
                             />
-                          </label>
-                        )}
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-bold text-zinc-900 truncate">
+                                {linkPreviews[link.id].title}
+                              </div>
+                              <div className="text-[10px] text-zinc-400 truncate">
+                                {linkPreviews[link.id].host} · {link.url}
+                              </div>
+                            </div>
+                          </>
+                        ) : null}
                       </div>
-                    </div>
-                    <div className="flex justify-between items-center mt-2 border-t border-zinc-200 pt-2">
-                      <span className="text-[9px] text-zinc-400">지도나 상품 링크에 이름과 사진을 직접 입력할 수 있습니다.</span>
-                      <button className="secondary px-2 py-0.5 text-[10px] rounded" type="button" onClick={() => setLinks(links.filter(item => item.id !== link.id))}>삭제</button>
+                    )}
+                    <div className="flex justify-between items-center mt-2">
+                      <span className="text-[10px] text-zinc-400">네이버 지도 등 장소명과 매칭되어 자동 노출됩니다.</span>
+                      <button className="secondary px-2 py-1 text-[11px] rounded" type="button" onClick={() => setLinks(links.filter(item => item.id !== link.id))}>삭제</button>
                     </div>
                   </div>
                 ))}
               </div>
 
-              <button className="secondary full border border-dashed text-xs" type="button" onClick={() => setLinks([...links, { id: generateId(), url: "", title: "", image: "" }])}>
+              <button className="secondary full border border-dashed text-xs" type="button" onClick={() => setLinks([...links, { id: generateId(), url: "" }])}>
                 + 구매 상품 / 지도 장소 링크 추가
               </button>
               <button className="primary full mt-4 text-xs font-bold" type="submit" disabled={loading}>
