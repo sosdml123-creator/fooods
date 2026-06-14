@@ -1148,7 +1148,7 @@
           {/* 플로팅 글쓰기 버튼 */}
           <button 
             className="community-fab"
-            style={{ position: "absolute", bottom: "80px", right: "20px", zIndex: 50 }}
+            style={{ position: "fixed", bottom: "80px", right: "20px", zIndex: 50 }}
             onClick={onOpenCommunityWrite}
             aria-label="커뮤니티 글쓰기"
           >
@@ -1654,42 +1654,35 @@
       const [voucherTitle, setVoucherTitle] = useState("");
       const [voucherPrice, setVoucherPrice] = useState("");
 
-      // 다중 사진 로드 및 20MB 자동 압축 압축기 연동
+      // R2 클라우드 스토리지 직접 업로드 (모바일 최적화)
       async function handlePhoto(e) {
-        const files = Array.from(e.target.files).slice(0, 10); // 최대 10장 한도
+        const files = Array.from(e.target.files).slice(0, 10);
         if (files.length === 0) return;
-
         setLoading(true);
 
-        const totalSize = files.reduce((sum, f) => sum + f.size, 0);
-        const maxLimit = 20 * 1024 * 1024; // 총 20MB
-
-        let loadedBase64s = [];
-
-        if (totalSize > maxLimit) {
-          alert("🚫 첨부하신 사진들의 총 용량이 20MB를 초과했습니다.\n브라우저 로컬 저장 최적화를 위해 사진 해상도와 품질을 자동으로 조절하여 저장합니다.");
-          
-          for (const file of files) {
-            const compressedBlob = await compressImage(file, 1000, 1250, 0.7);
-            const base64 = await new Promise((resolve) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result);
-              reader.readAsDataURL(compressedBlob);
-            });
-            loadedBase64s.push(base64);
+        const uploadedUrls = [];
+        for (const file of files) {
+          try {
+            let uploadBlob = file;
+            if (file.size > 2 * 1024 * 1024) {
+              uploadBlob = await compressImage(file, 1200, 1500, 0.75);
+            }
+            const formData = new FormData();
+            formData.append("file", uploadBlob, file.name);
+            const resp = await fetch("/upload", { method: "POST", body: formData });
+            const result = await resp.json();
+            if (result.success) {
+              uploadedUrls.push(result.url);
+            } else {
+              alert("사진 업로드 실패: " + (result.message || ""));
+            }
+          } catch (err) {
+            console.error("Upload error:", err);
+            alert("사진 업로드 중 오류가 발생했습니다.");
           }
-        } else {
-          const loaders = files.map(file => {
-            return new Promise((resolve) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result);
-              reader.readAsDataURL(file);
-            });
-          });
-          loadedBase64s = await Promise.all(loaders);
         }
 
-        setImages(loadedBase64s);
+        setImages(uploadedUrls);
         setLoading(false);
       }
 
@@ -1778,20 +1771,21 @@
                 </select>
               </label>
               <label>
-                포스팅 제목
-                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="제목을 입력해 주세요" required />
+                포스팅 제목 <span className="text-[10px] text-zinc-400 font-normal">({title.length}/40자)</span>
+                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="제목을 입력해 주세요" maxLength={40} required />
               </label>
               <label>
-                이야기 / 레시피 내용
+                이야기 / 레시피 내용 <span className="text-[10px] text-zinc-400 font-normal">({body.length}/1000자)</span>
                 <textarea 
                   value={body} 
                   onChange={(e) => setBody(e.target.value)} 
                   placeholder="이야기나 레시피를 적어보세요. 내용 내의 #해시태그는 자동으로 하이라이트됩니다." 
+                  maxLength={1000}
                   required 
                 />
               </label>
               <label>
-                음식 사진 (최대 10장, 총합 20MB 이하 - 초과 시 자동 리사이징)
+                음식 사진 (최대 10장)
                 <input type="file" accept="image/*" multiple onChange={handlePhoto} />
                 {images.length > 0 && (
                   <div className="flex gap-2 overflow-x-auto mt-2 py-1">
@@ -1890,10 +1884,7 @@
               <button className="full kakao-btn mb-3" onClick={() => onLogin("kakao")}>
                 <i className="fa-solid fa-comment text-zinc-950"></i> 카카오로 시작하기
               </button>
-              
-              <button className="secondary full" onClick={() => onLogin("guest")}>
-                게스트 로그인 (테스트용)
-              </button>
+
             </div>
           </section>
         </div>
@@ -1955,6 +1946,24 @@
             </div>
           </div>
 
+          <div className="bg-white border border-zinc-200 rounded-xl p-4 shadow-sm mb-4">
+            <h3 className="text-xs font-bold text-zinc-400 mb-3 uppercase tracking-wider">법적 고지</h3>
+            <button 
+              className="w-full text-left py-2.5 text-xs font-medium text-zinc-800 flex justify-between items-center border-b border-zinc-100"
+              onClick={() => window.open('/landing.html', '_blank')}
+            >
+              <span>개인정보 처리방침</span>
+              <i className="fa-solid fa-chevron-right text-zinc-400 text-[10px]"></i>
+            </button>
+            <button 
+              className="w-full text-left py-2.5 text-xs font-medium text-zinc-800 flex justify-between items-center"
+              onClick={() => window.open('/landing.html', '_blank')}
+            >
+              <span>서비스 이용약관</span>
+              <i className="fa-solid fa-chevron-right text-zinc-400 text-[10px]"></i>
+            </button>
+          </div>
+
           <div className="bg-white border border-zinc-200 rounded-xl p-4 shadow-sm">
             <h3 className="text-xs font-bold text-zinc-400 mb-3 uppercase tracking-wider">계정 관리</h3>
             <button 
@@ -1984,42 +1993,35 @@
       const [loading, setLoading] = useState(false);
       const comCategories = ["자유", "질문", "공동구매", "맛집추천"];
 
-      // 다중 사진 로드 및 20MB 자동 압축 압축기 연동
+      // R2 클라우드 스토리지 직접 업로드 (모바일 최적화)
       async function handlePhoto(e) {
-        const files = Array.from(e.target.files).slice(0, 10); // 최대 10장 한도
+        const files = Array.from(e.target.files).slice(0, 10);
         if (files.length === 0) return;
-
         setLoading(true);
 
-        const totalSize = files.reduce((sum, f) => sum + f.size, 0);
-        const maxLimit = 20 * 1024 * 1024; // 총 20MB
-
-        let loadedBase64s = [];
-
-        if (totalSize > maxLimit) {
-          alert("🚫 첨부하신 사진들의 총 용량이 20MB를 초과했습니다.\n브라우저 로컬 저장 최적화를 위해 사진 해상도와 품질을 자동으로 조절하여 저장합니다.");
-          
-          for (const file of files) {
-            const compressedBlob = await compressImage(file, 1000, 1250, 0.7);
-            const base64 = await new Promise((resolve) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result);
-              reader.readAsDataURL(compressedBlob);
-            });
-            loadedBase64s.push(base64);
+        const uploadedUrls = [];
+        for (const file of files) {
+          try {
+            let uploadBlob = file;
+            if (file.size > 2 * 1024 * 1024) {
+              uploadBlob = await compressImage(file, 1200, 1500, 0.75);
+            }
+            const formData = new FormData();
+            formData.append("file", uploadBlob, file.name);
+            const resp = await fetch("/upload", { method: "POST", body: formData });
+            const result = await resp.json();
+            if (result.success) {
+              uploadedUrls.push(result.url);
+            } else {
+              alert("사진 업로드 실패: " + (result.message || ""));
+            }
+          } catch (err) {
+            console.error("Upload error:", err);
+            alert("사진 업로드 중 오류가 발생했습니다.");
           }
-        } else {
-          const loaders = files.map(file => {
-            return new Promise((resolve) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result);
-              reader.readAsDataURL(file);
-            });
-          });
-          loadedBase64s = await Promise.all(loaders);
         }
 
-        setImages(loadedBase64s);
+        setImages(uploadedUrls);
         setLoading(false);
       }
 
@@ -2064,27 +2066,29 @@
                 </select>
               </label>
               <label className="text-xs font-bold text-zinc-500 flex flex-col gap-1.5">
-                제목
+                제목 <span className="font-normal">({newTitle.length}/40자)</span>
                 <input 
                   value={newTitle} 
                   onChange={(e) => setNewTitle(e.target.value)} 
                   placeholder="글 제목을 입력해 주세요" 
                   className="border p-2 rounded text-xs"
+                  maxLength={40}
                   required 
                 />
               </label>
               <label className="text-xs font-bold text-zinc-500 flex flex-col gap-1.5">
-                내용
+                내용 <span className="font-normal">({newBody.length}/1000자)</span>
                 <textarea 
                   value={newBody} 
                   onChange={(e) => setNewBody(e.target.value)} 
                   placeholder="자유롭게 이야기를 나눠보세요." 
                   className="border p-2 rounded text-xs h-36 resize-none"
+                  maxLength={1000}
                   required 
                 />
               </label>
               <label className="text-xs font-bold text-zinc-500 flex flex-col gap-1.5">
-                사진 첨부 (최대 10장, 총합 20MB 이하 - 초과 시 자동 리사이징)
+                사진 첨부 (최대 10장)
                 <input type="file" accept="image/*" multiple onChange={handlePhoto} className="border p-2 rounded text-xs" />
                 {images.length > 0 && (
                   <div className="flex gap-2 overflow-x-auto mt-2 py-1">
