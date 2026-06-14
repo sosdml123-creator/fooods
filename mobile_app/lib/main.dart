@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'dart:convert';
+import 'custom_gallery_picker.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -70,6 +72,35 @@ class _WebViewScreenState extends State<WebViewScreen> {
           ),
           onWebViewCreated: (controller) {
             _webViewController = controller;
+            
+            // 갤러리 피커 통신용 JS 핸들러 등록
+            controller.addJavaScriptHandler(
+              handlerName: 'openCustomGallery',
+              callback: (args) async {
+                final type = args.isNotEmpty ? (args[0]['type'] ?? 'recipe') : 'recipe';
+                
+                // 커스텀 갤러리 화면 호출 및 결과 대기 ( R2 이미지 URL 목록 리턴 받음 )
+                final List<dynamic>? urls = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CustomGalleryPicker(),
+                  ),
+                );
+                
+                if (urls != null && urls.isNotEmpty) {
+                  final urlsJson = jsonEncode(urls);
+                  if (type == 'community') {
+                    controller.evaluateJavascript(
+                      source: 'window.openCommunityWriteWithPhotos($urlsJson);',
+                    );
+                  } else {
+                    controller.evaluateJavascript(
+                      source: 'window.openWriteSheetWithPhotos($urlsJson);',
+                    );
+                  }
+                }
+              },
+            );
           },
           onPermissionRequest: (controller, request) async {
             // 웹뷰 내 카메라/마이크 등 권한 요청 시 자동 허용

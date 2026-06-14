@@ -645,17 +645,11 @@
         badgeType = "shop";
       }
 
-      // 포인트 가상 시스템 (+10P 뱃지)
-      const offersPoint = post.likeCount > 20;
-
       return (
         <article className="feed-card" onClick={onCardClick}>
           <div className="feed-card-image-wrapper">
             {badgeText && (
               <span className={`feed-badge ${badgeType}`}>{badgeText}</span>
-            )}
-            {offersPoint && (
-              <span className="feed-badge point" style={{ left: "auto", right: "8px" }}>+10P</span>
             )}
             <img 
               className="feed-card-image" 
@@ -918,28 +912,28 @@
       return (
         <section className="my-page">
           <div className="px-4 pt-3 flex items-center gap-2">
-            <button className="text-zinc-500 text-sm py-1.5 active:scale-95 transition-transform" onClick={onBack}>
-              <i className="fa-solid fa-chevron-left mr-1"></i> 피드로 가기
+            <button className="text-zinc-500 text-lg py-1.5 active:scale-95 transition-transform" onClick={onBack} aria-label="뒤로가기">
+              <i className="fa-solid fa-chevron-left"></i>
             </button>
           </div>
 
           <div className="my-card">
-            <div className="flex justify-between items-start">
-              <div className="my-profile">
-                <span className="avatar overflow-hidden">
+            <div className="flex items-center justify-between gap-4">
+              <div className="my-profile flex-1 min-w-0 mb-0">
+                <span className="avatar overflow-hidden flex-shrink-0">
                   {creatorInfo.avatarImg ? <img src={creatorInfo.avatarImg} alt="" className="w-full h-full object-cover" /> : userName.slice(0, 1)}
                 </span>
-                <div>
-                  <h2 className="flex items-center gap-1.5 font-bold">
+                <div className="flex-1 min-w-0">
+                  <h2 className="flex items-center gap-1.5 font-bold text-sm truncate">
                     {userName}
-                    {isFollowing && <span className="text-[9px] bg-zinc-100 text-zinc-500 border border-zinc-300 font-normal px-1.5 py-0.5 rounded">팔로잉 중</span>}
+                    {isFollowing && <span className="text-[9px] bg-zinc-100 text-zinc-500 border border-zinc-300 font-normal px-1.5 py-0.5 rounded flex-shrink-0">팔로잉 중</span>}
                   </h2>
-                  <p>{creatorInfo.bio}</p>
+                  <p className="text-zinc-500 text-xs mt-1 break-all whitespace-normal">{creatorInfo.bio || "소개글이 없습니다."}</p>
                 </div>
               </div>
               
               <button 
-                className={`text-[11px] font-bold px-4 py-1.5 rounded-full transition-colors ${isFollowing ? 'secondary' : 'primary'}`}
+                className={`text-[11px] font-bold px-4 py-1.5 rounded-full transition-colors flex-shrink-0 ${isFollowing ? 'secondary' : 'primary'}`}
                 onClick={onFollowToggle}
               >
                 {isFollowing ? "팔로잉" : "팔로우"}
@@ -1640,10 +1634,10 @@
     }
 
     // 최대 10개 및 총 용량 20MB 제한 (초과 시 자동 압축 지원) 글쓰기 시트
-    function WriteSheet({ onClose, onCreate }) {
+    function WriteSheet({ onClose, onCreate, initialImages = [] }) {
       const [title, setTitle] = useState("");
       const [body, setBody] = useState("");
-      const [images, setImages] = useState([]); // 이미지 주소 배열 관리
+      const [images, setImages] = useState(initialImages); // 이미지 주소 배열 관리
       const [category, setCategory] = useState("레시피");
       const [links, setLinks] = useState([{ id: generateId(), url: "" }]);
       const [loading, setLoading] = useState(false);
@@ -1657,10 +1651,10 @@
       const fileInputRef = useRef(null);
 
       useEffect(() => {
-        if (fileInputRef.current) {
+        if (fileInputRef.current && (!initialImages || initialImages.length === 0)) {
           fileInputRef.current.click();
         }
-      }, []);
+      }, [initialImages]);
 
       // R2 클라우드 스토리지 직접 업로드 (모바일 최적화)
       async function handlePhoto(e) {
@@ -1993,21 +1987,21 @@
       );
     }
 
-    function CommunityWriteView({ onBack, onAddPost, currentUserName }) {
+    function CommunityWriteView({ onBack, onAddPost, currentUserName, initialImages = [] }) {
       const [newTitle, setNewTitle] = useState("");
       const [newBody, setNewBody] = useState("");
       const [writeCat, setWriteCat] = useState("자유");
-      const [images, setImages] = useState([]); // 이미지 주소 배열 관리
+      const [images, setImages] = useState(initialImages); // 이미지 주소 배열 관리
       const [loading, setLoading] = useState(false);
       const comCategories = ["자유", "질문", "공동구매", "맛집추천"];
 
       const fileInputRef = useRef(null);
 
       useEffect(() => {
-        if (fileInputRef.current) {
+        if (fileInputRef.current && (!initialImages || initialImages.length === 0)) {
           fileInputRef.current.click();
         }
-      }, []);
+      }, [initialImages]);
 
       // R2 클라우드 스토리지 직접 업로드 (모바일 최적화)
       async function handlePhoto(e) {
@@ -2135,6 +2129,19 @@
       const [writeOpen, setWriteOpen] = useState(false);
       const [loginOpen, setLoginOpen] = useState(false);
       const [isLoggedIn, setIsLoggedIn] = useState(false);
+      const [writeInitialImages, setWriteInitialImages] = useState([]);
+      const [communityInitialImages, setCommunityInitialImages] = useState([]);
+
+      useEffect(() => {
+        window.openWriteSheetWithPhotos = (urls) => {
+          setWriteInitialImages(urls);
+          setWriteOpen(true);
+        };
+        window.openCommunityWriteWithPhotos = (urls) => {
+          setCommunityInitialImages(urls);
+          setActiveTab("community_write");
+        };
+      }, []);
 
       const [activePostId, setActivePostId] = useState(null); // ID 기반 조회로 변경
       const [activeUser, setActiveUser] = useState(null);
@@ -2197,6 +2204,8 @@
       function handleWriteClick() {
         if (!isLoggedIn) {
           setLoginOpen(true);
+        } else if (window.flutter_inappwebview) {
+          window.flutter_inappwebview.callHandler('openCustomGallery', { type: 'recipe' });
         } else {
           setWriteOpen(true);
         }
@@ -2597,6 +2606,8 @@
                 onOpenCommunityWrite={() => {
                   if (!isLoggedIn) {
                     setLoginOpen(true);
+                  } else if (window.flutter_inappwebview) {
+                    window.flutter_inappwebview.callHandler('openCustomGallery', { type: 'community' });
                   } else {
                     setActiveTab("community_write");
                   }
@@ -2627,12 +2638,14 @@
 
             {activeTab === "community_write" && (
               <CommunityWriteView
-                onBack={() => setActiveTab("community")}
+                onBack={() => { setActiveTab("community"); setCommunityInitialImages([]); }}
                 onAddPost={(newPost) => {
                   handleAddCommunityPost(newPost);
                   setActiveTab("community"); // 작성 성공 시 커뮤니티 피드로 이동
+                  setCommunityInitialImages([]);
                 }}
                 currentUserName={profile.name}
+                initialImages={communityInitialImages}
               />
             )}
 
@@ -2719,8 +2732,9 @@
 
           {writeOpen && (
             <WriteSheet 
-              onClose={() => setWriteOpen(false)} 
+              onClose={() => { setWriteOpen(false); setWriteInitialImages([]); }} 
               onCreate={handleCreatePost} 
+              initialImages={writeInitialImages}
             />
           )}
 
