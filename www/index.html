@@ -1639,7 +1639,7 @@
       const [body, setBody] = useState("");
       const [images, setImages] = useState(initialImages); // 이미지 주소 배열 관리
       const [category, setCategory] = useState("레시피");
-      const [links, setLinks] = useState([{ id: generateId(), url: "" }]);
+      const [links, setLinks] = useState([{ id: generateId(), url: "", title: "", image: "" }]);
       const [loading, setLoading] = useState(false);
 
       const [placeName, setPlaceName] = useState("");
@@ -1649,6 +1649,27 @@
       const [voucherPrice, setVoucherPrice] = useState("");
 
       const fileInputRef = useRef(null);
+
+      function handleUrlChange(id, value) {
+        const trimmed = value.trim();
+        const urlMatch = trimmed.match(/(https?:\/\/[^\s\n\r]+)/);
+        if (urlMatch && (trimmed.includes("\n") || trimmed.includes("[") || trimmed.includes("]"))) {
+          const url = urlMatch[0];
+          const lines = trimmed.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+          let title = "";
+          if (lines.length > 0) {
+            let firstLine = lines[0];
+            if (firstLine.includes("[네이버지도]")) {
+              title = firstLine.replace("[네이버지도]", "").trim();
+            } else if (!firstLine.startsWith("http")) {
+              title = firstLine;
+            }
+          }
+          setLinks(links.map(item => item.id === id ? { ...item, url: url, title: title } : item));
+        } else {
+          setLinks(links.map(item => item.id === id ? { ...item, url: value } : item));
+        }
+      }
 
       useEffect(() => {
         if (fileInputRef.current && (!initialImages || initialImages.length === 0)) {
@@ -1693,16 +1714,25 @@
         for (const l of links) {
           if (l.url.trim() === "") continue;
           try {
-            const meta = await fetchLinkMeta(l.url.trim());
-            if (meta) {
+            // 사용자가 이미지와 이름을 직접 수동 지정한 경우 크롤링 스킵하고 즉시 사용
+            if (l.title && l.title.trim() && l.image && l.image.trim()) {
               resolved.push({
                 id: generateId(),
                 url: l.url.trim(),
-                title: meta.title,
-                image: meta.image,
-                host: meta.host
+                title: l.title.trim(),
+                image: l.image.trim(),
+                host: new URL(l.url.trim()).hostname.replace("www.", "")
               });
+              continue;
             }
+            const meta = await fetchLinkMeta(l.url.trim());
+            resolved.push({
+              id: generateId(),
+              url: l.url.trim(),
+              title: (l.title && l.title.trim()) ? l.title.trim() : (meta ? meta.title : "상세 링크"),
+              image: (l.image && l.image.trim()) ? l.image.trim() : (meta ? meta.image : "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400"),
+              host: meta ? meta.host : new URL(l.url.trim()).hostname.replace("www.", "")
+            });
           } catch(e) {
             console.error(e);
           }
@@ -1839,29 +1869,83 @@
 
               <div className="link-editor-list">
                 <div className="text-xs font-bold text-zinc-500 mb-2">
-                  <i className="fa-solid fa-cart-shopping mr-1"></i> 소개된 재료/도구 구매 링크 (쿠팡 파트너스 등)
+                  <i className="fa-solid fa-cart-shopping mr-1"></i> 소개된 재료/도구/지도 링크 추가 (네이버지도, 쇼핑몰 등)
                 </div>
                 {links.map((link, idx) => (
-                  <div className="link-editor" key={link.id}>
-                    <label className="mb-1.5">
-                      구매 링크 URL #{idx + 1}
-                      <input 
-                        type="url" 
-                        value={link.url} 
-                        onChange={(e) => setLinks(links.map(item => item.id === link.id ? { ...item, url: e.target.value } : item))} 
-                        placeholder="https://... 상품 링크 주소 입력" 
-                      />
-                    </label>
-                    <div className="flex justify-between items-center mt-2">
-                      <span className="text-[10px] text-zinc-400">쇼핑몰 링크에 맞게 상품 정보가 자동으로 매칭됩니다</span>
-                      <button className="secondary px-2 py-1 text-[11px] rounded" type="button" onClick={() => setLinks(links.filter(item => item.id !== link.id))}>삭제</button>
+                  <div className="link-editor p-3 border border-zinc-200 rounded-lg bg-zinc-50 mb-3" key={link.id}>
+                    <div className="flex gap-3">
+                      <div className="flex-1 flex flex-col gap-2">
+                        <label className="text-[10px] font-bold text-zinc-500 m-0 flex flex-col gap-1">
+                          링크 URL #{idx + 1}
+                          <input 
+                            type="url" 
+                            value={link.url} 
+                            onChange={(e) => handleUrlChange(link.id, e.target.value)} 
+                            placeholder="주소 입력 (네이버지도 복사글 전체 붙여넣기 가능)" 
+                            className="w-full bg-white border border-zinc-300 rounded p-2 text-xs"
+                          />
+                        </label>
+                        <label className="text-[10px] font-bold text-zinc-500 m-0 flex flex-col gap-1">
+                          링크 이름/장소명 (선택)
+                          <input 
+                            type="text" 
+                            value={link.title || ""} 
+                            onChange={(e) => setLinks(links.map(item => item.id === link.id ? { ...item, title: e.target.value } : item))} 
+                            placeholder="표시될 이름 입력 (예: 육회공작소 영등포점)" 
+                            className="w-full bg-white border border-zinc-300 rounded p-2 text-xs"
+                          />
+                        </label>
+                      </div>
+
+                      {/* 링크용 대표 이미지 개별 등록 */}
+                      <div className="flex flex-col items-center justify-center border border-dashed border-zinc-300 rounded-lg w-20 h-20 bg-white relative flex-shrink-0 cursor-pointer overflow-hidden mt-4">
+                        {link.image ? (
+                          <>
+                            <img src={link.image} alt="" className="w-full h-full object-cover" />
+                            <button 
+                              type="button" 
+                              onClick={() => setLinks(links.map(item => item.id === link.id ? { ...item, image: "" } : item))}
+                              className="absolute top-0.5 right-0.5 bg-black/60 text-white rounded-full w-4 h-4 flex items-center justify-center text-[8px] border-none"
+                            >
+                              ×
+                            </button>
+                          </>
+                        ) : (
+                          <label className="flex flex-col items-center justify-center cursor-pointer m-0 w-full h-full text-center">
+                            <i className="fa-solid fa-camera text-zinc-400 text-sm mb-0.5"></i>
+                            <span className="text-[8px] text-zinc-400 font-normal scale-90">사진 등록</span>
+                            <input 
+                              type="file" 
+                              accept="image/*" 
+                              className="hidden" 
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                const formData = new FormData();
+                                formData.append("file", file);
+                                const resp = await fetch("/upload", { method: "POST", body: formData });
+                                const res = await resp.json();
+                                if (res.success) {
+                                  setLinks(links.map(item => item.id === link.id ? { ...item, image: res.url } : item));
+                                } else {
+                                  alert("이미지 업로드 실패");
+                                }
+                              }} 
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center mt-2 border-t border-zinc-200 pt-2">
+                      <span className="text-[9px] text-zinc-400">지도나 상품 링크에 이름과 사진을 직접 입력할 수 있습니다.</span>
+                      <button className="secondary px-2 py-0.5 text-[10px] rounded" type="button" onClick={() => setLinks(links.filter(item => item.id !== link.id))}>삭제</button>
                     </div>
                   </div>
                 ))}
               </div>
 
-              <button className="secondary full border border-dashed text-xs" type="button" onClick={() => setLinks([...links, { id: generateId(), url: "" }])}>
-                + 구매 상품 링크 추가
+              <button className="secondary full border border-dashed text-xs" type="button" onClick={() => setLinks([...links, { id: generateId(), url: "", title: "", image: "" }])}>
+                + 구매 상품 / 지도 장소 링크 추가
               </button>
               <button className="primary full mt-4 text-xs font-bold" type="submit" disabled={loading}>
                 {loading ? "사진 최적화 및 등록 중..." : "글 등록 및 수익 모델 연동"}

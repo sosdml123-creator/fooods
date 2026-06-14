@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:image/image.dart' as img;
 import 'dart:convert';
 import 'dart:io';
 
@@ -29,6 +30,10 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
   List<AssetEntity> _assets = [];
   final List<SelectedPhoto> _selectedPhotos = [];
   
+  // 백그라운드 선업로드(Pre-uploading)를 위한 맵핑 객체들
+  final Map<String, String> _uploadedUrls = {}; 
+  final Map<String, Future<void>> _uploadFutures = {};
+
   AssetEntity? _previewAsset;
   File? _previewFile;
   
@@ -93,17 +98,87 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
     setState(() => _isLoading = false);
   }
 
+  // Dart image 패키지를 활용한 90% 이상 고용량 압축 기능 구현 (최대 1200px, 80% 퀄리티)
+  Future<File> _compressImage(File file) async {
+    try {
+      final bytes = await file.readAsBytes();
+      final image = img.decodeImage(bytes);
+      if (image == null) return file;
+
+      img.Image resized = image;
+      if (image.width > 1200 || image.height > 1200) {
+        if (image.width > image.height) {
+          resized = img.copyResize(image, width: 1200);
+        } else {
+          resized = img.copyResize(image, height: 1200);
+        }
+      }
+
+      final compressedBytes = img.encodeJpg(resized, quality: 80);
+
+      final tempDir = Directory.systemTemp;
+      final tempFile = File(
+          '${tempDir.path}/compressed_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      await tempFile.writeAsBytes(compressedBytes);
+      return tempFile;
+    } catch (e) {
+      debugPrint("이미지 압축 실패: $e");
+      return file;
+    }
+  }
+
+  String _getPhotoKey(SelectedPhoto photo) {
+    if (photo.entity != null) return photo.entity!.id;
+    return photo.file!.path;
+  }
+
+  // 사진을 선택 또는 촬영하는 순간 즉시 압축 및 R2 서버로 선업로드(Pre-uploading) 시작
+  Future<void> _compressAndUploadPhoto(SelectedPhoto photo) async {
+    final key = _getPhotoKey(photo);
+    try {
+      File? originalFile = await photo.getFile;
+      if (originalFile == null) return;
+      
+      // 1. 이미지 압축
+      File compressedFile = await _compressImage(originalFile);
+      
+      // 2. R2로 업로드
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('https://myplating.kr/upload'),
+      );
+      request.files.add(await http.MultipartFile.fromPath('file', compressedFile.path));
+
+      var streamedResponse = await request.send();
+      var response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        var data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          _uploadedUrls[key] = data['url'];
+          debugPrint("선업로드 성공: $key -> ${data['url']}");
+        }
+      }
+    } catch (e) {
+      debugPrint("선업로드 실패: $e");
+    }
+  }
+
   Future<void> _handleCamera() async {
     final XFile? photo = await _picker.pickImage(source: ImageSource.camera);
     if (photo != null) {
       final file = File(photo.path);
       final selected = SelectedPhoto(file: file);
+      final key = file.path;
       
       setState(() {
         if (_selectedPhotos.length < widget.maxCount) {
           _selectedPhotos.add(selected);
           _previewFile = file;
           _previewAsset = null;
+          
+          // 촬영하자마자 백그라운드 선업로드 기동
+          _uploadFutures[key] = _compressAndUploadPhoto(selected);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text("사진은 최대 ${widget.maxCount}장까지 선택 가능합니다.")),
@@ -114,11 +189,14 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
   }
 
   void _toggleSelection(AssetEntity asset) {
-    int index = _selectedPhotos.indexWhere((p) => p.entity?.id == asset.id);
+    final key = asset.id;
+    int index = _selectedPhotos.indexWhere((p) => p.entity?.id == key);
     setState(() {
       if (index >= 0) {
         // 이미 선택된 경우 제거
         _selectedPhotos.removeAt(index);
+        _uploadedUrls.remove(key);
+        _uploadFutures.remove(key);
         if (_selectedPhotos.isNotEmpty) {
           final last = _selectedPhotos.last;
           _previewAsset = last.entity;
@@ -127,9 +205,13 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
       } else {
         // 새로 선택하는 경우
         if (_selectedPhotos.length < widget.maxCount) {
-          _selectedPhotos.add(SelectedPhoto(entity: asset));
+          final selected = SelectedPhoto(entity: asset);
+          _selectedPhotos.add(selected);
           _previewAsset = asset;
           _previewFile = null;
+          
+          // 터치 즉시 백그라운드 선업로드 기동
+          _uploadFutures[key] = _compressAndUploadPhoto(selected);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text("사진은 최대 ${widget.maxCount}장까지 선택 가능합니다.")),
@@ -148,7 +230,7 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
 
     setState(() => _isUploading = true);
     
-    // 로딩 모달 띄우기
+    // 업로드 마무리 로딩 모달 표출
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -159,82 +241,100 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
             children: [
               CircularProgressIndicator(color: Colors.black),
               SizedBox(width: 20),
-              Text("사진을 업로드하는 중입니다..."),
+              Text("사진 업로드를 완료하는 중입니다..."),
             ],
           ),
         ),
       ),
     );
 
-    List<String> uploadedUrls = [];
-    
-    try {
-      for (var photo in _selectedPhotos) {
-        File? file = await photo.getFile;
-        if (file == null) continue;
-
-        var request = http.MultipartRequest(
-          'POST',
-          Uri.parse('https://myplating.kr/upload'),
-        );
-        request.files.add(await http.MultipartFile.fromPath('file', file.path));
-
-        var streamedResponse = await request.send();
-        var response = await http.Response.fromStream(streamedResponse);
-
-        if (response.statusCode == 200) {
-          var data = jsonDecode(response.body);
-          if (data['success'] == true) {
-            uploadedUrls.add(data['url']);
-          }
-        }
+    // 모든 선택 항목의 비동기 업로드 Future들을 수집하여 대기
+    List<Future<void>> futures = [];
+    for (var photo in _selectedPhotos) {
+      final key = _getPhotoKey(photo);
+      final f = _uploadFutures[key];
+      if (f != null) {
+        futures.add(f);
       }
-    } catch (e) {
-      debugPrint("업로드 오류: $e");
+    }
+    
+    await Future.wait(futures);
+
+    // 사진첩 선택 순서에 완벽히 정렬하여 R2 URL들을 파싱
+    List<String> urls = [];
+    for (var photo in _selectedPhotos) {
+      final key = _getPhotoKey(photo);
+      final url = _uploadedUrls[key];
+      if (url != null) {
+        urls.add(url);
+      }
     }
 
-    // 로딩 다이얼로그 닫기
     if (mounted) {
-      Navigator.pop(context);
+      Navigator.pop(context); // 로딩 창 닫기
     }
 
     setState(() => _isUploading = false);
 
-    // 업로드 성공한 URL 리스트를 리턴하며 화면 닫기
     if (mounted) {
-      Navigator.pop(context, uploadedUrls);
+      Navigator.pop(context, urls); // 결과 반환하며 갤러리 피커 닫기
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // 트렌디하고 고급스러운 다크 그레이 디자인 테마
+    const darkBackgroundColor = Color(0xFF0F0F10);
+    const darkCardColor = Color(0xFF18181C);
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: darkBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: darkBackgroundColor,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.black),
+          icon: const Icon(Icons.close, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          "전체 보기",
-          style: TextStyle(
-            color: Colors.black,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              "최근 항목",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(width: 4),
+            Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 18),
+          ],
         ),
         centerTitle: true,
         actions: [
-          TextButton(
-            onPressed: (_selectedPhotos.isEmpty || _isUploading) ? null : _uploadAndReturn,
-            child: Text(
-              "다음",
-              style: TextStyle(
-                color: _selectedPhotos.isEmpty ? Colors.grey : Colors.blue,
-                fontWeight: FontWeight.bold,
-                fontSize: 15,
+          // 파란색 캡슐 디자인의 트렌디한 다음 버튼
+          Padding(
+            padding: const EdgeInsets.only(right: 12, top: 10, bottom: 10),
+            child: ElevatedButton(
+              onPressed: (_selectedPhotos.isEmpty || _isUploading) ? null : _uploadAndReturn,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue[600],
+                disabledBackgroundColor: Colors.grey[800],
+                foregroundColor: Colors.white,
+                disabledForegroundColor: Colors.grey[400],
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              child: const Text(
+                "다음",
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
@@ -244,9 +344,9 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
         children: [
           // 상단 사진 크게 보기 영역
           Container(
-            height: MediaQuery.of(context).size.height * 0.4,
+            height: MediaQuery.of(context).size.height * 0.38,
             width: double.infinity,
-            color: Colors.grey[100],
+            color: Colors.black,
             child: _previewFile != null
                 ? Image.file(_previewFile!, fit: BoxFit.cover)
                 : (_previewAsset != null
@@ -256,13 +356,13 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
                           if (snapshot.connectionState == ConnectionState.done && snapshot.data != null) {
                             return Image.file(snapshot.data!, fit: BoxFit.cover);
                           }
-                          return const Center(child: CircularProgressIndicator(color: Colors.black));
+                          return const Center(child: CircularProgressIndicator(color: Colors.white24));
                         },
                       )
                     : const Center(
                         child: Text(
                           "사진을 선택해 주세요",
-                          style: TextStyle(color: Colors.grey),
+                          style: TextStyle(color: Colors.white30, fontSize: 13),
                         ),
                       )),
           ),
@@ -270,33 +370,33 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
           // 하단 그리드 영역
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Colors.black))
+                ? const Center(child: CircularProgressIndicator(color: Colors.white24))
                 : GridView.builder(
                     padding: const EdgeInsets.all(1),
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 4,
-                      crossAxisSpacing: 1,
-                      mainAxisSpacing: 1,
+                      crossAxisSpacing: 1.5,
+                      mainAxisSpacing: 1.5,
                     ),
                     itemCount: _assets.length + 1, // 카메라 타일 1개 추가
                     itemBuilder: (context, index) {
                       if (index == 0) {
-                        // 0번 타일: 촬영하기
+                        // 0번 타일: 촬영하기 (어두운 카드 디자인)
                         return GestureDetector(
                           onTap: _handleCamera,
                           child: Container(
-                            color: Colors.grey[200],
+                            color: darkCardColor,
                             child: const Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.camera_alt, color: Colors.black, size: 28),
-                                SizedBox(height: 4),
+                                Icon(Icons.camera_alt_outlined, color: Colors.white, size: 28),
+                                SizedBox(height: 5),
                                 Text(
                                   "촬영하기",
                                   style: TextStyle(
                                     fontSize: 11,
-                                    color: Colors.black,
-                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white70,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ],
@@ -321,27 +421,33 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
                               builder: (context, snapshot) {
                                 final bytes = snapshot.data;
                                 if (bytes == null) {
-                                  return Container(color: Colors.grey[200]);
+                                  return Container(color: darkCardColor);
                                 }
                                 return Image.memory(bytes, fit: BoxFit.cover);
                               },
                             ),
                             
-                            // 선택 시 반투명 레이어 효과
+                            // 선택 시 반투명 블랙 레이어 및 크기 변화 효과 부여
                             if (isSelected)
                               Container(
-                                color: Colors.white.withOpacity(0.2),
+                                color: Colors.black.withOpacity(0.35),
+                                child: Container(
+                                  margin: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.blue[500]!, width: 2),
+                                  ),
+                                ),
                               ),
                             
                             // 우상단 체크/순서 동그라미 배지
                             Positioned(
-                              top: 6,
-                              right: 6,
+                              top: 8,
+                              right: 8,
                               child: Container(
-                                width: 22,
-                                height: 22,
+                                width: 20,
+                                height: 20,
                                 decoration: BoxDecoration(
-                                  color: isSelected ? Colors.blue : Colors.black.withOpacity(0.4),
+                                  color: isSelected ? Colors.blue[600] : Colors.black.withOpacity(0.4),
                                   shape: BoxShape.circle,
                                   border: Border.all(color: Colors.white, width: 1.5),
                                 ),
@@ -351,7 +457,7 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
                                           "${selIdx + 1}",
                                           style: const TextStyle(
                                             color: Colors.white,
-                                            fontSize: 11,
+                                            fontSize: 10,
                                             fontWeight: FontWeight.bold,
                                           ),
                                         )
