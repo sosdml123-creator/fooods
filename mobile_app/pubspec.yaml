@@ -1,4 +1,4 @@
-﻿name: plating_mobile_app
+name: plating_mobile_app
 description: "Plating hybrid webview application for iOS and Android"
 publish_to: 'none'
 
@@ -11,7 +11,8 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
-  webview_flutter: ^4.8.0
+  flutter_inappwebview: ^6.0.0
+  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_test:
