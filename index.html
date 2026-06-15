@@ -1132,7 +1132,7 @@
     }
 
     // 에타 스타일 커뮤니티 상세 페이지 (댓글 수정/삭제 CRUD, 공감 토글)
-    function CommunityDetailView({ activeComPostId, communityPosts, onBack, onLikePost, onDeletePost, onEditPost, onAddComment, onEditComment, onDeleteComment, onScrapPost, currentUserName }) {
+    function CommunityDetailView({ activeComPostId, communityPosts, onBack, onLikePost, onDeletePost, onEditPost, onAddComment, onEditComment, onDeleteComment, onScrapPost, currentUserName, currentUserRole }) {
       const post = communityPosts.find(p => p.id === activeComPostId);
       if (!post) return (
         <div className="p-4 text-center">
@@ -1152,6 +1152,7 @@
       const [editingCommentText, setEditingCommentText] = useState("");
 
       const isMyPost = post.author === "나" || post.author === currentUserName;
+      const isAdmin = currentUserRole === "admin";
 
       useEffect(() => {
         setEditComTitle(post.title);
@@ -2289,6 +2290,59 @@
       const [communityPosts, setCommunityPosts] = useState(initialCommunityPosts);
 
       const [dbLoaded, setDbLoaded] = useState(false); // IndexedDB 로드 완료 플래그
+
+      // 뒤로가기 브라우저 역사 연동 (HTML5 History API)
+      const isInitialMount = useRef(true);
+      const isPoppingState = useRef(false);
+
+      useEffect(() => {
+        if (dbLoaded) {
+          if (isInitialMount.current) {
+            isInitialMount.current = false;
+            // 최초 상태 저장
+            window.history.replaceState({
+              activeTab,
+              activePostId,
+              activeComPostId,
+              activeUser,
+              writeOpen
+            }, "");
+            return;
+          }
+
+          if (isPoppingState.current) {
+            // popstate 이벤트로 인한 상태 변화인 경우 pushState를 생략
+            isPoppingState.current = false;
+            return;
+          }
+
+          // 상태가 변경되었을 때 pushState 실행
+          window.history.pushState({
+            activeTab,
+            activePostId,
+            activeComPostId,
+            activeUser,
+            writeOpen
+          }, "");
+        }
+      }, [activeTab, activePostId, activeComPostId, activeUser, writeOpen, dbLoaded]);
+
+      useEffect(() => {
+        const handlePopState = (event) => {
+          if (event.state) {
+            isPoppingState.current = true;
+            const state = event.state;
+            if (state.activeTab !== undefined) setActiveTab(state.activeTab);
+            if (state.activePostId !== undefined) setActivePostId(state.activePostId);
+            if (state.activeComPostId !== undefined) setActiveComPostId(state.activeComPostId);
+            if (state.activeUser !== undefined) setActiveUser(state.activeUser);
+            if (state.writeOpen !== undefined) setWriteOpen(state.writeOpen);
+          }
+        };
+
+        window.addEventListener("popstate", handlePopState);
+        return () => window.removeEventListener("popstate", handlePopState);
+      }, []);
 
       // 2. 마운트 시 IndexedDB 복원 (Hydration)
       useEffect(() => {

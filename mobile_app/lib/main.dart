@@ -16,7 +16,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '플레이팅 모바일',
+      title: '플레이팅',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -38,6 +38,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   InAppWebViewController? _webViewController;
   final String _targetUrl = 'https://myplating.kr';
   static const MethodChannel _intentChannel = MethodChannel('com.foodhouse.plating/intent');
+  bool _isLoadingWeb = true;
 
   @override
   void initState() {
@@ -72,17 +73,19 @@ class _WebViewScreenState extends State<WebViewScreen> {
       child: Scaffold(
         backgroundColor: Colors.white,
         body: SafeArea(
-          child: InAppWebView(
-            initialUrlRequest: URLRequest(url: WebUri(_targetUrl)),
-            initialSettings: InAppWebViewSettings(
-              useShouldOverrideUrlLoading: true,
-              mediaPlaybackRequiresUserGesture: false,
-              javaScriptEnabled: true,
-              javaScriptCanOpenWindowsAutomatically: true,
-              allowFileAccessFromFileURLs: true,
-              allowUniversalAccessFromFileURLs: true,
-              useOnDownloadStart: true,
-            ),
+          child: Stack(
+            children: [
+              InAppWebView(
+                initialUrlRequest: URLRequest(url: WebUri(_targetUrl)),
+                initialSettings: InAppWebViewSettings(
+                  useShouldOverrideUrlLoading: true,
+                  mediaPlaybackRequiresUserGesture: false,
+                  javaScriptEnabled: true,
+                  javaScriptCanOpenWindowsAutomatically: true,
+                  allowFileAccessFromFileURLs: true,
+                  allowUniversalAccessFromFileURLs: true,
+                  useOnDownloadStart: true,
+                ),
             onWebViewCreated: (controller) {
               _webViewController = controller;
               
@@ -142,9 +145,57 @@ class _WebViewScreenState extends State<WebViewScreen> {
               }
               return NavigationActionPolicy.ALLOW;
             },
+            onLoadStop: (controller, url) {
+              setState(() {
+                _isLoadingWeb = false;
+              });
+            },
           ),
-        ),
+          if (_isLoadingWeb)
+            Container(
+              color: Colors.white,
+              width: double.infinity,
+              height: double.infinity,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: Image.asset(
+                        'assets/icon.png',
+                        width: 120,
+                        height: 120,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      "플레이팅",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.black54,
+                        strokeWidth: 2.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
-    );
+    ),
+  ),
+);
   }
 }

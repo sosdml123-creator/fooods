@@ -40,6 +40,7 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
 
   AssetEntity? _previewAsset;
   File? _previewFile;
+  File? _previewLoadedFile;
   
   bool _isLoading = false;
   bool _isUploading = false;
@@ -81,6 +82,7 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
           _assets = assets;
           if (assets.isNotEmpty) {
             _previewAsset = assets[0];
+            _loadPreviewFile(assets[0]);
           }
         });
       }
@@ -110,6 +112,19 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
       }
     }
     setState(() => _isLoading = false);
+  }
+
+  Future<void> _loadPreviewFile(AssetEntity asset) async {
+    try {
+      final file = await asset.file;
+      if (file != null && mounted && _previewAsset?.id == asset.id) {
+        setState(() {
+          _previewLoadedFile = file;
+        });
+      }
+    } catch (e) {
+      debugPrint("미리보기 파일 로드 실패: $e");
+    }
   }
 
   // Dart image 패키지를 활용한 90% 이상 고용량 압축 기능 구현 (최대 1200px, 80% 퀄리티)
@@ -215,6 +230,21 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
           final last = _selectedPhotos.last;
           _previewAsset = last.entity;
           _previewFile = last.file;
+          if (last.entity != null) {
+            _loadPreviewFile(last.entity!);
+          } else {
+            _previewLoadedFile = null;
+          }
+        } else {
+          // 모든 선택이 해제된 경우 최근 첫 번째 사진으로 미리보기 환원
+          _previewFile = null;
+          if (_assets.isNotEmpty) {
+            _previewAsset = _assets[0];
+            _loadPreviewFile(_assets[0]);
+          } else {
+            _previewAsset = null;
+            _previewLoadedFile = null;
+          }
         }
       } else {
         // 새로 선택하는 경우
@@ -223,6 +253,7 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
           _selectedPhotos.add(selected);
           _previewAsset = asset;
           _previewFile = null;
+          _loadPreviewFile(asset);
           
           // 터치 즉시 백그라운드 선업로드 기동
           _uploadFutures[key] = _compressAndUploadPhoto(selected);
@@ -356,27 +387,27 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
       ),
       body: Column(
         children: [
-          // 상단 사진 크게 보기 영역
+          // 상단 사진 크게 보기 영역 (게시글 업로드 사이즈 4:5 BoxFit.cover 비율 대응)
           Container(
             height: MediaQuery.of(context).size.height * 0.38,
             width: double.infinity,
             color: Colors.black,
+            alignment: Alignment.center,
             child: _previewFile != null
-                ? Image.file(_previewFile!, fit: BoxFit.contain)
-                : (_previewAsset != null
-                    ? FutureBuilder<File?>(
-                        future: _previewAsset!.file,
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState == ConnectionState.done && snapshot.data != null) {
-                            return Image.file(snapshot.data!, fit: BoxFit.contain);
-                          }
-                          return const Center(child: CircularProgressIndicator(color: Colors.white24));
-                        },
+                ? AspectRatio(
+                    aspectRatio: 4 / 5,
+                    child: Image.file(_previewFile!, fit: BoxFit.cover),
+                  )
+                : (_previewLoadedFile != null
+                    ? AspectRatio(
+                        aspectRatio: 4 / 5,
+                        child: Image.file(_previewLoadedFile!, fit: BoxFit.cover),
                       )
                     : const Center(
-                        child: Text(
-                          "사진을 선택해 주세요",
-                          style: TextStyle(color: Colors.white30, fontSize: 13),
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(color: Colors.white24, strokeWidth: 2.5),
                         ),
                       )),
           ),
