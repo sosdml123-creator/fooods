@@ -594,10 +594,6 @@ function LoginModal({ onClose, onLogin }) {
             <i className="fa-solid fa-comment text-zinc-950"></i> 카카오로 시작하기
           </button>
           
-          <button className="secondary full" onClick={() => onLogin("guest")}>
-            게스트 로그인 (테스트용)
-          </button>
-          
           <div className="mt-8 text-left bg-zinc-50 p-3 rounded-lg border border-zinc-200 text-[11px] text-zinc-500 leading-relaxed">
             <span className="font-bold text-zinc-700 block mb-1">💡 비전공자 운영자 팁 (카카오 로그인 구현 방법)</span>
             향후 모바일 및 실배포 시에는 카카오 디벨로퍼스(developers.kakao.com)에서 애플리케이션 등록 후, 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:convert';
@@ -36,6 +37,7 @@ class WebViewScreen extends StatefulWidget {
 class _WebViewScreenState extends State<WebViewScreen> {
   InAppWebViewController? _webViewController;
   final String _targetUrl = 'https://myplating.kr';
+  static const MethodChannel _intentChannel = MethodChannel('com.foodhouse.plating/intent');
 
   @override
   void initState() {
@@ -113,12 +115,17 @@ class _WebViewScreenState extends State<WebViewScreen> {
             var uri = navigationAction.request.url;
             if (uri != null) {
               final urlStr = uri.toString();
-              // 카카오 로그인 스키마 등 외부 앱 리다이렉션 흐름 제어 및 취소 처리
+              // 카카오 로그인 스키마 등 외부 앱 리다이렉션 흐름 제어 및 인텐트 실행
               if (urlStr.startsWith('intent://') || 
                   urlStr.startsWith('kakaolink://') || 
                   urlStr.startsWith('kakaotalk://') || 
                   urlStr.startsWith('kakaotoll://')) {
                 debugPrint('외부 스키마 및 카카오 딥링크 감지: $urlStr');
+                try {
+                  await _intentChannel.invokeMethod('launchIntent', {'url': urlStr});
+                } on PlatformException catch (e) {
+                  debugPrint('카카오 인텐트 실행 실패: ${e.message}');
+                }
                 return NavigationActionPolicy.CANCEL;
               }
             }
