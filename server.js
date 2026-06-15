@@ -117,6 +117,9 @@ const message_template = {
 // 로컬 회원 DB 파일 경로
 const USERS_DB_PATH = path.join(__dirname, "users.json");
 
+// 관리자 권한을 가질 카카오 고유 ID 목록
+const ADMIN_KAKAO_IDS = [4933844865];
+
 // 로컬 DB 헬퍼 함수
 function readUsers() {
   try {
@@ -225,9 +228,16 @@ app.get("/redirect", async function (req, res) {
       if (existingUserIdx === -1) {
         // [회원가입] 신규 회원이므로 로컬 DB에 등록
         isNewUser = true;
+        
+        // 닉네임 중복 방지 (회원가입 시)
+        let uniqueNickname = userNickname;
+        while (users.some(u => u.nickname.toLowerCase() === uniqueNickname.toLowerCase())) {
+          uniqueNickname = `${userNickname}_${Math.floor(100 + Math.random() * 900)}`;
+        }
+
         const newUser = {
           kakao_id: kakaoProfile.id,
-          nickname: userNickname,
+          nickname: uniqueNickname,
           profile_image: userProfileImg,
           email: userEmail,
           registered_at: new Date().toISOString(),
@@ -235,13 +245,14 @@ app.get("/redirect", async function (req, res) {
         };
         users.push(newUser);
         writeUsers(users);
-        console.log(`[회원가입 완료] 카카오 ID: ${kakaoProfile.id}, 닉네임: ${userNickname}`);
+        userNickname = uniqueNickname; // 세션에 저장할 용도
+        console.log(`[회원가입 완료] 카카오 ID: ${kakaoProfile.id}, 닉네임: ${uniqueNickname}`);
       } else {
         // [로그인] 기존 회원이므로 최종 로그인 시간 업데이트
         isNewUser = false;
         users[existingUserIdx].last_login_at = new Date().toISOString();
-        // 최신 프로필 정보 업데이트 반영
-        users[existingUserIdx].nickname = userNickname;
+        // 최신 프로필 이미지와 이메일만 동기화하고, 닉네임은 기존 가입 시점의 커스텀 값을 유지
+        userNickname = users[existingUserIdx].nickname;
         users[existingUserIdx].profile_image = userProfileImg;
         users[existingUserIdx].email = userEmail;
         writeUsers(users);
@@ -277,11 +288,68 @@ app.get("/profile", async function (req, res) {
   const isNewUser = req.session.isNewUser || false;
   req.session.isNewUser = false; 
 
+  const isAdmin = ADMIN_KAKAO_IDS.includes(req.session.user.kakao_id);
+
   res.json({
     isLoggedIn: true,
     isNewUser: isNewUser,
-    user: req.session.user
+    user: {
+      ...req.session.user,
+      role: isAdmin ? "admin" : "user"
+    }
   });
+});
+
+// 프로필 편집 & 중복 닉네임 검증 API
+app.post("/profile/update", async function (req, res) {
+  if (!req.session.key || !req.session.user) {
+    return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
+  }
+
+  const { nickname, bio, avatarImg } = req.body;
+  const targetNickname = (nickname || "").trim();
+
+  if (!targetNickname) {
+    return res.status(400).json({ success: false, message: "닉네임을 입력해 주세요." });
+  }
+
+  const users = readUsers();
+  const currentKakaoId = req.session.user.kakao_id;
+
+  // 본인을 제외한 다른 가입 유저 중 닉네임 중복 체크
+  const isDuplicate = users.some(
+    u => u.kakao_id !== currentKakaoId && u.nickname.toLowerCase() === targetNickname.toLowerCase()
+  );
+
+  // 기본 시스템 mock 크리에이터명과 겹치는지 체크
+  const systemCreators = ["푸드스타일리스트", "카페투어러"];
+  const isSystemDuplicate = systemCreators.some(
+    name => name.toLowerCase() === targetNickname.toLowerCase()
+  );
+
+  if (isDuplicate || isSystemDuplicate) {
+    return res.json({ success: false, message: "이미 사용 중인 닉네임입니다. 다른 닉네임을 사용해 주세요." });
+  }
+
+  // users.json 업데이트
+  const userIdx = users.findIndex(u => u.kakao_id === currentKakaoId);
+  if (userIdx !== -1) {
+    users[userIdx].nickname = targetNickname;
+    // bio와 profile_image 업데이트
+    users[userIdx].bio = bio || "";
+    if (avatarImg) {
+      users[userIdx].profile_image = avatarImg;
+    }
+    writeUsers(users);
+  }
+
+  // 세션 정보 업데이트
+  req.session.user.nickname = targetNickname;
+  if (avatarImg) {
+    req.session.user.profile_image = avatarImg;
+  }
+
+  res.json({ success: true });
 });
 
 // 친구 목록 조회

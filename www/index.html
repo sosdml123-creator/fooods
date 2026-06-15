@@ -617,7 +617,7 @@
     }
 
     // 내가 쓴 글 수정/삭제 옵션 및 이미지 카레셀 상세 렌더링을 내장한 디테일 시트 모달 (댓글 수정/삭제 지원)
-    function DetailModal({ postId, posts, onClose, onLike, onScrap, onComment, onEditComment, onDeleteComment, onTagClick, onAuthorClick, onDeletePost, onEditPost, currentUserName }) {
+    function DetailModal({ postId, posts, onClose, onLike, onScrap, onComment, onEditComment, onDeleteComment, onTagClick, onAuthorClick, onDeletePost, onEditPost, currentUserName, currentUserRole }) {
       const post = posts.find(p => p.id === postId);
       if (!post) return null;
 
@@ -633,6 +633,7 @@
 
       const isVideo = post.mediaType === "video";
       const isMyPost = post.author === "나" || post.author === currentUserName;
+      const isAdmin = currentUserRole === "admin";
 
       useEffect(() => {
         setEditTitle(post.title);
@@ -684,14 +685,14 @@
               
               <div className="flex items-center gap-3">
                 {/* 햄버거/케밥 드롭다운 메뉴 */}
-                {isMyPost && !isEditingMode && (
+                {(isMyPost || isAdmin) && !isEditingMode && (
                   <div className="kebab-dropdown-wrapper">
                     <button className="kebab-menu-btn" onClick={() => setShowKebabMenu(!showKebabMenu)} aria-label="메뉴">
                       <i className="fa-solid fa-ellipsis-vertical text-zinc-500"></i>
                     </button>
                     {showKebabMenu && (
                       <div className="kebab-dropdown">
-                        <button onClick={() => { setIsEditingMode(true); setShowKebabMenu(false); }}>수정</button>
+                        {isMyPost && <button onClick={() => { setIsEditingMode(true); setShowKebabMenu(false); }}>수정</button>}
                         <button className="delete-btn" onClick={() => { handleDelete(); setShowKebabMenu(false); }}>삭제</button>
                       </div>
                     )}
@@ -822,11 +823,7 @@
 
       return (
         <section className="my-page">
-          <div className="px-4 pt-3 flex items-center gap-2">
-            <button className="text-zinc-500 text-lg py-1.5 active:scale-95 transition-transform" onClick={onBack} aria-label="뒤로가기">
-              <i className="fa-solid fa-chevron-left"></i>
-            </button>
-          </div>
+          <div className="pt-3"></div>
 
           <div className="my-card">
             <div className="flex items-center justify-between gap-4">
@@ -895,11 +892,61 @@
       );
     }
 
+    // 커뮤니티 이용 규칙 모달
+    function CommunityRulesModal({ isOpen, onClose }) {
+      if (!isOpen) return null;
+      return (
+        <div className="sheet-backdrop" onClick={onClose} style={{ zIndex: 1100 }}>
+          <div className="sheet text-left" onClick={(e) => e.stopPropagation()} style={{ maxHeight: "80vh", overflowY: "auto", padding: "20px" }}>
+            <div className="flex justify-between items-center border-b border-zinc-100 pb-3 mb-4">
+              <h3 className="text-sm font-bold text-zinc-950 flex items-center gap-1.5">
+                🛡️ 플레이팅 커뮤니티 이용 규칙
+              </h3>
+              <button onClick={onClose} className="text-zinc-400 text-xl font-normal">×</button>
+            </div>
+            
+            <div className="flex flex-col gap-4 text-xs text-zinc-700 leading-relaxed">
+              <div>
+                <strong className="text-zinc-950 block mb-1">1. 음란 및 음란물 금지</strong>
+                <p>성적 수치심을 유발하거나 음란한 표현, 이미지, 음란 웹사이트 링크를 게시하는 행위는 엄격히 금지됩니다. 위반 시 계정이 즉시 영구 정지될 수 있습니다.</p>
+              </div>
+              
+              <div>
+                <strong className="text-zinc-950 block mb-1">2. 욕설 및 인신공격, 명예훼손 금지</strong>
+                <p>특정 유저나 타인을 지칭하여 비방하거나, 욕설을 사용해 인격을 모독하거나, 사실 유무와 관계없이 명예를 훼손하는 부정적 게시글은 사전 조치 없이 삭제됩니다.</p>
+              </div>
+
+              <div>
+                <strong className="text-zinc-950 block mb-1">3. 상업적 홍보 및 스팸 금지</strong>
+                <p>맛집 할인쿠폰을 포함하여 앱 내부 기능을 사칭한 부적절한 광고 홍보, 무차별적인 도배성 게시글, 상업성 거래 글은 절대 업로드할 수 없습니다.</p>
+              </div>
+
+              <div>
+                <strong className="text-zinc-950 block mb-1">4. 타인의 권리 및 저작권 침해 금지</strong>
+                <p>인터넷 블로그나 타인의 SNS 사진 및 레시피를 무단 복제하여 마치 본인의 게시글인 것처럼 게시하는 도용 행위를 금지하며, 초상권 및 저작권을 존중해 주세요.</p>
+              </div>
+
+              <div>
+                <strong className="text-zinc-950 block mb-1">5. 깨끗하고 안전한 커뮤니티 문화 조성</strong>
+                <p>위 위반 사항에 해당하는 게시글은 관리자(Admin) 권한으로 상시 모니터링을 통해 **즉시 삭제** 조치되며, 누적 신고 시 서비스 이용이 영구 정지될 수 있습니다.</p>
+              </div>
+            </div>
+            
+            <button className="primary w-full py-2.5 rounded-lg text-xs font-bold mt-6" onClick={onClose}>
+              확인했습니다
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     // 에타 스타일 커뮤니티 컴포넌트 (익명 제거, 오른쪽 아래 연필 모양 플로팅 글쓰기 버튼 탑재, 상세 페이지 이동 방식)
     function CommunityView({ communityPosts, onPostClick, onOpenCommunityWrite, onLikePost, onScrapPost }) {
       const [comCategory, setComCategory] = useState("🔥 인기");
       const [showSearch, setShowSearch] = useState(false);
       const [comSearchQuery, setComSearchQuery] = useState("");
+
+      const [showRulesModal, setShowRulesModal] = useState(false);
 
       const comCategories = ["🔥 인기", "💬 자유", "❓ 질문", "🛒 공동구매", "📍 맛집추천"];
       
@@ -936,6 +983,27 @@
               </button>
             </div>
           </div>
+
+          {/* 커뮤니티 규칙 안내 배너 */}
+          <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 mb-4 flex items-start gap-2.5 justify-between shadow-sm">
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-bold text-zinc-950 flex items-center gap-1">
+                🛡️ 커뮤니티 이용 규칙 안내
+              </div>
+              <p className="text-[10px] text-zinc-500 mt-1 leading-relaxed">
+                성적인 표현이나 음란물, 욕설, 타인 비방, 광고 도배글 등은 사전 예고 없이 즉시 삭제 조치됩니다.
+              </p>
+            </div>
+            <button 
+              type="button"
+              className="text-[10px] bg-zinc-900 text-white px-2.5 py-1.5 rounded-lg font-bold hover:bg-black flex-shrink-0 active:scale-95 transition-transform"
+              onClick={() => setShowRulesModal(true)}
+            >
+              규칙 보기
+            </button>
+          </div>
+
+          <CommunityRulesModal isOpen={showRulesModal} onClose={() => setShowRulesModal(false)} />
 
           {showSearch && (
             <div className="relative mb-4">
@@ -1144,14 +1212,14 @@
                 <span>{post.author}</span>
               </div>
               <div>
-                {isMyPost && !isEditingCom && (
+                {(isMyPost || isAdmin) && !isEditingCom && (
                   <div className="kebab-dropdown-wrapper">
                     <button className="kebab-menu-btn" onClick={() => setShowKebabMenu(!showKebabMenu)} aria-label="메뉴">
                       <i className="fa-solid fa-ellipsis-vertical text-zinc-500"></i>
                     </button>
                     {showKebabMenu && (
                       <div className="kebab-dropdown">
-                        <button onClick={() => { startEdit(); setShowKebabMenu(false); }}>수정</button>
+                        {isMyPost && <button onClick={() => { startEdit(); setShowKebabMenu(false); }}>수정</button>}
                         <button className="delete-btn" onClick={() => { deletePost(); setShowKebabMenu(false); }}>삭제</button>
                       </div>
                     )}
@@ -1271,6 +1339,7 @@
       const [editName, setEditName] = useState(profile.name);
       const [editBio, setEditBio] = useState(profile.bio);
       const [editPhoto, setEditPhoto] = useState(profile.avatarImg || "");
+      const fileInputRef = useRef(null);
       
       const [myTab, setMyTab] = useState("posts");
       const [myCategory, setMyCategory] = useState("전체");
@@ -1293,15 +1362,64 @@
         reader.readAsDataURL(file);
       }
 
+      function startEditing() {
+        setEditName(profile.name);
+        setEditBio(profile.bio);
+        setEditPhoto(profile.avatarImg || "");
+        setIsEditing(true);
+      }
+
       function handleSave() {
-        if (!editName.trim()) return;
-        setProfile({
-          name: editName.trim(),
-          bio: editBio.trim(),
-          avatar: editName.slice(0, 1),
-          avatarImg: editPhoto
+        const targetName = editName.trim();
+        if (!targetName) return;
+
+        // 1. 클라이언트단에서 mock 크리에이터 이름과 중복 확인
+        const isMockCreatorDuplicate = Object.keys(initialCreatorsData).some(
+          (name) => name !== profile.name && name.toLowerCase() === targetName.toLowerCase()
+        );
+        if (isMockCreatorDuplicate) {
+          alert("이미 사용 중인 닉네임입니다. 다른 닉네임을 사용해 주세요.");
+          return;
+        }
+
+        // 2. 백엔드와 연동하여 세션/DB 중복체크 진행 후 최종 저장
+        fetch("/profile/update", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            nickname: targetName,
+            bio: editBio.trim(),
+            avatarImg: editPhoto
+          })
+        })
+        .then(r => r.json())
+        .then(res => {
+          if (res.success) {
+            setProfile({
+              name: targetName,
+              bio: editBio.trim(),
+              avatar: targetName.slice(0, 1),
+              avatarImg: editPhoto,
+              role: profile.role || "user"
+            });
+            setIsEditing(false);
+            alert("프로필이 저장되었습니다.");
+          } else {
+            alert(res.message || "프로필 저장 중 오류가 발생했습니다.");
+          }
+        })
+        .catch(err => {
+          console.error("프로필 저장 실패:", err);
+          // 오프라인 혹은 개발 환경 폴백
+          setProfile({
+            name: targetName,
+            bio: editBio.trim(),
+            avatar: targetName.slice(0, 1),
+            avatarImg: editPhoto,
+            role: profile.role || "user"
+          });
+          setIsEditing(false);
         });
-        setIsEditing(false);
       }
 
       return (
@@ -1309,17 +1427,45 @@
           <div className="my-card">
             {isEditing ? (
               <div className="flex flex-col gap-3">
+                {/* 앱 스타일 프로필 이미지 에디터 */}
+                <div className="flex flex-col items-center gap-2 mb-3 mt-1">
+                  <div 
+                    className="relative w-20 h-20 rounded-full border border-zinc-200 shadow-sm overflow-hidden bg-zinc-100 cursor-pointer active:scale-95 transition-transform"
+                    onClick={() => fileInputRef.current.click()}
+                  >
+                    {editPhoto ? (
+                      <img src={editPhoto} alt="프로필 사진" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-zinc-400 text-2xl font-bold bg-zinc-200">
+                        {editName.slice(0, 1)}
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-black bg-opacity-35 flex items-center justify-center">
+                      <i className="fa-solid fa-camera text-white text-xs"></i>
+                    </div>
+                  </div>
+                  <button 
+                    type="button" 
+                    className="text-[10px] text-blue-500 font-semibold cursor-pointer"
+                    onClick={() => fileInputRef.current.click()}
+                  >
+                    사진 변경
+                  </button>
+                  <input 
+                    ref={fileInputRef} 
+                    type="file" 
+                    accept="image/*" 
+                    onChange={handlePhotoChange} 
+                    style={{ display: "none" }} 
+                  />
+                </div>
+
                 <label className="text-xs font-bold text-zinc-500 flex flex-col gap-1">
-                  프로필 사진 변경
-                  <input type="file" accept="image/*" onChange={handlePhotoChange} />
-                  {editPhoto && <img src={editPhoto} alt="" className="w-12 h-12 rounded-full object-cover mt-1" />}
-                </label>
-                <label className="text-xs font-bold text-zinc-500 flex flex-col gap-1">
-                  닉네임 (최대 12자)
+                  닉네임
                   <input value={editName} maxLength={12} onChange={(e) => setEditName(e.target.value)} className="border p-2 rounded text-xs" />
                 </label>
                 <label className="text-xs font-bold text-zinc-500 flex flex-col gap-1">
-                  한 줄 소개 (최대 40자)
+                  한 줄 소개
                   <textarea value={editBio} maxLength={40} onChange={(e) => setEditBio(e.target.value)} className="border p-2 rounded text-xs h-16 resize-none" placeholder="자기소개를 입력해주세요" />
                 </label>
                 <div className="flex gap-2 mt-2">
@@ -1340,7 +1486,7 @@
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <button className="secondary text-[11px] px-2 py-1.5 rounded font-bold" onClick={() => setIsEditing(true)}>수정</button>
+                    <button className="secondary text-[11px] px-2 py-1.5 rounded font-bold" onClick={startEditing}>수정</button>
                     
                     <button 
                       className="text-zinc-500 hover:text-zinc-950 p-1.5 text-xs border border-zinc-200 rounded-lg active:scale-95 transition-transform" 
@@ -2134,7 +2280,8 @@
         name: "나의 플레이팅",
         bio: "내가 올린 레시피와 구매 링크를 관리합니다.",
         avatar: "나",
-        avatarImg: ""
+        avatarImg: "",
+        role: "user"
       });
 
       const [followingList, setFollowingList] = useState([]);
@@ -2168,7 +2315,8 @@
                     ...prev,
                     name: res.user.nickname,
                     bio: res.user.email || "카카오 연동 프로필",
-                    avatarImg: res.user.profile_image || ""
+                    avatarImg: res.user.profile_image || "",
+                    role: res.user.role || "user"
                   }));
                 } else {
                   // 백엔드가 로그아웃 상태이면 클라이언트 상태도 동기화
@@ -2642,6 +2790,7 @@
                 onDeleteComment={handleDeleteCommunityComment}
                 onScrapPost={handleScrapCommunityPost}
                 currentUserName={profile.name}
+                currentUserRole={profile.role || "user"}
               />
             )}
 
@@ -2736,6 +2885,7 @@
               onDeletePost={handleDeletePost}
               onEditPost={handleEditPost}
               currentUserName={profile.name}
+              currentUserRole={profile.role || "user"}
             />
           )}
 
