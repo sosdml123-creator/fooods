@@ -334,16 +334,7 @@
         comments: [
           { id: "c3", author: "빵돌이", text: "여기 크로플 진짜 맛나요. 쿠폰 바로 구매했습니다!" }
         ],
-        productLinks: [],
-        placeInfo: {
-          name: "카페 모노톤 성수점",
-          address: "서울 성동구 성수동2가 123-4",
-          voucher: {
-            title: "모노톤 성수 - 1만원 모바일 식사권 (10% 할인)",
-            price: 9000,
-            originalPrice: 10000
-          }
-        }
+        productLinks: []
       },
       {
         id: "3",
@@ -572,11 +563,11 @@
       if (post.category === "레시피") {
         badgeText = "레시피";
         badgeType = "recipe";
+      } else if (post.category === "맛집") {
+        badgeText = "맛집리뷰";
+        badgeType = "shop";
       } else if (post.productLinks && post.productLinks.length > 0) {
         badgeText = "최저가 링크";
-        badgeType = "shop";
-      } else if (post.placeInfo) {
-        badgeText = "맛집리뷰";
         badgeType = "shop";
       }
 
@@ -766,22 +757,7 @@
                 </div>
               )}
 
-              {post.placeInfo && (
-                <div className="mb-5 bg-zinc-50 border border-zinc-200 rounded-lg p-3">
-                  <div className="text-[10px] font-bold text-zinc-400 mb-2">📍 맛집 정보 및 할인 식사권</div>
-                  <strong className="text-xs text-zinc-900 block">{post.placeInfo.name}</strong>
-                  <span className="text-[10px] text-zinc-400 block mb-2">{post.placeInfo.address}</span>
-                  {post.placeInfo.voucher && (
-                    <div className="bg-white border border-zinc-200 p-2 rounded flex justify-between items-center">
-                      <div className="min-w-0 flex-1 pr-2">
-                        <strong className="text-[10px] text-zinc-800 block truncate">{post.placeInfo.voucher.title}</strong>
-                        <span className="text-xs font-bold text-zinc-950">{post.placeInfo.voucher.price.toLocaleString()}원</span>
-                      </div>
-                      <button className="bg-black text-white text-[10px] py-1 px-2.5 rounded" onClick={() => alert("식사권이 발송되었습니다.")}>구매</button>
-                    </div>
-                  )}
-                </div>
-              )}
+
 
               <div className="flex justify-between items-center border-y border-zinc-100 py-2.5 my-4">
                 <button className={`text-xs font-bold flex items-center gap-1.5 ${post.liked ? 'text-black' : 'text-zinc-400'}`} onClick={onLike}>
@@ -1577,11 +1553,7 @@
       const [links, setLinks] = useState([{ id: generateId(), url: "" }]);
       const [loading, setLoading] = useState(false);
 
-      const [placeName, setPlaceName] = useState("");
-      const [placeAddress, setPlaceAddress] = useState("");
-      const [hasVoucher, setHasVoucher] = useState(false);
-      const [voucherTitle, setVoucherTitle] = useState("");
-      const [voucherPrice, setVoucherPrice] = useState("");
+
 
       const fileInputRef = useRef(null);
 
@@ -1619,11 +1591,7 @@
           } : item));
           
           if (parsed.name) {
-            setPlaceName(parsed.name);
             setCategory("맛집");
-          }
-          if (parsed.address) {
-            setPlaceAddress(parsed.address);
           }
         } else {
           setLinks(links.map(item => item.id === id ? { ...item, url: value } : item));
@@ -1755,17 +1723,6 @@
         const detectedTags = extractHashtags(body);
 
         let placeInfo = null;
-        if (category === "맛집" && placeName.trim()) {
-          placeInfo = {
-            name: placeName.trim(),
-            address: placeAddress.trim() || "위치 정보 없음",
-            voucher: hasVoucher && voucherTitle.trim() ? {
-              title: voucherTitle.trim(),
-              price: Number(voucherPrice) || 10000,
-              originalPrice: Math.floor((Number(voucherPrice) || 10000) * 1.1)
-            } : null
-          };
-        }
 
         setLoading(false);
         
@@ -1836,44 +1793,7 @@
                 />
               </label>
 
-              {category === "맛집" && (
-                <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 my-4">
-                  <div className="text-xs font-bold text-zinc-950 mb-2">
-                    <i className="fa-solid fa-map-location-dot mr-1"></i> 맛집 장소 & 할인 식사권 연동
-                  </div>
-                  <label className="mb-2">
-                    식당 / 카페 이름
-                    <input value={placeName} onChange={(e) => setPlaceName(e.target.value)} placeholder="예: 카페 모노톤 성수점" />
-                  </label>
-                  <label className="mb-2">
-                    식당 주소
-                    <input value={placeAddress} onChange={(e) => setPlaceAddress(e.target.value)} placeholder="예: 서울 성동구 성수동2가 123-4" />
-                  </label>
-                  <div className="flex items-center gap-2 mb-2 mt-3">
-                    <input 
-                      type="checkbox" 
-                      id="voucherCheck" 
-                      checked={hasVoucher} 
-                      onChange={(e) => setHasVoucher(e.target.checked)} 
-                    />
-                    <label htmlFor="voucherCheck" className="m-0 cursor-pointer text-xs select-none">
-                      이 장소의 할인 식사권 판매 등록
-                    </label>
-                  </div>
-                  {hasVoucher && (
-                    <div className="flex flex-col gap-2 pl-4 border-l-2 border-zinc-300">
-                      <label className="mb-1">
-                        식사권 상품명
-                        <input value={voucherTitle} onChange={(e) => setVoucherTitle(e.target.value)} placeholder="예: 1만원 디지털 식사권 (10% 할인)" />
-                      </label>
-                      <label className="mb-1">
-                        판매 금액 (원)
-                        <input type="number" value={voucherPrice} onChange={(e) => setVoucherPrice(e.target.value)} placeholder="예: 9000" />
-                      </label>
-                    </div>
-                  )}
-                </div>
-              )}
+
 
               <div className="link-editor-list">
                 <div className="text-xs font-bold text-zinc-500 mb-2">

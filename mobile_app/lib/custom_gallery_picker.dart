@@ -7,6 +7,9 @@ import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+
+final Map<String, Uint8List> _thumbnailCache = {};
 
 class SelectedPhoto {
   final AssetEntity? entity;
@@ -359,13 +362,13 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
             width: double.infinity,
             color: Colors.black,
             child: _previewFile != null
-                ? Image.file(_previewFile!, fit: BoxFit.cover)
+                ? Image.file(_previewFile!, fit: BoxFit.contain)
                 : (_previewAsset != null
                     ? FutureBuilder<File?>(
                         future: _previewAsset!.file,
                         builder: (context, snapshot) {
                           if (snapshot.connectionState == ConnectionState.done && snapshot.data != null) {
-                            return Image.file(snapshot.data!, fit: BoxFit.cover);
+                            return Image.file(snapshot.data!, fit: BoxFit.contain);
                           }
                           return const Center(child: CircularProgressIndicator(color: Colors.white24));
                         },
@@ -426,16 +429,11 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            // FutureBuilder를 이용한 썸네일 렌더링
-                            FutureBuilder<Uint8List?>(
-                              future: asset.thumbnailData,
-                              builder: (context, snapshot) {
-                                final bytes = snapshot.data;
-                                if (bytes == null) {
-                                  return Container(color: darkCardColor);
-                                }
-                                return Image.memory(bytes, fit: BoxFit.cover);
-                              },
+                            // 캐시 지원 및 플리커(깜빡임) 방지 썸네일 Widget
+                            GalleryThumbnail(
+                              key: ValueKey(asset.id),
+                              asset: asset,
+                              darkCardColor: darkCardColor,
                             ),
                             
                             // 선택 시 반투명 블랙 레이어 및 크기 변화 효과 부여
@@ -485,5 +483,64 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
         ],
       ),
     );
+  }
+}
+
+class GalleryThumbnail extends StatefulWidget {
+  final AssetEntity asset;
+  final Color darkCardColor;
+  const GalleryThumbnail({super.key, required this.asset, required this.darkCardColor});
+
+  @override
+  State<GalleryThumbnail> createState() => _GalleryThumbnailState();
+}
+
+class _GalleryThumbnailState extends State<GalleryThumbnail> {
+  Uint8List? _bytes;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadThumbnail();
+  }
+
+  @override
+  void didUpdateWidget(GalleryThumbnail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.asset.id != widget.asset.id) {
+      _loadThumbnail();
+    }
+  }
+
+  Future<void> _loadThumbnail() async {
+    if (_thumbnailCache.containsKey(widget.asset.id)) {
+      if (mounted) {
+        setState(() {
+          _bytes = _thumbnailCache[widget.asset.id];
+        });
+      }
+      return;
+    }
+    try {
+      final data = await widget.asset.thumbnailData;
+      if (data != null) {
+        _thumbnailCache[widget.asset.id] = data;
+        if (mounted) {
+          setState(() {
+            _bytes = data;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("썸네일 로드 실패: $e");
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_bytes == null) {
+      return Container(color: widget.darkCardColor);
+    }
+    return Image.memory(_bytes!, fit: BoxFit.cover);
   }
 }
