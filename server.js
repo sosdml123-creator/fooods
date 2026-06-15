@@ -35,7 +35,7 @@ app.use(
 );
 
 const client_id = process.env.KAKAO_CLIENT_ID || "3c6b9b1d740c3c2cb76369773ea57471"; 
-const client_secret = process.env.KAKAO_CLIENT_SECRET || "4iVOg0kSdyclGvYfPAJnql8T29w7ECjy";
+const client_secret = process.env.KAKAO_CLIENT_SECRET || "";
 const domain = "https://myplating.kr";
 const redirect_uri = `${domain}/redirect`;
 const kauth_host = "https://kauth.kakao.com";
