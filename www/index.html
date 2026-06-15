@@ -1794,6 +1794,25 @@
               <button type="button" onClick={onClose} aria-label="닫기">×</button>
             </header>
             <form onSubmit={submit}>
+              {images.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto mb-4 py-1.5 border-b border-zinc-100">
+                  {images.map((img, idx) => (
+                    <div key={idx} className="relative w-16 h-16 flex-shrink-0">
+                      <img className="w-full h-full object-cover rounded border border-zinc-200" src={img} alt="" />
+                      <button 
+                        type="button" 
+                        onClick={() => setImages(images.filter((_, i) => i !== idx))}
+                        className="absolute -top-1.5 -right-1.5 bg-black/80 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] border-none font-bold"
+                        style={{ cursor: "pointer", padding: 0 }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handlePhoto} className="hidden" />
+
               <label>
                 카테고리 선택
                 <select value={category} onChange={(e) => setCategory(e.target.value)}>
@@ -1815,17 +1834,6 @@
                   maxLength={1000}
                   required 
                 />
-              </label>
-              <label>
-                음식 사진 (최대 10장)
-                <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handlePhoto} />
-                {images.length > 0 && (
-                  <div className="flex gap-2 overflow-x-auto mt-2 py-1">
-                    {images.map((img, idx) => (
-                      <img key={idx} className="w-16 h-16 object-cover rounded border border-zinc-200" src={img} alt="" />
-                    ))}
-                  </div>
-                )}
               </label>
 
               {category === "맛집" && (
@@ -2227,7 +2235,29 @@
         ];
 
         Promise.all(loadPromises)
-          .then(() => setDbLoaded(true))
+          .then(() => {
+            setDbLoaded(true);
+            // 백엔드 세션 조회하여 로그인 정보 동기화
+            fetch("/profile")
+              .then(r => r.json())
+              .then(res => {
+                if (res.isLoggedIn && res.user) {
+                  setIsLoggedIn(true);
+                  setDBData("foodhouse_logged_in", "true").catch(e => console.error(e));
+                  setProfile(prev => ({
+                    ...prev,
+                    name: res.user.nickname,
+                    bio: res.user.email || "카카오 연동 프로필",
+                    avatarImg: res.user.profile_image || ""
+                  }));
+                } else {
+                  // 백엔드가 로그아웃 상태이면 클라이언트 상태도 동기화
+                  setIsLoggedIn(false);
+                  setDBData("foodhouse_logged_in", "false").catch(e => console.error(e));
+                }
+              })
+              .catch(err => console.error("Profile sync error:", err));
+          })
           .catch(e => {
             console.error("IndexedDB 로드 오류: ", e);
             setDbLoaded(true); // 에러 발생 시 기본값으로 구동 지속
@@ -2267,9 +2297,13 @@
       }
 
       function handleLogin(type) {
-        setIsLoggedIn(true);
-        setDBData("foodhouse_logged_in", "true").catch(e => console.error(e));
-        setLoginOpen(false);
+        if (type === "kakao") {
+          window.location.href = "/authorize";
+        } else {
+          setIsLoggedIn(true);
+          setDBData("foodhouse_logged_in", "true").catch(e => console.error(e));
+          setLoginOpen(false);
+        }
       }
 
       function handleLogout() {

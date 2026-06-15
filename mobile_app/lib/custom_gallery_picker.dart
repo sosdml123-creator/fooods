@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
 import 'dart:convert';
@@ -52,7 +53,17 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
     
     // photo_manager 권한 허용 여부 확인
     final PermissionState ps = await PhotoManager.requestPermissionExtend();
-    if (ps.isAuth) {
+    bool isAuthorized = ps.isAuth;
+    
+    if (!isAuthorized && Platform.isAndroid) {
+      final photosStatus = await Permission.photos.status;
+      final storageStatus = await Permission.storage.status;
+      if (photosStatus.isGranted || storageStatus.isGranted) {
+        isAuthorized = true;
+      }
+    }
+
+    if (isAuthorized) {
       // 앨범 목록 조회
       List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
         type: RequestType.image,

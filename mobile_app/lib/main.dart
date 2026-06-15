@@ -58,79 +58,91 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: InAppWebView(
-          initialUrlRequest: URLRequest(url: WebUri(_targetUrl)),
-          initialSettings: InAppWebViewSettings(
-            useShouldOverrideUrlLoading: true,
-            mediaPlaybackRequiresUserGesture: false,
-            javaScriptEnabled: true,
-            javaScriptCanOpenWindowsAutomatically: true,
-            allowFileAccessFromFileURLs: true,
-            allowUniversalAccessFromFileURLs: true,
-            useOnDownloadStart: true,
-          ),
-          onWebViewCreated: (controller) {
-            _webViewController = controller;
-            
-            // 갤러리 피커 통신용 JS 핸들러 등록
-            controller.addJavaScriptHandler(
-              handlerName: 'openCustomGallery',
-              callback: (args) async {
-                final type = args.isNotEmpty ? (args[0]['type'] ?? 'recipe') : 'recipe';
-                
-                // 커스텀 갤러리 화면 호출 및 결과 대기 ( R2 이미지 URL 목록 리턴 받음 )
-                final List<dynamic>? urls = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CustomGalleryPicker(),
-                  ),
-                );
-                
-                if (urls != null && urls.isNotEmpty) {
-                  final urlsJson = jsonEncode(urls);
-                  if (type == 'community') {
-                    controller.evaluateJavascript(
-                      source: 'window.openCommunityWriteWithPhotos($urlsJson);',
-                    );
-                  } else {
-                    controller.evaluateJavascript(
-                      source: 'window.openWriteSheetWithPhotos($urlsJson);',
-                    );
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        final controller = _webViewController;
+        if (controller != null && await controller.canGoBack()) {
+          controller.goBack();
+        } else {
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: SafeArea(
+          child: InAppWebView(
+            initialUrlRequest: URLRequest(url: WebUri(_targetUrl)),
+            initialSettings: InAppWebViewSettings(
+              useShouldOverrideUrlLoading: true,
+              mediaPlaybackRequiresUserGesture: false,
+              javaScriptEnabled: true,
+              javaScriptCanOpenWindowsAutomatically: true,
+              allowFileAccessFromFileURLs: true,
+              allowUniversalAccessFromFileURLs: true,
+              useOnDownloadStart: true,
+            ),
+            onWebViewCreated: (controller) {
+              _webViewController = controller;
+              
+              // 갤러리 피커 통신용 JS 핸들러 등록
+              controller.addJavaScriptHandler(
+                handlerName: 'openCustomGallery',
+                callback: (args) async {
+                  final type = args.isNotEmpty ? (args[0]['type'] ?? 'recipe') : 'recipe';
+                  
+                  // 커스텀 갤러리 화면 호출 및 결과 대기 ( R2 이미지 URL 목록 리턴 받음 )
+                  final List<dynamic>? urls = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const CustomGalleryPicker(),
+                    ),
+                  );
+                  
+                  if (urls != null && urls.isNotEmpty) {
+                    final urlsJson = jsonEncode(urls);
+                    if (type == 'community') {
+                      controller.evaluateJavascript(
+                        source: 'window.openCommunityWriteWithPhotos($urlsJson);',
+                      );
+                    } else {
+                      controller.evaluateJavascript(
+                        source: 'window.openWriteSheetWithPhotos($urlsJson);',
+                      );
+                    }
                   }
+                },
+              );
+            },
+            onPermissionRequest: (controller, request) async {
+              // 웹뷰 내 카메라/마이크 등 권한 요청 시 자동 허용
+              return PermissionResponse(
+                resources: request.resources,
+                action: PermissionResponseAction.GRANT,
+              );
+            },
+            shouldOverrideUrlLoading: (controller, navigationAction) async {
+              var uri = navigationAction.request.url;
+              if (uri != null) {
+                final urlStr = uri.toString();
+                // 카카오 로그인 스키마 등 외부 앱 리다이렉션 흐름 제어 및 인텐트 실행
+                if (urlStr.startsWith('intent://') || 
+                    urlStr.startsWith('kakaolink://') || 
+                    urlStr.startsWith('kakaotalk://') || 
+                    urlStr.startsWith('kakaotoll://')) {
+                  debugPrint('외부 스키마 및 카카오 딥링크 감지: $urlStr');
+                  try {
+                    await _intentChannel.invokeMethod('launchIntent', {'url': urlStr});
+                  } on PlatformException catch (e) {
+                    debugPrint('카카오 인텐트 실행 실패: ${e.message}');
+                  }
+                  return NavigationActionPolicy.CANCEL;
                 }
-              },
-            );
-          },
-          onPermissionRequest: (controller, request) async {
-            // 웹뷰 내 카메라/마이크 등 권한 요청 시 자동 허용
-            return PermissionResponse(
-              resources: request.resources,
-              action: PermissionResponseAction.GRANT,
-            );
-          },
-          shouldOverrideUrlLoading: (controller, navigationAction) async {
-            var uri = navigationAction.request.url;
-            if (uri != null) {
-              final urlStr = uri.toString();
-              // 카카오 로그인 스키마 등 외부 앱 리다이렉션 흐름 제어 및 인텐트 실행
-              if (urlStr.startsWith('intent://') || 
-                  urlStr.startsWith('kakaolink://') || 
-                  urlStr.startsWith('kakaotalk://') || 
-                  urlStr.startsWith('kakaotoll://')) {
-                debugPrint('외부 스키마 및 카카오 딥링크 감지: $urlStr');
-                try {
-                  await _intentChannel.invokeMethod('launchIntent', {'url': urlStr});
-                } on PlatformException catch (e) {
-                  debugPrint('카카오 인텐트 실행 실패: ${e.message}');
-                }
-                return NavigationActionPolicy.CANCEL;
               }
-            }
-            return NavigationActionPolicy.ALLOW;
-          },
+              return NavigationActionPolicy.ALLOW;
+            },
+          ),
         ),
       ),
     );
