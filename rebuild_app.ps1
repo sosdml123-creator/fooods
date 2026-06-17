@@ -80,12 +80,14 @@ Write-Host "6. AndroidManifest.xml 권한 추가 중..."
 $manifestPath = "d:\food\mobile_app\android\app\src\main\AndroidManifest.xml"
 $manifestContent = Get-Content -Path $manifestPath -Raw
 
-# 인터넷 권한 추가
-$internetPermission = "    <uses-permission android:name=`"android.permission.INTERNET`" />"
+# 인터넷 및 광고 ID 권한 추가
+$internetPermission = "    <uses-permission android:name=`"android.permission.INTERNET`" />`n    <uses-permission android:name=`"com.google.android.gms.permission.AD_ID`" />"
 $manifestContent = $manifestContent.Replace("<manifest xmlns:android=`"http://schemas.android.com/apk/res/android`">", "<manifest xmlns:android=`"http://schemas.android.com/apk/res/android`">`n$internetPermission")
 
-# usesCleartextTraffic="true" 추가 (이중 따옴표 내 백틱 개행 처리)
+# usesCleartextTraffic="true" 및 AdMob App ID 추가
+$admobMetadata = "        <!-- Google AdMob Application ID (Test ID, replace with your actual ID later) -->`n        <meta-data`n            android:name=`"com.google.android.gms.ads.APPLICATION_ID`"`n            android:value=`"ca-app-pub-3940256099942544~3347511713`"/>"
 $manifestContent = $manifestContent.Replace("<application", "<application`n        android:usesCleartextTraffic=`"true`"")
+$manifestContent = $manifestContent.Replace("<application`n        android:usesCleartextTraffic=`"true`">", "<application`n        android:usesCleartextTraffic=`"true`">`n$admobMetadata")
 
 Set-Content -Path $manifestPath -Value $manifestContent -Encoding UTF8
 
@@ -97,11 +99,11 @@ Set-Location "d:\food\mobile_app"
 & "$sdkDir\flutter\bin\flutter.bat" pub run flutter_native_splash:create
 
 Write-Host "========================================"
-Write-Host "8. 릴리즈 배포용 APK 최종 빌드 실행..."
+Write-Host "8. 릴리즈 배포용 App Bundle (AAB) 최종 빌드 실행..."
 Write-Host "========================================"
-& "$sdkDir\flutter\bin\flutter.bat" build apk --release
+& "$sdkDir\flutter\bin\flutter.bat" build appbundle --release
 
 Write-Host "========================================"
 Write-Host "🎉 하이브리드 앱 빌드 성공 완료!"
-Write-Host "최종 APK 위치: d:\food\mobile_app\build\app\outputs\flutter-apk\app-release.apk"
+Write-Host "최종 App Bundle (.aab) 위치: d:\food\mobile_app\build\app\outputs\bundle\release\app-release.aab"
 Write-Host "========================================"
