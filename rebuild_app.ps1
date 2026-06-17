@@ -10,8 +10,9 @@ Write-Host "1. 기존 리소스 임시 백업 중..."
 $tempBackupDir = "d:\food\temp_backup"
 if (Test-Path $tempBackupDir) { Remove-Item -Recurse -Force $tempBackupDir }
 New-Item -ItemType Directory -Force -Path $tempBackupDir
-Copy-Item -Path "d:\food\mobile_app\assets\icon.png" -Destination "$tempBackupDir\icon.png" -Force
-Copy-Item -Path "d:\food\mobile_app\lib\main.dart" -Destination "$tempBackupDir\main.dart" -Force
+if (Test-Path "d:\food\mobile_app\assets\icon.png") { Copy-Item -Path "d:\food\mobile_app\assets\icon.png" -Destination "$tempBackupDir\icon.png" -Force }
+if (Test-Path "d:\food\mobile_app\lib\main.dart") { Copy-Item -Path "d:\food\mobile_app\lib\main.dart" -Destination "$tempBackupDir\main.dart" -Force }
+if (Test-Path "d:\food\mobile_app\lib\custom_gallery_picker.dart") { Copy-Item -Path "d:\food\mobile_app\lib\custom_gallery_picker.dart" -Destination "$tempBackupDir\custom_gallery_picker.dart" -Force }
 
 # 2. 불완전한 기존 폴더 삭제
 Write-Host "2. 기존 폴더 정리 중..."
@@ -25,8 +26,9 @@ Set-Location "d:\food"
 # 4. 백업 리소스 복원
 Write-Host "4. 백업 리소스 복원 중..."
 New-Item -ItemType Directory -Force -Path "d:\food\mobile_app\assets"
-Copy-Item -Path "$tempBackupDir\icon.png" -Destination "d:\food\mobile_app\assets\icon.png" -Force
-Copy-Item -Path "$tempBackupDir\main.dart" -Destination "d:\food\mobile_app\lib\main.dart" -Force
+if (Test-Path "$tempBackupDir\icon.png") { Copy-Item -Path "$tempBackupDir\icon.png" -Destination "d:\food\mobile_app\assets\icon.png" -Force }
+if (Test-Path "$tempBackupDir\main.dart") { Copy-Item -Path "$tempBackupDir\main.dart" -Destination "d:\food\mobile_app\lib\main.dart" -Force }
+if (Test-Path "$tempBackupDir\custom_gallery_picker.dart") { Copy-Item -Path "$tempBackupDir\custom_gallery_picker.dart" -Destination "d:\food\mobile_app\lib\custom_gallery_picker.dart" -Force }
 Remove-Item -Recurse -Force $tempBackupDir
 
 # 5. pubspec.yaml 설정 갱신
@@ -46,7 +48,11 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
-  webview_flutter: ^4.8.0
+  flutter_inappwebview: ^6.0.0
+  permission_handler: ^11.3.1
+  photo_manager: 3.0.0
+  image_picker: ^1.1.2
+  http: ^1.2.1
 
 dev_dependencies:
   flutter_test:
