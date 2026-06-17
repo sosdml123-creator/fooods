@@ -13,6 +13,7 @@ New-Item -ItemType Directory -Force -Path $tempBackupDir
 if (Test-Path "d:\food\mobile_app\assets\icon.png") { Copy-Item -Path "d:\food\mobile_app\assets\icon.png" -Destination "$tempBackupDir\icon.png" -Force }
 if (Test-Path "d:\food\mobile_app\lib\main.dart") { Copy-Item -Path "d:\food\mobile_app\lib\main.dart" -Destination "$tempBackupDir\main.dart" -Force }
 if (Test-Path "d:\food\mobile_app\lib\custom_gallery_picker.dart") { Copy-Item -Path "d:\food\mobile_app\lib\custom_gallery_picker.dart" -Destination "$tempBackupDir\custom_gallery_picker.dart" -Force }
+if (Test-Path "d:\food\mobile_app\android\app\upload-keystore.jks") { Copy-Item -Path "d:\food\mobile_app\android\app\upload-keystore.jks" -Destination "$tempBackupDir\upload-keystore.jks" -Force }
 
 # 2. 불완전한 기존 폴더 삭제
 Write-Host "2. 기존 폴더 정리 중..."
@@ -29,6 +30,10 @@ New-Item -ItemType Directory -Force -Path "d:\food\mobile_app\assets"
 if (Test-Path "$tempBackupDir\icon.png") { Copy-Item -Path "$tempBackupDir\icon.png" -Destination "d:\food\mobile_app\assets\icon.png" -Force }
 if (Test-Path "$tempBackupDir\main.dart") { Copy-Item -Path "$tempBackupDir\main.dart" -Destination "d:\food\mobile_app\lib\main.dart" -Force }
 if (Test-Path "$tempBackupDir\custom_gallery_picker.dart") { Copy-Item -Path "$tempBackupDir\custom_gallery_picker.dart" -Destination "d:\food\mobile_app\lib\custom_gallery_picker.dart" -Force }
+if (Test-Path "$tempBackupDir\upload-keystore.jks") {
+    New-Item -ItemType Directory -Force -Path "d:\food\mobile_app\android\app"
+    Copy-Item -Path "$tempBackupDir\upload-keystore.jks" -Destination "d:\food\mobile_app\android\app\upload-keystore.jks" -Force
+}
 Remove-Item -Recurse -Force $tempBackupDir
 
 # 5. pubspec.yaml 설정 갱신
@@ -96,6 +101,24 @@ $manifestContent = $manifestContent.Replace("<application", "<application`n     
 $manifestContent = $manifestContent.Replace("<application`n        android:usesCleartextTraffic=`"true`">", "<application`n        android:usesCleartextTraffic=`"true`">`n$admobMetadata")
 
 Set-Content -Path $manifestPath -Value $manifestContent -Encoding UTF8
+
+# 6.5. android/app/build.gradle 설정 변경 (API 35 및 서명 설정)
+Write-Host "6.5. build.gradle API 35 및 릴리즈 서명 설정 중..."
+$gradlePath = "d:\food\mobile_app\android\app\build.gradle"
+$gradleContent = Get-Content -Path $gradlePath -Raw
+
+# compileSdk 및 targetSdk를 API 35로 지정
+$gradleContent = $gradleContent.Replace("compileSdk = flutter.compileSdkVersion", "compileSdk = 35")
+$gradleContent = $gradleContent.Replace("targetSdk = flutter.targetSdkVersion", "targetSdk = 35")
+
+# signingConfigs 추가
+$signingConfigBlock = "    signingConfigs {`n        release {`n            storeFile file('upload-keystore.jks')`n            storePassword 'plating1234'`n            keyAlias 'upload'`n            keyPassword 'plating1234'`n        }`n    }"
+$gradleContent = $gradleContent.Replace("    defaultConfig {", "$signingConfigBlock`n`n    defaultConfig {")
+
+# buildTypes.release.signingConfig를 release로 지정
+$gradleContent = $gradleContent.Replace("signingConfig = signingConfigs.debug", "signingConfig = signingConfigs.release")
+
+Set-Content -Path $gradlePath -Value $gradleContent -Encoding UTF8
 
 # 7. 패키지 설치, 아이콘/스플래시 생성 및 최종 release APK 컴파일
 Write-Host "7. Flutter 패키지 수급 및 아이콘/스플래시 자동 생성..."
