@@ -244,7 +244,7 @@ function App() {
           <i className="fa-solid fa-user"></i>
           <span>마이페이지</span>
         </button>
-        <button className="bottom-nav-item" onClick={() => alert("광고 문의: support@plating.app\n배너 클릭 시 광고 사이트로 이동합니다.")}>
+        <button className="bottom-nav-item" onClick={() => alert("광고 문의: sosdml123@naver.com\n배너 클릭 시 광고 사이트로 이동합니다.")}>
           <i className="fa-solid fa-rectangle-ad"></i>
           <span>제휴안내</span>
         </button>

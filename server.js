@@ -283,6 +283,11 @@ app.get("/privacy", function (req, res) {
   res.sendFile(path.join(__dirname, "www", "privacy.html"));
 });
 
+// 2.6. 서비스 이용약관 서빙 API (구글 플레이 연동 대응)
+app.get("/terms", function (req, res) {
+  res.sendFile(path.join(__dirname, "www", "terms.html"));
+});
+
 // 3. 현재 로그인된 유저 프로필 조회 API
 app.get("/profile", async function (req, res) {
   if (!req.session.key || !req.session.user) {
