@@ -288,6 +288,38 @@ app.get("/terms", function (req, res) {
   res.sendFile(path.join(__dirname, "www", "terms.html"));
 });
 
+// 2.7. 구글 플레이 심사용 데모 로그인 API
+app.post("/api/demo-login", function (req, res) {
+  const { username, password } = req.body;
+  if (username === "google-tester" && password === "plating1234") {
+    req.session.key = "demo-session-token";
+    req.session.user = {
+      kakao_id: 99999999,
+      nickname: "GoogleTester",
+      profile_image: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100",
+      email: "sosdml123@naver.com"
+    };
+    req.session.isNewUser = false;
+    
+    // DB에 해당 테스터 정보가 없으면 가입 처리
+    const users = readUsers();
+    if (!users.some(u => u.kakao_id === 99999999)) {
+      users.push({
+        kakao_id: 99999999,
+        nickname: "GoogleTester",
+        profile_image: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100",
+        email: "sosdml123@naver.com",
+        registered_at: new Date().toISOString(),
+        last_login_at: new Date().toISOString()
+      });
+      writeUsers(users);
+    }
+    return res.json({ success: true });
+  } else {
+    return res.status(401).json({ success: false, message: "Invalid username or password" });
+  }
+});
+
 // 3. 현재 로그인된 유저 프로필 조회 API
 app.get("/profile", async function (req, res) {
   if (!req.session.key || !req.session.user) {
