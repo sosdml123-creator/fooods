@@ -84,7 +84,7 @@ flutter_native_splash:
   android: true
   ios: true
 "@
-Set-Content -Path $pubspecPath -Value $pubspecContent -Encoding UTF8
+[System.IO.File]::WriteAllText($pubspecPath, $pubspecContent)
 
 # 6. AndroidManifest.xml 권한 및 Cleartext 설정 변경
 Write-Host "6. AndroidManifest.xml 권한 추가 중..."
@@ -100,7 +100,7 @@ $admobMetadata = "        <!-- Google AdMob Application ID (Test ID, replace wit
 $manifestContent = $manifestContent.Replace("<application", "<application`n        android:usesCleartextTraffic=`"true`"")
 $manifestContent = $manifestContent.Replace("<application`n        android:usesCleartextTraffic=`"true`">", "<application`n        android:usesCleartextTraffic=`"true`">`n$admobMetadata")
 
-Set-Content -Path $manifestPath -Value $manifestContent -Encoding UTF8
+[System.IO.File]::WriteAllText($manifestPath, $manifestContent)
 
 # 6.5. android/app/build.gradle 설정 변경 (API 35 및 서명 설정)
 Write-Host "6.5. build.gradle API 35 및 릴리즈 서명 설정 중..."
@@ -118,7 +118,7 @@ $gradleContent = $gradleContent.Replace("    defaultConfig {", "$signingConfigBl
 # buildTypes.release.signingConfig를 release로 지정
 $gradleContent = $gradleContent.Replace("signingConfig = signingConfigs.debug", "signingConfig = signingConfigs.release")
 
-Set-Content -Path $gradlePath -Value $gradleContent -Encoding UTF8
+[System.IO.File]::WriteAllText($gradlePath, $gradleContent)
 
 # 7. 패키지 설치, 아이콘/스플래시 생성 및 최종 release APK 컴파일
 Write-Host "7. Flutter 패키지 수급 및 아이콘/스플래시 자동 생성..."
