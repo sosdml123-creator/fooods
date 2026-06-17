@@ -89,7 +89,7 @@ flutter_native_splash:
 # 6. AndroidManifest.xml 권한 및 Cleartext 설정 변경
 Write-Host "6. AndroidManifest.xml 권한 추가 중..."
 $manifestPath = "d:\food\mobile_app\android\app\src\main\AndroidManifest.xml"
-$manifestContent = Get-Content -Path $manifestPath -Raw
+$manifestContent = [System.IO.File]::ReadAllText($manifestPath)
 
 # 인터넷 및 광고 ID 권한 추가
 $internetPermission = "    <uses-permission android:name=`"android.permission.INTERNET`" />`n    <uses-permission android:name=`"com.google.android.gms.permission.AD_ID`" />"
@@ -105,7 +105,7 @@ $manifestContent = $manifestContent.Replace("<application`n        android:usesC
 # 6.5. android/app/build.gradle 설정 변경 (API 35 및 서명 설정)
 Write-Host "6.5. build.gradle API 35 및 릴리즈 서명 설정 중..."
 $gradlePath = "d:\food\mobile_app\android\app\build.gradle"
-$gradleContent = Get-Content -Path $gradlePath -Raw
+$gradleContent = [System.IO.File]::ReadAllText($gradlePath)
 
 # compileSdk 및 targetSdk를 API 35로 지정
 $gradleContent = $gradleContent.Replace("compileSdk = flutter.compileSdkVersion", "compileSdk = 35")
