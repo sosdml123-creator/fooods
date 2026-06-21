@@ -385,134 +385,102 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // 상단 사진 크게 보기 영역 (게시글 업로드 사이즈 4:5 BoxFit.cover 비율 대응)
-          Container(
-            height: MediaQuery.of(context).size.height * 0.38,
-            width: double.infinity,
-            color: Colors.black,
-            alignment: Alignment.center,
-            child: _previewFile != null
-                ? AspectRatio(
-                    aspectRatio: 4 / 5,
-                    child: Image.file(_previewFile!, fit: BoxFit.cover),
-                  )
-                : (_previewLoadedFile != null
-                    ? AspectRatio(
-                        aspectRatio: 4 / 5,
-                        child: Image.file(_previewLoadedFile!, fit: BoxFit.cover),
-                      )
-                    : const Center(
-                        child: SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(color: Colors.white24, strokeWidth: 2.5),
-                        ),
-                      )),
-          ),
-          
-          // 하단 그리드 영역
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Colors.white24))
-                : GridView.builder(
-                    padding: const EdgeInsets.all(1),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 4,
-                      crossAxisSpacing: 1.5,
-                      mainAxisSpacing: 1.5,
-                    ),
-                    itemCount: _assets.length + 1, // 카메라 타일 1개 추가
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        // 0번 타일: 촬영하기 (어두운 카드 디자인)
-                        return GestureDetector(
-                          onTap: _handleCamera,
-                          child: Container(
-                            color: darkCardColor,
-                            child: const Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.camera_alt_outlined, color: Colors.white, size: 28),
-                                SizedBox(height: 5),
-                                Text(
-                                  "촬영하기",
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.white70,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: Colors.white24))
+          : GridView.builder(
+              padding: const EdgeInsets.all(1),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 4,
+                crossAxisSpacing: 1.5,
+                mainAxisSpacing: 1.5,
+              ),
+              itemCount: _assets.length + 1, // 카메라 타일 1개 추가
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  // 0번 타일: 촬영하기 (어두운 카드 디자인)
+                  return GestureDetector(
+                    onTap: _handleCamera,
+                    child: Container(
+                      color: darkCardColor,
+                      child: const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.camera_alt_outlined, color: Colors.white, size: 28),
+                          SizedBox(height: 5),
+                          Text(
+                            "촬영하기",
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.white70,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                        );
-                      }
+                        ],
+                      ),
+                    ),
+                  );
+                }
 
-                      // 갤러리 미디어 타일
-                      final asset = _assets[index - 1];
-                      final selIdx = _getSelectedIndex(asset);
-                      final isSelected = selIdx >= 0;
+                // 갤러리 미디어 타일
+                final asset = _assets[index - 1];
+                final selIdx = _getSelectedIndex(asset);
+                final isSelected = selIdx >= 0;
 
-                      return GestureDetector(
-                        onTap: () => _toggleSelection(asset),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            // 캐시 지원 및 플리커(깜빡임) 방지 썸네일 Widget
-                            GalleryThumbnail(
-                              key: ValueKey(asset.id),
-                              asset: asset,
-                              darkCardColor: darkCardColor,
+                return GestureDetector(
+                  onTap: () => _toggleSelection(asset),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // 캐시 지원 및 플리커(깜빡임) 방지 썸네일 Widget
+                      GalleryThumbnail(
+                        key: ValueKey(asset.id),
+                        asset: asset,
+                        darkCardColor: darkCardColor,
+                      ),
+                      
+                      // 선택 시 반투명 블랙 레이어 및 크기 변화 효과 부여
+                      if (isSelected)
+                        Container(
+                          color: Colors.black.withOpacity(0.35),
+                          child: Container(
+                            margin: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.blue[500]!, width: 2),
                             ),
-                            
-                            // 선택 시 반투명 블랙 레이어 및 크기 변화 효과 부여
-                            if (isSelected)
-                              Container(
-                                color: Colors.black.withOpacity(0.35),
-                                child: Container(
-                                  margin: const EdgeInsets.all(4),
-                                  decoration: BoxDecoration(
-                                    border: Border.all(color: Colors.blue[500]!, width: 2),
-                                  ),
-                                ),
-                              ),
-                            
-                            // 우상단 체크/순서 동그라미 배지
-                            Positioned(
-                              top: 8,
-                              right: 8,
-                              child: Container(
-                                width: 20,
-                                height: 20,
-                                decoration: BoxDecoration(
-                                  color: isSelected ? Colors.blue[600] : Colors.black.withOpacity(0.4),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 1.5),
-                                ),
-                                child: Center(
-                                  child: isSelected
-                                      ? Text(
-                                          "${selIdx + 1}",
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        )
-                                      : null,
-                                ),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
-                      );
-                    },
+                      
+                      // 우상단 체크/순서 동그라미 배지
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: isSelected ? Colors.blue[600] : Colors.black.withOpacity(0.4),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 1.5),
+                          ),
+                          child: Center(
+                            child: isSelected
+                                ? Text(
+                                    "${selIdx + 1}",
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  )
+                                : null,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-          ),
-        ],
-      ),
+                );
+              },
+            ),
     );
   }
 }

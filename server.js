@@ -551,6 +551,54 @@ app.get("/api/link-meta", async (req, res) => {
     }
   }
 
+  // 1.5. 쿠팡 링크 파싱 (Akamai WAF 우회 및 short link redirect title 파싱)
+  if (lowerUrl.includes("coupang.com")) {
+    try {
+      const coupangRes = await axios.get(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+          "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+          "Cache-Control": "no-cache"
+        },
+        timeout: 5000
+      });
+      if (coupangRes.status === 200) {
+        const html = coupangRes.data;
+        const decodedHtml = html.replace(/\\x([0-9A-Fa-f]{2})/g, (match, p1) => {
+          return String.fromCharCode(parseInt(p1, 16));
+        });
+        
+        let title = "쿠팡 추천 상품";
+        const titleMatch = decodedHtml.match(/title=([^&'\s]+)/);
+        if (titleMatch) {
+          try {
+            title = decodeURIComponent(titleMatch[1]);
+          } catch (e) {}
+        }
+        
+        if (!title || title === "고객님을 위한 상품") {
+          title = "쿠팡 상품 링크";
+        }
+
+        return res.json({
+          success: true,
+          title: title,
+          image: "https://image.coupangcdn.com/image/coupang/common/logo308x76.png",
+          host: "coupang.com"
+        });
+      }
+    } catch (err) {
+      console.error("쿠팡 링크 파싱 에러:", err.message);
+      return res.json({
+        success: true,
+        title: "쿠팡 추천 상품",
+        image: "https://image.coupangcdn.com/image/coupang/common/logo308x76.png",
+        host: "coupang.com"
+      });
+    }
+  }
+
   // 2. 일반 사이트 크롤링 (Axios로 HTML 받아서 og 태그 파싱)
   try {
     const htmlRes = await axios.get(url, {

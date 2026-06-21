@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:convert';
+import 'dart:io';
 import 'custom_gallery_picker.dart';
 
 void main() {
@@ -129,16 +130,36 @@ class _WebViewScreenState extends State<WebViewScreen> {
               var uri = navigationAction.request.url;
               if (uri != null) {
                 final urlStr = uri.toString();
-                // 카카오 로그인 스키마 등 외부 앱 리다이렉션 흐름 제어 및 인텐트 실행
-                if (urlStr.startsWith('intent://') || 
-                    urlStr.startsWith('kakaolink://') || 
-                    urlStr.startsWith('kakaotalk://') || 
-                    urlStr.startsWith('kakaotoll://')) {
-                  debugPrint('외부 스키마 및 카카오 딥링크 감지: $urlStr');
+                final scheme = uri.scheme;
+
+                // 1. 커스텀 스키마 (navermaps://, coupang://, intent:// 등) 처리
+                if (scheme != 'http' && scheme != 'https' && scheme != 'file' && scheme != 'about' && scheme != 'javascript') {
+                  debugPrint('커스텀 스키마 감지: $urlStr');
                   try {
                     await _intentChannel.invokeMethod('launchIntent', {'url': urlStr});
-                  } on PlatformException catch (e) {
-                    debugPrint('카카오 인텐트 실행 실패: ${e.message}');
+                  } catch (e) {
+                    debugPrint('인텐트 실행 실패: $e');
+                  }
+                  return NavigationActionPolicy.CANCEL;
+                }
+
+                // 2. HTTP/HTTPS 웹 링크 중 네이버 지도, 쿠팡, 플레이스토어는 외부 앱(딥링크)으로 다이렉트 호출
+                final isNaverMap = urlStr.contains('map.naver.com') || urlStr.contains('naver.me');
+                final isCoupang = urlStr.contains('coupang.com') || urlStr.contains('link.coupang.com');
+                final isPlayStore = urlStr.contains('play.google.com/store');
+
+                if (isNaverMap) {
+                  debugPrint('네이버 지도 링크 감지: $urlStr');
+                  _handleNaverMapIntent(urlStr);
+                  return NavigationActionPolicy.CANCEL;
+                }
+
+                if (isCoupang || isPlayStore) {
+                  debugPrint('외부 앱 연동 링크 감지: $urlStr');
+                  try {
+                    await _intentChannel.invokeMethod('launchIntent', {'url': urlStr});
+                  } catch (e) {
+                    debugPrint('인텐트 실행 실패: $e');
                   }
                   return NavigationActionPolicy.CANCEL;
                 }
@@ -197,5 +218,79 @@ class _WebViewScreenState extends State<WebViewScreen> {
     ),
   ),
 );
+  }
+
+  Future<void> _handleNaverMapIntent(String urlStr) async {
+    try {
+      String resolvedUrl = urlStr;
+      if (urlStr.contains('naver.me')) {
+        final client = HttpClient();
+        client.connectionTimeout = const Duration(seconds: 3);
+        final request = await client.getUrl(Uri.parse(urlStr));
+        request.followRedirects = false;
+        final response = await request.close();
+        final location = response.headers.value('location');
+        if (location != null && location.isNotEmpty) {
+          resolvedUrl = location;
+        }
+      }
+
+      String intentUrl;
+      final placeId = _extractNaverPlaceId(resolvedUrl);
+      if (placeId != null) {
+        intentUrl = 'intent://place?id=$placeId&appname=com.foodhouse.plating_mobile_app#Intent;scheme=nmap;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;package=com.nhn.android.nmap;end';
+      } else {
+        final query = _extractNaverSearchQuery(resolvedUrl);
+        if (query != null) {
+          intentUrl = 'intent://search?query=${Uri.encodeComponent(query)}&appname=com.foodhouse.plating_mobile_app#Intent;scheme=nmap;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;package=com.nhn.android.nmap;end';
+        } else {
+          intentUrl = 'intent://map?&appname=com.foodhouse.plating_mobile_app#Intent;scheme=nmap;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;package=com.nhn.android.nmap;end';
+        }
+      }
+
+      debugPrint('네이버 지도 인텐트 실행: $intentUrl');
+      await _intentChannel.invokeMethod('launchIntent', {'url': intentUrl});
+    } catch (e) {
+      debugPrint('네이버 지도 인텐트 실행 중 오류: $e');
+      try {
+        await _intentChannel.invokeMethod('launchIntent', {'url': urlStr});
+      } catch (err) {
+        debugPrint('기본 웹 URL 실행 실패: $err');
+      }
+    }
+  }
+
+  String? _extractNaverPlaceId(String url) {
+    final regexes = [
+      RegExp(r'/place/(\d+)'),
+      RegExp(r'pinId=(\d+)'),
+      RegExp(r'placeId=(\d+)'),
+      RegExp(r'place\.naver\?id=(\d+)'),
+    ];
+    for (final regex in regexes) {
+      final match = regex.firstMatch(url);
+      if (match != null && match.groupCount >= 1) {
+        return match.group(1);
+      }
+    }
+    return null;
+  }
+
+  String? _extractNaverSearchQuery(String url) {
+    final regexes = [
+      RegExp(r'/search/([^/?#]+)'),
+      RegExp(r'query=([^&]+)'),
+    ];
+    for (final regex in regexes) {
+      final match = regex.firstMatch(url);
+      if (match != null && match.groupCount >= 1) {
+        try {
+          return Uri.decodeComponent(match.group(1)!);
+        } catch (e) {
+          return match.group(1);
+        }
+      }
+    }
+    return null;
   }
 }
