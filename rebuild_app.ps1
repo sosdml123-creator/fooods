@@ -41,7 +41,6 @@ $gradleContent = [System.IO.File]::ReadAllText($gradlePath)
 
 $gradleContent = $gradleContent -replace 'compileSdk\s*=?\s*flutter\.compileSdkVersion', 'compileSdk = 35'
 $gradleContent = $gradleContent -replace 'targetSdk\s*=?\s*flutter\.targetSdkVersion', 'targetSdk = 35'
-$gradleContent = $gradleContent -replace 'compileOptions\s*\{', "kotlinOptions {`n        jvmTarget = '1.8'`n    }`n`n    compileOptions {"
 
 [System.IO.File]::WriteAllText($gradlePath, $gradleContent)
 
@@ -69,7 +68,7 @@ Set-Location "d:\food\mobile_app"
 Write-Host "========================================"
 Write-Host "6. 릴리즈 배포용 App Bundle (AAB) 최종 빌드 실행 (버전: $buildName, 빌드번호: $buildNumber)..."
 Write-Host "========================================"
-& "$sdkDir\flutter\bin\flutter.bat" build appbundle --release --build-name=$buildName --build-number=$buildNumber
+& "$sdkDir\flutter\bin\flutter.bat" build appbundle --release --build-name=$buildName --build-number=$buildNumber --split-debug-info=build/app/outputs/symbols
 
 Write-Host "========================================"
 Write-Host "🎉 App Bundle 서명 및 빌드 성공 완료!"
