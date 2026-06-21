@@ -107,16 +107,16 @@ Write-Host "6.5. build.gradle API 35 및 릴리즈 서명 설정 중..."
 $gradlePath = "d:\food\mobile_app\android\app\build.gradle"
 $gradleContent = [System.IO.File]::ReadAllText($gradlePath)
 
-# compileSdk 및 targetSdk를 API 35로 지정
-$gradleContent = $gradleContent.Replace("compileSdk = flutter.compileSdkVersion", "compileSdk = 35")
-$gradleContent = $gradleContent.Replace("targetSdk = flutter.targetSdkVersion", "targetSdk = 35")
+# compileSdk 및 targetSdk를 API 35로 지정 (정규식 사용으로 공백 무관하게 매칭)
+$gradleContent = $gradleContent -replace 'compileSdk\s*=?\s*flutter\.compileSdkVersion', 'compileSdk = 35'
+$gradleContent = $gradleContent -replace 'targetSdk\s*=?\s*flutter\.targetSdkVersion', 'targetSdk = 35'
 
 # signingConfigs 추가
 $signingConfigBlock = "    signingConfigs {`n        release {`n            storeFile file('upload-keystore.jks')`n            storePassword 'plating1234'`n            keyAlias 'upload'`n            keyPassword 'plating1234'`n        }`n    }"
 $gradleContent = $gradleContent.Replace("    defaultConfig {", "$signingConfigBlock`n`n    defaultConfig {")
 
-# buildTypes.release.signingConfig를 release로 지정
-$gradleContent = $gradleContent.Replace("signingConfig = signingConfigs.debug", "signingConfig = signingConfigs.release")
+# buildTypes.release.signingConfig를 release로 지정 (정규식 사용으로 공백 무관하게 매칭)
+$gradleContent = $gradleContent -replace 'signingConfig\s*=?\s*signingConfigs\.debug', 'signingConfig = signingConfigs.release'
 
 [System.IO.File]::WriteAllText($gradlePath, $gradleContent)
 
