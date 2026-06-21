@@ -1,3 +1,7 @@
+param (
+    [string]$buildName = "1.0.0",
+    [string]$buildNumber = "2"
+)
 $ErrorActionPreference = "Stop"
 
 $sdkDir = "d:\food\sdks"
@@ -63,9 +67,9 @@ Set-Location "d:\food\mobile_app"
 
 # 6. 최종 배포용 App Bundle (AAB) 빌드
 Write-Host "========================================"
-Write-Host "6. 릴리즈 배포용 App Bundle (AAB) 최종 빌드 실행..."
+Write-Host "6. 릴리즈 배포용 App Bundle (AAB) 최종 빌드 실행 (버전: $buildName, 빌드번호: $buildNumber)..."
 Write-Host "========================================"
-& "$sdkDir\flutter\bin\flutter.bat" build appbundle --release
+& "$sdkDir\flutter\bin\flutter.bat" build appbundle --release --build-name=$buildName --build-number=$buildNumber
 
 Write-Host "========================================"
 Write-Host "🎉 App Bundle 서명 및 빌드 성공 완료!"
