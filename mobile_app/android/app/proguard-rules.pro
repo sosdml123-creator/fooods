@@ -14,3 +14,6 @@
 
 # Keep custom native activity
 -keep class com.foodhouse.plating_mobile_app.MainActivity { *; }
+
+# Ignore missing Play Core classes referenced by Flutter split/deferred components
+-dontwarn com.google.android.play.core.**
