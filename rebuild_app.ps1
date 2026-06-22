@@ -1,51 +1,85 @@
 param (
     [string]$buildName = "1.0.0",
-    [string]$buildNumber = "2"
+    [string]$buildNumber = $null
 )
 $ErrorActionPreference = "Stop"
+
+# Auto-increment version code logic
+$buildNumberFile = "d:\food\build_number.txt"
+if ([string]::IsNullOrEmpty($buildNumber)) {
+    $currentBuildNum = 2 # Default starting value
+    $hasFile = Test-Path $buildNumberFile
+
+    if ($hasFile) {
+        $fileContent = Get-Content $buildNumberFile -Raw
+        if ($fileContent -match '\d+') {
+            $currentBuildNum = [int]$fileContent.Trim()
+        }
+    }
+
+    if (-not $hasFile) {
+        $localPropPath = "d:\food\mobile_app\android\local.properties"
+        if (Test-Path $localPropPath) {
+            $propLines = Get-Content $localPropPath
+            foreach ($line in $propLines) {
+                if ($line -like "flutter.versionCode=*") {
+                    $val = $line.Split("=")[1]
+                    if ($val -match '\d+') {
+                        $currentBuildNum = [int]$val.Trim()
+                    }
+                }
+            }
+        }
+    }
+    $buildNumber = ($currentBuildNum + 1).ToString()
+}
+
+# Sync and save build number
+if ($buildNumber -match '^\d+$') {
+    Set-Content -Path $buildNumberFile -Value $buildNumber
+}
+
+Write-Host "========================================"
+Write-Host "Selected Build Number (Version Code): $buildNumber"
+Write-Host "========================================"
 
 $sdkDir = "d:\food\sdks"
 $env:JAVA_HOME = "$sdkDir\jdk"
 $env:ANDROID_HOME = "$sdkDir\android"
 $env:PATH = "$sdkDir\jdk\bin;$sdkDir\android\cmdline-tools\latest\bin;$sdkDir\flutter\bin;" + $env:PATH
 
-# 1. 기존 keystore 백업 및 Git HEAD 기준 복원
-Write-Host "1. Git HEAD 기준 원본 코드 복원 및 keystore 보호 중..."
+# 1. Backup keystore and restore Git HEAD mobile_app
+Write-Host "1. Restoring mobile_app from Git HEAD and protecting keystore..."
 $keystorePath = "d:\food\mobile_app\android\app\upload-keystore.jks"
 $tempBackupKeystore = "d:\food\upload-keystore.jks.temp"
 
-# 임시 폴더 대신 루트에 임시 복사
 if (Test-Path $keystorePath) {
     Copy-Item -Path $keystorePath -Destination $tempBackupKeystore -Force
 }
 
-# Git HEAD 기준으로 모바일 앱 리소스 원상 복구 (권한, Kakao login 등 보존)
 Set-Location "d:\food"
 & git restore mobile_app
 
-# 백업한 keystore를 다시 제자리에 위치
 if (Test-Path $tempBackupKeystore) {
     New-Item -ItemType Directory -Force -Path "d:\food\mobile_app\android\app"
     Move-Item -Path $tempBackupKeystore -Destination $keystorePath -Force
 }
 
-# 2. Flutter 프로젝트 클린
-Write-Host "2. Flutter Clean 실행..."
+# 2. Clean Flutter project
+Write-Host "2. Running flutter clean..."
 Set-Location "d:\food\mobile_app"
 & "$sdkDir\flutter\bin\flutter.bat" clean
 
-# 3. Android API 35 타겟 설정 및 JVM 호환성 수정 (in-place)
-Write-Host "3. Android build.gradle API 35 및 JVM 호환성 설정 수정 중..."
+# 3. Android API 35 settings configuration
+Write-Host "3. Updating build.gradle for compileSdk/targetSdk 35..."
 $gradlePath = "d:\food\mobile_app\android\app\build.gradle"
 $gradleContent = [System.IO.File]::ReadAllText($gradlePath)
-
 $gradleContent = $gradleContent -replace 'compileSdk\s*=?\s*flutter\.compileSdkVersion', 'compileSdk = 35'
 $gradleContent = $gradleContent -replace 'targetSdk\s*=?\s*flutter\.targetSdkVersion', 'targetSdk = 35'
-
 [System.IO.File]::WriteAllText($gradlePath, $gradleContent)
 
-# 4. Gradle 및 Kotlin 버전 업그레이드 (API 35 빌드 호환성 확보)
-Write-Host "4. Gradle Wrapper 및 Kotlin 플러그인 업그레이드 중..."
+# 4. Upgrade Gradle and Kotlin versions
+Write-Host "4. Upgrading Gradle Wrapper and Kotlin versions..."
 $wrapperPath = "d:\food\mobile_app\android\gradle\wrapper\gradle-wrapper.properties"
 $wrapperContent = [System.IO.File]::ReadAllText($wrapperPath)
 $wrapperContent = $wrapperContent.Replace("gradle-7.6.3-all.zip", "gradle-8.4-all.zip")
@@ -57,20 +91,20 @@ $settingsContent = $settingsContent.Replace('id "com.android.application" versio
 $settingsContent = $settingsContent.Replace('id "org.jetbrains.kotlin.android" version "1.7.10"', 'id "org.jetbrains.kotlin.android" version "1.8.22"')
 [System.IO.File]::WriteAllText($settingsPath, $settingsContent)
 
-# 5. 패키지 설치, 아이콘/스플래시 생성
-Write-Host "5. Flutter 패키지 설치 및 런처 리소스 생성..."
+# 5. Pub get and launcher/splash generation
+Write-Host "5. Running pub get and generating icons/splash..."
 Set-Location "d:\food\mobile_app"
 & "$sdkDir\flutter\bin\flutter.bat" pub get
 & "$sdkDir\flutter\bin\flutter.bat" pub run flutter_launcher_icons
 & "$sdkDir\flutter\bin\flutter.bat" pub run flutter_native_splash:create
 
-# 6. 최종 배포용 App Bundle (AAB) 빌드
+# 6. Build final App Bundle (AAB)
 Write-Host "========================================"
-Write-Host "6. 릴리즈 배포용 App Bundle (AAB) 최종 빌드 실행 (버전: $buildName, 빌드번호: $buildNumber)..."
+Write-Host "6. Building release App Bundle (AAB) (Name: $buildName, Number: $buildNumber)..."
 Write-Host "========================================"
 & "$sdkDir\flutter\bin\flutter.bat" build appbundle --release --build-name=$buildName --build-number=$buildNumber --split-debug-info=build/app/outputs/symbols
 
 Write-Host "========================================"
-Write-Host "🎉 App Bundle 서명 및 빌드 성공 완료!"
-Write-Host "최종 App Bundle (.aab) 위치: d:\food\mobile_app\build\app\outputs\bundle\release\app-release.aab"
+Write-Host "🎉 App Bundle build completed successfully!"
+Write-Host "Path: d:\food\mobile_app\build\app\outputs\bundle\release\app-release.aab"
 Write-Host "========================================"
