@@ -56,6 +56,17 @@
             <data android:mimeType="text/plain"/>
         </intent>
         <package android:name="com.kakao.talk" />
+        <!-- 네이버 지도 앱 딥링크 지원 -->
+        <package android:name="com.nhn.android.nmap" />
+        <!-- 쿠팡 앱 딥링크 지원 -->
+        <package android:name="com.coupang.mobile" />
+        <!-- 네이버 앱 딥링크 지원 -->
+        <package android:name="com.nhn.android.search" />
+        <!-- 일반 앱 열기 (http/https intent 처리) -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
     </queries>
 </manifest>
 

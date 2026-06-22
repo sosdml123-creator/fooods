@@ -627,6 +627,14 @@
       const [editBody, setEditBody] = useState(post.body);
       const [showKebabMenu, setShowKebabMenu] = useState(false);
 
+      // 링크 수정용 상태 (수정 모드일 때만 사용)
+      const [editLinks, setEditLinks] = useState(() =>
+        (post.productLinks && post.productLinks.length > 0)
+          ? post.productLinks.map(l => ({ id: l.id || generateId(), url: l.url || "", _saved: l }))
+          : [{ id: generateId(), url: "" }]
+      );
+      const [editLinkPreviews, setEditLinkPreviews] = useState({});
+
       // 댓글 수정용 인라인 로컬 상태
       const [editingCommentId, setEditingCommentId] = useState(null);
       const [editingCommentText, setEditingCommentText] = useState("");
@@ -640,6 +648,48 @@
         setEditBody(post.body);
       }, [post.id]);
 
+      // 수정 모드 진입 시 기존 링크 미리보기 초기화
+      useEffect(() => {
+        if (!isEditingMode) return;
+        editLinks.forEach(link => {
+          if (!link.url || !link.url.startsWith("http")) return;
+          if (editLinkPreviews[link.id]) return;
+          setEditLinkPreviews(prev => ({ ...prev, [link.id]: { loading: true, url: link.url } }));
+          fetchLinkMeta(link.url).then(meta => {
+            setEditLinkPreviews(prev => ({
+              ...prev,
+              [link.id]: {
+                loading: false, url: link.url,
+                title: meta ? (meta.title || "상세 링크") : "상세 링크",
+                image: meta ? meta.image : "",
+                host: meta ? meta.host : ""
+              }
+            }));
+          });
+        });
+      }, [isEditingMode]);
+
+      // editLinks URL 변경 시 미리보기 자동 갱신
+      useEffect(() => {
+        editLinks.forEach(link => {
+          if (!link.url || !link.url.startsWith("http")) return;
+          const existing = editLinkPreviews[link.id];
+          if (existing && existing.url === link.url) return;
+          setEditLinkPreviews(prev => ({ ...prev, [link.id]: { loading: true, url: link.url } }));
+          fetchLinkMeta(link.url).then(meta => {
+            setEditLinkPreviews(prev => ({
+              ...prev,
+              [link.id]: {
+                loading: false, url: link.url,
+                title: meta ? (meta.title || "상세 링크") : "상세 링크",
+                image: meta ? meta.image : "",
+                host: meta ? meta.host : ""
+              }
+            }));
+          });
+        });
+      }, [editLinks]);
+
       function submitComment(e) {
         e.preventDefault();
         if (!commentText.trim()) return;
@@ -649,7 +699,22 @@
 
       function handleSave() {
         if (!editTitle.trim() || !editBody.trim()) return;
-        onEditPost(post.id, editTitle.trim(), editBody.trim());
+        // 링크 정보도 함께 저장
+        const updatedLinks = editLinks
+          .filter(l => l.url && l.url.startsWith("http"))
+          .map(l => {
+            const preview = editLinkPreviews[l.id];
+            let host = "link";
+            try { host = new URL(l.url).hostname.replace("www.", ""); } catch(e) {}
+            return {
+              id: l.id,
+              url: l.url.trim(),
+              title: preview && !preview.loading ? preview.title : (l._saved ? l._saved.title : "상세 링크"),
+              image: preview && !preview.loading ? preview.image : (l._saved ? l._saved.image : ""),
+              host: preview && !preview.loading ? preview.host : host
+            };
+          });
+        onEditPost(post.id, editTitle.trim(), editBody.trim(), updatedLinks);
         setIsEditingMode(false);
       }
 
@@ -727,6 +792,52 @@
                     포스팅 본문 수정
                     <textarea value={editBody} onChange={(e) => setEditBody(e.target.value)} className="border p-2 rounded text-xs h-24 resize-none" />
                   </label>
+                  {/* 링크 편집기 */}
+                  <div>
+                    <div className="text-[10px] font-bold text-zinc-400 mb-1.5">
+                      <i className="fa-solid fa-cart-shopping mr-1"></i> 링크 수정/추가
+                    </div>
+                    {editLinks.map((link, idx) => (
+                      <div key={link.id} className="mb-2 p-2 bg-white border border-zinc-200 rounded-lg">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <input
+                            type="text"
+                            className="flex-1 border border-zinc-200 rounded px-2 py-1 text-[10px] outline-none focus:border-zinc-400"
+                            placeholder="https://... 링크 URL 입력"
+                            value={link.url}
+                            onChange={(e) => setEditLinks(editLinks.map(l => l.id === link.id ? { ...l, url: e.target.value } : l))}
+                          />
+                          <button
+                            type="button"
+                            className="text-red-400 text-xs px-1.5 py-1 rounded border border-red-200 bg-red-50 hover:bg-red-100"
+                            onClick={() => setEditLinks(editLinks.filter(l => l.id !== link.id))}
+                          >×</button>
+                        </div>
+                        {link.url && link.url.startsWith("http") && (
+                          <div className="flex items-center gap-2 mt-1">
+                            {editLinkPreviews[link.id]?.loading ? (
+                              <span className="text-[9px] text-zinc-400"><i className="fa-solid fa-spinner fa-spin mr-1"></i>불러오는 중...</span>
+                            ) : editLinkPreviews[link.id] ? (
+                              <>
+                                {editLinkPreviews[link.id].image && (
+                                  <img src={editLinkPreviews[link.id].image} alt="" className="w-8 h-8 object-cover rounded border border-zinc-200 flex-shrink-0" />
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-[10px] font-bold text-zinc-800 truncate">{editLinkPreviews[link.id].title}</div>
+                                  <div className="text-[9px] text-zinc-400 truncate">{editLinkPreviews[link.id].host}</div>
+                                </div>
+                              </>
+                            ) : null}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="w-full text-[10px] border border-dashed border-zinc-300 text-zinc-400 rounded py-1.5 hover:bg-zinc-100"
+                      onClick={() => setEditLinks([...editLinks, { id: generateId(), url: "" }])}
+                    >+ 링크 추가</button>
+                  </div>
                   <div className="flex gap-2">
                     <button className="primary flex-1 py-1.5 rounded text-xs font-bold" onClick={handleSave}>저장</button>
                     <button className="secondary flex-1 py-1.5 rounded text-xs font-bold" onClick={() => setIsEditingMode(false)}>취소</button>
@@ -741,7 +852,7 @@
                 </div>
               )}
 
-              {post.productLinks && post.productLinks.length > 0 && (
+              {!isEditingMode && post.productLinks && post.productLinks.length > 0 && (
                 <div className="mb-5 bg-zinc-50 rounded-xl p-3">
                   <div className="text-[10px] font-bold text-zinc-400 mb-2">소개된 아이템 정보 전체 ({post.productLinks.length})</div>
                   <div className="flex flex-col gap-2">
@@ -2701,10 +2812,15 @@
         setPosts(posts.filter(p => p.id !== id));
       }
 
-      function handleEditPost(id, newTitle, newBody) {
+      function handleEditPost(id, newTitle, newBody, newProductLinks) {
         setPosts(posts.map(p => {
           if (p.id === id) {
-            return { ...p, title: newTitle, body: newBody };
+            return {
+              ...p,
+              title: newTitle,
+              body: newBody,
+              productLinks: newProductLinks !== undefined ? newProductLinks : p.productLinks
+            };
           }
           return p;
         }));

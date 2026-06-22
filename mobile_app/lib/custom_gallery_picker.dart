@@ -1,15 +1,78 @@
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
-import 'package:photo_manager/photo_manager.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:http/http.dart' as http;
-import 'package:image/image.dart' as img;
+import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:image/image.dart' as img;
+import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:photo_manager/photo_manager.dart';
+
+// 앱 전역 썸네일 캐시 (화면 이동 후에도 유지되어 재오픈 시 즉시 표시)
 final Map<String, Uint8List> _thumbnailCache = {};
+
+// 동시 썸네일 로딩 수를 제한하는 세마포어 (UI 쓰레드 과부하 방지)
+final _thumbnailSemaphore = _Semaphore(maxConcurrent: 4);
+
+/// 간단한 세마포어 구현: 동시 실행 가능한 비동기 작업 수를 제한
+class _Semaphore {
+  final int maxConcurrent;
+  int _current = 0;
+  final Queue<Completer<void>> _waiters = Queue();
+
+  _Semaphore({required this.maxConcurrent});
+
+  Future<void> acquire() async {
+    if (_current < maxConcurrent) {
+      _current++;
+      return;
+    }
+    final completer = Completer<void>();
+    _waiters.add(completer);
+    await completer.future;
+  }
+
+  void release() {
+    if (_waiters.isNotEmpty) {
+      final next = _waiters.removeFirst();
+      next.complete();
+    } else {
+      _current--;
+    }
+  }
+}
+
+// Isolate에서 실행될 이미지 압축 함수 (UI 쓰레드 차단 없이 백그라운드 처리)
+Future<File> _compressImageIsolate(String filePath) async {
+  try {
+    final file = File(filePath);
+    final bytes = await file.readAsBytes();
+    final image = img.decodeImage(bytes);
+    if (image == null) return file;
+
+    img.Image resized = image;
+    if (image.width > 1200 || image.height > 1200) {
+      if (image.width > image.height) {
+        resized = img.copyResize(image, width: 1200);
+      } else {
+        resized = img.copyResize(image, height: 1200);
+      }
+    }
+
+    final compressedBytes = img.encodeJpg(resized, quality: 82);
+    final tempDir = Directory.systemTemp;
+    final tempFile = File(
+        '${tempDir.path}/compressed_${DateTime.now().millisecondsSinceEpoch}.jpg');
+    await tempFile.writeAsBytes(compressedBytes);
+    return tempFile;
+  } catch (e) {
+    debugPrint('이미지 압축 실패: $e');
+    return File(filePath);
+  }
+}
 
 class SelectedPhoto {
   final AssetEntity? entity;
@@ -38,11 +101,7 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
   final Map<String, String> _uploadedUrls = {}; 
   final Map<String, Future<void>> _uploadFutures = {};
 
-  AssetEntity? _previewAsset;
-  File? _previewFile;
-  File? _previewLoadedFile;
-  
-  bool _isLoading = false;
+  bool _isLoading = true;
   bool _isUploading = false;
   final ImagePicker _picker = ImagePicker();
 
@@ -53,8 +112,6 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
   }
 
   Future<void> _requestPermissionAndLoadPhotos() async {
-    setState(() => _isLoading = true);
-    
     // photo_manager 권한 허용 여부 확인
     final PermissionState ps = await PhotoManager.requestPermissionExtend();
     bool isAuthorized = ps.isAuth;
@@ -68,92 +125,80 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
     }
 
     if (isAuthorized) {
-      // 앨범 목록 조회
-      List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
+      // 앨범 목록 조회 - hasAll:true로 전체 사진 앨범 우선 조회
+      final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
         type: RequestType.image,
+        hasAll: true,
+        onlyAll: true, // "전체" 앨범만 조회해 빠르게 로딩
       );
+      
       if (albums.isNotEmpty) {
-        // 최근 사진 150장 로드
-        List<AssetEntity> assets = await albums[0].getAssetListRange(
+        // 최근 사진 200장을 비동기로 빠르게 로드
+        final List<AssetEntity> assets = await albums[0].getAssetListRange(
           start: 0,
-          end: 150,
+          end: 200,
         );
-        setState(() {
-          _assets = assets;
-          if (assets.isNotEmpty) {
-            _previewAsset = assets[0];
-            _loadPreviewFile(assets[0]);
-          }
-        });
+        if (mounted) {
+          setState(() {
+            _assets = assets;
+            _isLoading = false;
+          });
+        }
+        
+        // 백그라운드에서 상위 20장 썸네일 사전 캐싱 (즉각 표시용)
+        _preCacheThumbnails(assets.take(20).toList());
+      } else {
+        if (mounted) setState(() => _isLoading = false);
       }
     } else {
       // 권한 거부 시 안내 및 시스템 설정 열기
       if (mounted) {
+        setState(() => _isLoading = false);
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text("권한 필요"),
-            content: const Text("사진첩 접근 권한이 거부되었습니다. 설정에서 허용해 주세요."),
+            title: const Text('권한 필요'),
+            content: const Text('사진첩 접근 권한이 거부되었습니다. 설정에서 허용해 주세요.'),
             actions: [
               TextButton(
                 onPressed: () {
                   Navigator.pop(context);
                   PhotoManager.openSetting();
                 },
-                child: const Text("설정 열기"),
+                child: const Text('설정 열기'),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text("취소"),
+                child: const Text('취소'),
               ),
             ],
           ),
         );
       }
     }
-    setState(() => _isLoading = false);
   }
 
-  Future<void> _loadPreviewFile(AssetEntity asset) async {
-    try {
-      final file = await asset.file;
-      if (file != null && mounted && _previewAsset?.id == asset.id) {
-        setState(() {
-          _previewLoadedFile = file;
-        });
+  /// 상위 N장 썸네일을 백그라운드에서 순차적으로 사전 캐싱
+  Future<void> _preCacheThumbnails(List<AssetEntity> assets) async {
+    for (final asset in assets) {
+      if (!mounted) break;
+      if (!_thumbnailCache.containsKey(asset.id)) {
+        try {
+          final data = await asset.thumbnailDataWithSize(
+            const ThumbnailSize(200, 200),
+            quality: 80,
+          );
+          if (data != null) {
+            _thumbnailCache[asset.id] = data;
+          }
+        } catch (_) {}
       }
-    } catch (e) {
-      debugPrint("미리보기 파일 로드 실패: $e");
     }
   }
 
-  // Dart image 패키지를 활용한 90% 이상 고용량 압축 기능 구현 (최대 1200px, 80% 퀄리티)
+  /// compute()를 활용해 UI 쓰레드를 차단하지 않고 이미지 압축
   Future<File> _compressImage(File file) async {
-    try {
-      final bytes = await file.readAsBytes();
-      final image = img.decodeImage(bytes);
-      if (image == null) return file;
-
-      img.Image resized = image;
-      if (image.width > 1200 || image.height > 1200) {
-        if (image.width > image.height) {
-          resized = img.copyResize(image, width: 1200);
-        } else {
-          resized = img.copyResize(image, height: 1200);
-        }
-      }
-
-      final compressedBytes = img.encodeJpg(resized, quality: 80);
-
-      final tempDir = Directory.systemTemp;
-      final tempFile = File(
-          '${tempDir.path}/compressed_${DateTime.now().millisecondsSinceEpoch}.jpg');
-      await tempFile.writeAsBytes(compressedBytes);
-      return tempFile;
-    } catch (e) {
-      debugPrint("이미지 압축 실패: $e");
-      return file;
-    }
+    return await compute(_compressImageIsolate, file.path);
   }
 
   String _getPhotoKey(SelectedPhoto photo) {
@@ -168,7 +213,7 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
       File? originalFile = await photo.getFile;
       if (originalFile == null) return;
       
-      // 1. 이미지 압축
+      // 1. Isolate를 통한 비동기 이미지 압축 (UI 쓰레드 비차단)
       File compressedFile = await _compressImage(originalFile);
       
       // 2. R2로 업로드
@@ -185,11 +230,11 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
         var data = jsonDecode(response.body);
         if (data['success'] == true) {
           _uploadedUrls[key] = data['url'];
-          debugPrint("선업로드 성공: $key -> ${data['url']}");
+          debugPrint('선업로드 성공: $key -> ${data['url']}');
         }
       }
     } catch (e) {
-      debugPrint("선업로드 실패: $e");
+      debugPrint('선업로드 실패: $e');
     }
   }
 
@@ -200,20 +245,19 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
       final selected = SelectedPhoto(file: file);
       final key = file.path;
       
-      setState(() {
-        if (_selectedPhotos.length < widget.maxCount) {
-          _selectedPhotos.add(selected);
-          _previewFile = file;
-          _previewAsset = null;
-          
-          // 촬영하자마자 백그라운드 선업로드 기동
-          _uploadFutures[key] = _compressAndUploadPhoto(selected);
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("사진은 최대 ${widget.maxCount}장까지 선택 가능합니다.")),
-          );
-        }
-      });
+      if (mounted) {
+        setState(() {
+          if (_selectedPhotos.length < widget.maxCount) {
+            _selectedPhotos.add(selected);
+            // 촬영하자마자 백그라운드 선업로드 기동
+            _uploadFutures[key] = _compressAndUploadPhoto(selected);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('사진은 최대 ${widget.maxCount}장까지 선택 가능합니다.')),
+            );
+          }
+        });
+      }
     }
   }
 
@@ -226,40 +270,17 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
         _selectedPhotos.removeAt(index);
         _uploadedUrls.remove(key);
         _uploadFutures.remove(key);
-        if (_selectedPhotos.isNotEmpty) {
-          final last = _selectedPhotos.last;
-          _previewAsset = last.entity;
-          _previewFile = last.file;
-          if (last.entity != null) {
-            _loadPreviewFile(last.entity!);
-          } else {
-            _previewLoadedFile = null;
-          }
-        } else {
-          // 모든 선택이 해제된 경우 최근 첫 번째 사진으로 미리보기 환원
-          _previewFile = null;
-          if (_assets.isNotEmpty) {
-            _previewAsset = _assets[0];
-            _loadPreviewFile(_assets[0]);
-          } else {
-            _previewAsset = null;
-            _previewLoadedFile = null;
-          }
-        }
       } else {
         // 새로 선택하는 경우
         if (_selectedPhotos.length < widget.maxCount) {
           final selected = SelectedPhoto(entity: asset);
           _selectedPhotos.add(selected);
-          _previewAsset = asset;
-          _previewFile = null;
-          _loadPreviewFile(asset);
           
-          // 터치 즉시 백그라운드 선업로드 기동
+          // 터치 즉시 백그라운드 선업로드 기동 (UI 반응성 차단하지 않음)
           _uploadFutures[key] = _compressAndUploadPhoto(selected);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("사진은 최대 ${widget.maxCount}장까지 선택 가능합니다.")),
+            SnackBar(content: Text('사진은 최대 ${widget.maxCount}장까지 선택 가능합니다.')),
           );
         }
       }
@@ -286,7 +307,7 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
             children: [
               CircularProgressIndicator(color: Colors.black),
               SizedBox(width: 20),
-              Text("사진 업로드를 완료하는 중입니다..."),
+              Text('사진 업로드를 완료하는 중입니다...'),
             ],
           ),
         ),
@@ -345,7 +366,7 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              "최근 항목",
+              '최근 항목',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 15,
@@ -374,9 +395,9 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
                   borderRadius: BorderRadius.circular(20),
                 ),
               ),
-              child: const Text(
-                "다음",
-                style: TextStyle(
+              child: Text(
+                _selectedPhotos.isEmpty ? '선택' : '다음 (${_selectedPhotos.length})',
+                style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
                 ),
@@ -394,6 +415,8 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
                 crossAxisSpacing: 1.5,
                 mainAxisSpacing: 1.5,
               ),
+              // RepaintBoundary를 통해 개별 타일이 독립적으로 리페인팅
+              cacheExtent: 1200, // 미리 더 많이 캐싱하여 스크롤 시 깜빡임 방지
               itemCount: _assets.length + 1, // 카메라 타일 1개 추가
               itemBuilder: (context, index) {
                 if (index == 0) {
@@ -408,7 +431,7 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
                           Icon(Icons.camera_alt_outlined, color: Colors.white, size: 28),
                           SizedBox(height: 5),
                           Text(
-                            "촬영하기",
+                            '촬영하기',
                             style: TextStyle(
                               fontSize: 11,
                               color: Colors.white70,
@@ -426,57 +449,59 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
                 final selIdx = _getSelectedIndex(asset);
                 final isSelected = selIdx >= 0;
 
-                return GestureDetector(
-                  onTap: () => _toggleSelection(asset),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      // 캐시 지원 및 플리커(깜빡임) 방지 썸네일 Widget
-                      GalleryThumbnail(
-                        key: ValueKey(asset.id),
-                        asset: asset,
-                        darkCardColor: darkCardColor,
-                      ),
-                      
-                      // 선택 시 반투명 블랙 레이어 및 크기 변화 효과 부여
-                      if (isSelected)
-                        Container(
-                          color: Colors.black.withOpacity(0.35),
+                return RepaintBoundary(
+                  child: GestureDetector(
+                    onTap: () => _toggleSelection(asset),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // 세마포어 기반 동시 로딩 제어 썸네일 Widget
+                        GalleryThumbnail(
+                          key: ValueKey(asset.id),
+                          asset: asset,
+                          darkCardColor: darkCardColor,
+                        ),
+                        
+                        // 선택 시 반투명 블랙 레이어 및 크기 변화 효과 부여
+                        if (isSelected)
+                          Container(
+                            color: Colors.black.withOpacity(0.35),
+                            child: Container(
+                              margin: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.blue[500]!, width: 2),
+                              ),
+                            ),
+                          ),
+                        
+                        // 우상단 체크/순서 동그라미 배지
+                        Positioned(
+                          top: 8,
+                          right: 8,
                           child: Container(
-                            margin: const EdgeInsets.all(4),
+                            width: 20,
+                            height: 20,
                             decoration: BoxDecoration(
-                              border: Border.all(color: Colors.blue[500]!, width: 2),
+                              color: isSelected ? Colors.blue[600] : Colors.black.withOpacity(0.4),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 1.5),
+                            ),
+                            child: Center(
+                              child: isSelected
+                                  ? Text(
+                                      '${selIdx + 1}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    )
+                                  : null,
                             ),
                           ),
                         ),
-                      
-                      // 우상단 체크/순서 동그라미 배지
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Container(
-                          width: 20,
-                          height: 20,
-                          decoration: BoxDecoration(
-                            color: isSelected ? Colors.blue[600] : Colors.black.withOpacity(0.4),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 1.5),
-                          ),
-                          child: Center(
-                            child: isSelected
-                                ? Text(
-                                    "${selIdx + 1}",
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  )
-                                : null,
-                          ),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 );
               },
@@ -496,6 +521,7 @@ class GalleryThumbnail extends StatefulWidget {
 
 class _GalleryThumbnailState extends State<GalleryThumbnail> {
   Uint8List? _bytes;
+  bool _loading = false;
 
   @override
   void initState() {
@@ -507,11 +533,13 @@ class _GalleryThumbnailState extends State<GalleryThumbnail> {
   void didUpdateWidget(GalleryThumbnail oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.asset.id != widget.asset.id) {
+      _bytes = null;
       _loadThumbnail();
     }
   }
 
   Future<void> _loadThumbnail() async {
+    // 이미 캐시에 있으면 즉시 표시 (락 없이)
     if (_thumbnailCache.containsKey(widget.asset.id)) {
       if (mounted) {
         setState(() {
@@ -520,8 +548,18 @@ class _GalleryThumbnailState extends State<GalleryThumbnail> {
       }
       return;
     }
+    
+    if (_loading) return;
+    _loading = true;
+
+    // 세마포어로 동시 로딩 수 제한 (최대 4개 동시 실행)
+    await _thumbnailSemaphore.acquire();
     try {
-      final data = await widget.asset.thumbnailData;
+      // 소형 썸네일 200×200을 요청하여 메모리/속도 최적화
+      final data = await widget.asset.thumbnailDataWithSize(
+        const ThumbnailSize(200, 200),
+        quality: 80,
+      );
       if (data != null) {
         _thumbnailCache[widget.asset.id] = data;
         if (mounted) {
@@ -531,7 +569,10 @@ class _GalleryThumbnailState extends State<GalleryThumbnail> {
         }
       }
     } catch (e) {
-      debugPrint("썸네일 로드 실패: $e");
+      debugPrint('썸네일 로드 실패: $e');
+    } finally {
+      _thumbnailSemaphore.release();
+      _loading = false;
     }
   }
 
@@ -540,6 +581,13 @@ class _GalleryThumbnailState extends State<GalleryThumbnail> {
     if (_bytes == null) {
       return Container(color: widget.darkCardColor);
     }
-    return Image.memory(_bytes!, fit: BoxFit.cover);
+    return Image.memory(
+      _bytes!,
+      fit: BoxFit.cover,
+      // gaplessPlayback: true로 교체 중 깜빡임 방지
+      gaplessPlayback: true,
+    );
   }
 }
+
+// dart:collection Queue is imported at top

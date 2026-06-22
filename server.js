@@ -419,10 +419,6 @@ app.get("/message", async function (req, res) {
     "content-Type": "application/x-www-form-urlencoded",
     Authorization: "Bearer " + req.session.key,
   };
-  var rtn = await call("POST", uri, param, header);
-  res.send(rtn);
-});
-
 // 친구에게 메시지 보내기
 app.get("/friend-message", async function (req, res) {
   if (!req.session.key) return res.status(401).send("Unauthorized");
@@ -500,16 +496,40 @@ app.get("/api/link-meta", async (req, res) => {
     host = new URL(url).hostname.replace("www.", "");
   } catch (e) {}
 
+  // --- 공통 헤더 ---
+  const pcHeaders = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8"
+  };
+  const mobileHeaders = {
+    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept-Language": "ko-KR,ko;q=0.9"
+  };
+
+  // --- OG 태그 파싱 헬퍼 ---
+  function parseOgTags(html) {
+    if (!html || typeof html !== "string") return { title: "", image: "" };
+    const ogTitle = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i)
+                 || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i);
+    const ogImage = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)
+                 || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
+    const titleTag = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    const title = (ogTitle ? ogTitle[1] : "") || (titleTag ? titleTag[1] : "");
+    const image = ogImage ? ogImage[1] : "";
+    return { title: title.trim(), image: image.trim() };
+  }
+
   // 1. 네이버 지도 단축 링크/상세 주소 판별 및 네이버 내부 플레이스 summary API 호출
-  if (lowerUrl.includes("naver.me") || lowerUrl.includes("map.naver")) {
+  if (lowerUrl.includes("naver.me") || lowerUrl.includes("map.naver") || lowerUrl.includes("naver.com/p/")) {
     try {
       const redirectRes = await axios.get(url, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
-        },
-        maxRedirects: 5
+        headers: pcHeaders,
+        maxRedirects: 10,
+        timeout: 8000
       });
-      const finalUrl = redirectRes.request.res.responseUrl || url;
+      const finalUrl = redirectRes.request.res?.responseUrl || url;
       
       let placeId = null;
       const placeMatch = finalUrl.match(/place\/(\d+)/);
@@ -517,127 +537,142 @@ app.get("/api/link-meta", async (req, res) => {
         placeId = placeMatch[1];
       } else {
         const pinIdMatch = finalUrl.match(/pinId=(\d+)/);
-        if (pinIdMatch) {
-          placeId = pinIdMatch[1];
-        }
+        if (pinIdMatch) placeId = pinIdMatch[1];
       }
 
       if (placeId) {
-        const summaryUrl = `https://map.naver.com/p/api/place/summary/${placeId}?lang=ko`;
-        const summaryRes = await axios.get(summaryUrl, {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
-            "Referer": "https://map.naver.com/"
-          }
-        });
-        if (summaryRes.status === 200 && summaryRes.data && summaryRes.data.data) {
-          const detail = summaryRes.data.data.placeDetail;
-          if (detail) {
-            let imgUrl = "https://ssl.pstatic.net/static/maps/m/navermap_80_80.png";
-            if (detail.images && detail.images.images && detail.images.images.length > 0) {
-              imgUrl = detail.images.images[0].origin;
+        try {
+          const summaryUrl = `https://map.naver.com/p/api/place/summary/${placeId}?lang=ko`;
+          const summaryRes = await axios.get(summaryUrl, {
+            headers: { ...pcHeaders, "Referer": "https://map.naver.com/" },
+            timeout: 5000
+          });
+          if (summaryRes.status === 200 && summaryRes.data && summaryRes.data.data) {
+            const detail = summaryRes.data.data.placeDetail;
+            if (detail) {
+              let imgUrl = "https://ssl.pstatic.net/static/maps/m/navermap_80_80.png";
+              if (detail.images && detail.images.images && detail.images.images.length > 0) {
+                imgUrl = detail.images.images[0].origin;
+              }
+              return res.json({
+                success: true,
+                title: detail.name || "네이버 지도 장소",
+                image: imgUrl,
+                host: "naver.map"
+              });
             }
-            return res.json({
-              success: true,
-              title: detail.name || "네이버 지도 장소",
-              image: imgUrl,
-              host: "naver.map"
-            });
           }
+        } catch (sumErr) {
+          console.error("네이버 Summary API 실패, OG fallback:", sumErr.message);
         }
+      }
+
+      // Summary API 실패 시 HTML OG 태그로 fallback
+      const ogData = parseOgTags(typeof redirectRes.data === "string" ? redirectRes.data : "");
+      if (ogData.title) {
+        return res.json({
+          success: true,
+          title: ogData.title,
+          image: ogData.image || "https://ssl.pstatic.net/static/maps/m/navermap_80_80.png",
+          host: "naver.map"
+        });
       }
     } catch (err) {
       console.error("네이버 지도 파싱 에러:", err.message);
     }
   }
 
-  // 1.5. 쿠팡 링크 파싱 (Akamai WAF 우회 및 short link redirect title 파싱)
-  if (lowerUrl.includes("coupang.com")) {
+  // 1.5. 쿠팡 링크 파싱 (다중 전략: OG tags → JS redirect → URL 상품명)
+  if (lowerUrl.includes("coupang.com") || lowerUrl.includes("link.coupang.com") || lowerUrl.includes("coupa.ng")) {
+    let coupangTitle = "";
+    let coupangImage = "https://image.coupangcdn.com/image/coupang/common/logo308x76.png";
+
     try {
       const coupangRes = await axios.get(url, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-          "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-          "Cache-Control": "no-cache"
-        },
-        timeout: 5000
+        headers: { ...mobileHeaders, "Cache-Control": "no-cache", "Pragma": "no-cache" },
+        maxRedirects: 10,
+        timeout: 8000
       });
+
       if (coupangRes.status === 200) {
-        const html = coupangRes.data;
-        const decodedHtml = html.replace(/\\x([0-9A-Fa-f]{2})/g, (match, p1) => {
-          return String.fromCharCode(parseInt(p1, 16));
-        });
+        const html = typeof coupangRes.data === "string" ? coupangRes.data : "";
         
-        let title = "쿠팡 추천 상품";
-        const titleMatch = decodedHtml.match(/title=([^&'\s]+)/);
-        if (titleMatch) {
-          try {
-            title = decodeURIComponent(titleMatch[1]);
-          } catch (e) {}
+        // 전략 1a: OG 태그에서 제목/이미지 추출
+        const ogData = parseOgTags(html);
+        if (ogData.title && ogData.title !== "쿠팡 | 쿠팡" && ogData.title !== "Coupang") {
+          coupangTitle = ogData.title;
+          if (ogData.image && ogData.image.startsWith("http")) {
+            coupangImage = ogData.image;
+          }
         }
         
-        if (!title || title === "고객님을 위한 상품") {
-          title = "쿠팡 상품 링크";
+        // 전략 1b: JS 내부 title= 파라미터 추출
+        if (!coupangTitle) {
+          const decodedHtml = html.replace(/\\x([0-9A-Fa-f]{2})/g, (_, p1) =>
+            String.fromCharCode(parseInt(p1, 16))
+          );
+          const titleMatch = decodedHtml.match(/title=([^&'"\s]+)/);
+          if (titleMatch) {
+            try { coupangTitle = decodeURIComponent(titleMatch[1]); } catch(e) {}
+          }
         }
 
-        return res.json({
-          success: true,
-          title: title,
-          image: "https://image.coupangcdn.com/image/coupang/common/logo308x76.png",
-          host: "coupang.com"
-        });
+        // 전략 1c: 리다이렉트 최종 URL에서 상품명 추출
+        if (!coupangTitle) {
+          const finalUrl = coupangRes.request?.res?.responseUrl || url;
+          const productNameMatch = finalUrl.match(/\/([^/?#]{8,})\?/);
+          if (productNameMatch) {
+            try {
+              const rawName = decodeURIComponent(productNameMatch[1]).replace(/-/g, " ");
+              if (rawName.length > 4) coupangTitle = rawName;
+            } catch(e) {}
+          }
+        }
       }
     } catch (err) {
       console.error("쿠팡 링크 파싱 에러:", err.message);
-      return res.json({
-        success: true,
-        title: "쿠팡 추천 상품",
-        image: "https://image.coupangcdn.com/image/coupang/common/logo308x76.png",
-        host: "coupang.com"
-      });
     }
+
+    return res.json({
+      success: true,
+      title: coupangTitle || "쿠팡 추천 상품",
+      image: coupangImage,
+      host: "coupang.com"
+    });
   }
 
   // 2. 일반 사이트 크롤링 (Axios로 HTML 받아서 og 태그 파싱)
   try {
     const htmlRes = await axios.get(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
-      },
-      timeout: 5000
+      headers: pcHeaders,
+      maxRedirects: 10,
+      timeout: 7000,
+      responseType: "text"
     });
     
     if (htmlRes.status === 200) {
-      const html = htmlRes.data;
+      const html = typeof htmlRes.data === "string" ? htmlRes.data : "";
+      const ogData = parseOgTags(html);
       
-      const ogTitleMatch = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i) ||
-                           html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i);
-      const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i) ||
-                           html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
-                           
-      let title = ogTitleMatch ? ogTitleMatch[1] : "";
-      let image = ogImageMatch ? ogImageMatch[1] : "";
+      let title = ogData.title;
+      let image = ogData.image;
       
       if (!title) {
         const titleTagMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-        if (titleTagMatch) title = titleTagMatch[1];
+        if (titleTagMatch) title = titleTagMatch[1].trim();
       }
-      
       if (!image) {
-        const imgTagMatch = html.match(/<img[^>]*src=["']([^"']+)["']/i);
+        const imgTagMatch = html.match(/<img[^>]+src=["']([^"']+)["']/i);
         if (imgTagMatch) image = imgTagMatch[1];
       }
       
       if (image && !image.startsWith("http")) {
-        try {
-          image = new URL(image, url).href;
-        } catch (e) {}
+        try { image = new URL(image, url).href; } catch (e) {}
       }
 
       return res.json({
         success: true,
-        title: title ? title.trim() : "상세 링크",
+        title: title ? title.substring(0, 100) : "상세 링크",
         image: image || "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
         host: host
       });
