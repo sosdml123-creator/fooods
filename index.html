@@ -3148,6 +3148,74 @@
         return () => window.removeEventListener("popstate", handlePopState);
       }, []);
 
+      // Firebase Auth 상태 리스너 등록 (단 한 번 등록되어 생명주기 관리)
+      useEffect(() => {
+        console.log("[Firebase Auth] Registering onAuthStateChanged listener...");
+        const unsubscribe = auth.onAuthStateChanged(async (user) => {
+          console.log("[Firebase Auth] onAuthStateChanged active. User object:", user);
+          if (user) {
+            console.log("[Firebase Auth] Auto-login successful. User email:", user.email);
+            
+            // Get details from Firestore users collection
+            let nickname = user.displayName || user.email.split("@")[0];
+            let role = "user";
+            let bio = user.email;
+            let avatarImg = user.photoURL || "";
+
+            try {
+              const doc = await db.collection("users").doc(user.uid).get();
+              if (doc.exists) {
+                const userData = doc.data();
+                nickname = userData.nickname || nickname;
+                role = userData.role || role;
+                bio = userData.bio || bio;
+                avatarImg = userData.avatarImg || avatarImg;
+              }
+            } catch (err) {
+              console.error("[Firebase Auth] Firestore user doc read error:", err);
+            }
+
+            const newProfile = {
+              name: nickname,
+              bio,
+              avatar: nickname.slice(0, 1),
+              avatarImg,
+              role
+            };
+
+            setProfile(newProfile);
+            setIsLoggedIn(true);
+
+            // Get fresh ID token
+            const token = await user.getIdToken();
+            console.log("[Firebase Auth] Synchronizing profile with Express session via ID token...");
+            
+            // Sync session with Express server
+            fetch(`/profile?token=${encodeURIComponent(token)}`)
+              .then(r => r.json())
+              .then(res => {
+                console.log("[Express Session Sync] Sync response:", res);
+              });
+
+          } else {
+            console.log("[Firebase Auth] No active session found or logged out.");
+            setIsLoggedIn(false);
+            setProfile({
+              name: "나의 플레이팅",
+              bio: "내가 올린 레시피와 구매 링크를 관리합니다.",
+              avatar: "나",
+              avatarImg: "",
+              role: "user"
+            });
+            
+            // Clear express session
+            fetch("/profile/logout", { method: "POST" }).catch(e => console.error(e));
+          }
+        });
+
+        return () => unsubscribe();
+      }, []);
+
       // 2. 마운트 시 디바이스 정보 조회, IndexedDB 및 네이티브 복원 (Hydration)
       useEffect(() => {
         // 2.1. 네이티브 웹뷰 플랫폼 연동 및 디바이스 ID 획득
@@ -3188,74 +3256,6 @@
         // 2.2. 세션 복원 및 토큰 동기화
         const urlParams = new URLSearchParams(window.location.search);
         const urlToken = urlParams.get("token");
-
-        // Firebase Auth 상태 리스너 등록 (단 한 번 등록되어 생명주기 관리)
-        useEffect(() => {
-          console.log("[Firebase Auth] Registering onAuthStateChanged listener...");
-          const unsubscribe = auth.onAuthStateChanged(async (user) => {
-            console.log("[Firebase Auth] onAuthStateChanged active. User object:", user);
-            if (user) {
-              console.log("[Firebase Auth] Auto-login successful. User email:", user.email);
-              
-              // Get details from Firestore users collection
-              let nickname = user.displayName || user.email.split("@")[0];
-              let role = "user";
-              let bio = user.email;
-              let avatarImg = user.photoURL || "";
-
-              try {
-                const doc = await db.collection("users").doc(user.uid).get();
-                if (doc.exists) {
-                  const userData = doc.data();
-                  nickname = userData.nickname || nickname;
-                  role = userData.role || role;
-                  bio = userData.bio || bio;
-                  avatarImg = userData.avatarImg || avatarImg;
-                }
-              } catch (err) {
-                console.error("[Firebase Auth] Firestore user doc read error:", err);
-              }
-
-              const newProfile = {
-                name: nickname,
-                bio,
-                avatar: nickname.slice(0, 1),
-                avatarImg,
-                role
-              };
-
-              setProfile(newProfile);
-              setIsLoggedIn(true);
-
-              // Get fresh ID token
-              const token = await user.getIdToken();
-              console.log("[Firebase Auth] Synchronizing profile with Express session via ID token...");
-              
-              // Sync session with Express server
-              fetch(`/profile?token=${encodeURIComponent(token)}`)
-                .then(r => r.json())
-                .then(res => {
-                  console.log("[Express Session Sync] Sync response:", res);
-                });
-
-            } else {
-              console.log("[Firebase Auth] No active session found or logged out.");
-              setIsLoggedIn(false);
-              setProfile({
-                name: "나의 플레이팅",
-                bio: "내가 올린 레시피와 구매 링크를 관리합니다.",
-                avatar: "나",
-                avatarImg: "",
-                role: "user"
-              });
-              
-              // Clear express session
-              fetch("/profile/logout", { method: "POST" }).catch(e => console.error(e));
-            }
-          });
-
-          return () => unsubscribe();
-        }, []);
 
         async function initSession() {
           // IndexedDB 로컬 기본 설정 로딩

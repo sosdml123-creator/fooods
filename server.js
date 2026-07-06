@@ -1190,7 +1190,9 @@ app.post("/api/login", function (req, res) {
   const users = readUsers();
   
   // 1. 데모 계정 검증 (구글 심사용)
-  if (username === "google-tester" && password === "plating1234") {
+  const demoUser = process.env.DEMO_USERNAME || "google-tester";
+  const demoPassword = process.env.DEMO_PASSWORD || "plating1234";
+  if (username === demoUser && password === demoPassword) {
     let sessionToken = "demo-session-token-999999";
     const existingTesterIdx = users.findIndex(u => u.kakao_id === 99999999 || u.username === "google-tester");
     
@@ -1359,7 +1361,7 @@ app.post("/api/signup", function (req, res) {
 // Firebase ID Token 검증 헬퍼 함수
 async function verifyFirebaseIdToken(token) {
   try {
-    const apiKey = "AIzaSyBKat-tCeDuoRr-uzdOeoQXT6PpXHBWJno";
+    const apiKey = process.env.FIREBASE_API_KEY || "AIzaSyBKat-tCeDuoRr-uzdOeoQXT6PpXHBWJno";
     const res = await axios.post(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`, {
       idToken: token
     });
