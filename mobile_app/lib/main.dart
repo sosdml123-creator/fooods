@@ -1,13 +1,60 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui';
 import 'custom_gallery_picker.dart';
 
-void main() {
+// Firebase 패키지 추가
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Firebase 초기화 및 푸시 알림 설정
+  try {
+    await Firebase.initializeApp();
+    
+    // Firebase Analytics 인스턴스 활성화
+    FirebaseAnalytics.instance.setAnalyticsCollectionEnabled(true);
+    
+    // FCM 권한 요청 (알림 수신용)
+    final messaging = FirebaseMessaging.instance;
+    await messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+    
+    // 푸시 토큰 로깅 (백엔드 FCM 전송 시 식별값으로 사용)
+    String? fcmToken = await messaging.getToken();
+    debugPrint("[Firebase FCM Token] $fcmToken");
+    
+    // 앱이 켜져 있을 때 (Foreground) 푸시 수신 시 리스너
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      debugPrint("[FCM Foreground Message] Title: ${message.notification?.title}, Body: ${message.notification?.body}");
+    });
+  } catch (e) {
+    debugPrint("[Firebase Initialization Error] Firebase 초기화 실패 (심사 중 무중단 테스트 보장): $e");
+  }
+
+  // 프레임워크 렌더링 에러 가로채기 (Crash 방지)
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    debugPrint("[Flutter Error] ${details.exceptionAsString()}");
+  };
+
+  // 비동기 스레드 에러 가로채기 (Crash 방지)
+  PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+    debugPrint("[Platform Error] Caught: $error");
+    return true; // 에러가 처리됨으로 표시하여 앱 강제 종료(Crash)를 막음
+  };
+
   runApp(const MyApp());
 }
 
@@ -40,20 +87,29 @@ class _WebViewScreenState extends State<WebViewScreen> {
   final String _targetUrl = 'https://myplating.kr';
   static const MethodChannel _intentChannel = MethodChannel('com.foodhouse.plating/intent');
   bool _isLoadingWeb = true;
+  bool _hasError = false;
 
   @override
   void initState() {
     super.initState();
     _requestPermissions();
+    
+    // 20초 타임아웃 폴백: 네트워크 지연 등으로 웹앱 준비 신호가 안 오면 로딩을 걷어냅니다.
+    Future.delayed(const Duration(seconds: 20), () {
+      if (mounted && _isLoadingWeb) {
+        setState(() {
+          _isLoadingWeb = false;
+        });
+      }
+    });
   }
 
   Future<void> _requestPermissions() async {
-    // 앱 진입 시 알림 푸시, 카메라, 사진 보관함, 저장소 권한을 일괄 요청합니다.
+    // 구글 플레이스토어 권한 최소화 권장안 준수: 
+    // 미디어 및 카메라는 글쓰기 진입 시 컨텍스트별로 개별 요청하도록 하고, 
+    // 앱 시작 시에는 알림(Push) 권한만 요청합니다.
     Map<Permission, PermissionStatus> statuses = await [
       Permission.notification,
-      Permission.camera,
-      Permission.photos,
-      Permission.storage,
     ].request();
     debugPrint("권한 요청 결과: $statuses");
   }
@@ -118,6 +174,90 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   }
                 },
               );
+
+              // 웹앱 로드 완료 통신용 JS 핸들러 등록
+              controller.addJavaScriptHandler(
+                handlerName: 'webAppReady',
+                callback: (args) {
+                  if (mounted && _isLoadingWeb) {
+                    setState(() {
+                      _isLoadingWeb = false;
+                    });
+                  }
+                  return null;
+                },
+              );
+
+              // 네이티브 광고 로딩용 JS 핸들러 등록
+              controller.addJavaScriptHandler(
+                handlerName: 'loadNativeAd',
+                callback: (args) async {
+                  try {
+                    final adData = await _intentChannel.invokeMethod('loadNativeAd');
+                    return adData;
+                  } catch (e) {
+                    debugPrint("AdMob Native Ad load error: $e");
+                    return null;
+                  }
+                },
+              );
+
+              // 네이티브 광고 클릭 처리용 JS 핸들러 등록
+              controller.addJavaScriptHandler(
+                handlerName: 'performAdClick',
+                callback: (args) async {
+                  try {
+                    final result = await _intentChannel.invokeMethod('performAdClick');
+                    return result;
+                  } catch (e) {
+                    debugPrint("AdMob Native Ad click error: $e");
+                    return false;
+                  }
+                },
+              );
+
+              // 디바이스 고유 ID 조회 JS 핸들러 등록
+              controller.addJavaScriptHandler(
+                handlerName: 'getDeviceId',
+                callback: (args) async {
+                  try {
+                    final deviceId = await _intentChannel.invokeMethod('getDeviceId');
+                    return deviceId;
+                  } catch (e) {
+                    debugPrint("getDeviceId error: $e");
+                    return "unknown-device";
+                  }
+                },
+              );
+
+              // 세션 토큰 네이티브 영구 저장 JS 핸들러 등록
+              controller.addJavaScriptHandler(
+                handlerName: 'saveToken',
+                callback: (args) async {
+                  try {
+                    final token = args.isNotEmpty ? (args[0]['token'] ?? '') : '';
+                    final result = await _intentChannel.invokeMethod('saveToken', {'token': token});
+                    return result;
+                  } catch (e) {
+                    debugPrint("saveToken error: $e");
+                    return false;
+                  }
+                },
+              );
+
+              // 네이티브 영구 저장 세션 토큰 복원 JS 핸들러 등록
+              controller.addJavaScriptHandler(
+                handlerName: 'readToken',
+                callback: (args) async {
+                  try {
+                    final token = await _intentChannel.invokeMethod('readToken');
+                    return token;
+                  } catch (e) {
+                    debugPrint("readToken error: $e");
+                    return null;
+                  }
+                },
+              );
             },
             onPermissionRequest: (controller, request) async {
               // 웹뷰 내 카메라/마이크 등 권한 요청 시 자동 허용
@@ -167,9 +307,17 @@ class _WebViewScreenState extends State<WebViewScreen> {
               return NavigationActionPolicy.ALLOW;
             },
             onLoadStop: (controller, url) {
-              setState(() {
-                _isLoadingWeb = false;
-              });
+              // 더이상 onLoadStop 단계에서 로딩을 해제하지 않고,
+              // 웹앱 내부의 React 마운트(webAppReady) 신호를 수신했을 때 해제합니다.
+            },
+            onReceivedError: (controller, request, error) {
+              // 메인 프레임 로딩 오류 발생 시 에러 상태로 전환 (오프라인/타임아웃 대응)
+              if (request.isForMainFrame ?? true) {
+                setState(() {
+                  _hasError = true;
+                  _isLoadingWeb = false;
+                });
+              }
             },
           ),
           if (_isLoadingWeb)
@@ -210,6 +358,68 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       ),
                     ),
                   ],
+                ),
+              ),
+            ),
+          if (_hasError)
+            Container(
+              color: Colors.white,
+              width: double.infinity,
+              height: double.infinity,
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.wifi_off_rounded,
+                        size: 64,
+                        color: Colors.black54,
+                      ),
+                      const SizedBox(height: 24),
+                      const Text(
+                        "연결할 수 없습니다",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        "인터넷 연결 상태를 확인하거나 서버가 깨어날 때까지 잠시 후 다시 시도해 주세요.",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.black45,
+                          height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _hasError = false;
+                            _isLoadingWeb = true;
+                          });
+                          _webViewController?.reload();
+                        },
+                        icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+                        label: const Text(
+                          "재시도",
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.black87,
+                          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

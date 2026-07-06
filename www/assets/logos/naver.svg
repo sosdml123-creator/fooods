@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%" height="100%">
+  <defs>
+    <linearGradient id="naverGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#03C75A" />
+      <stop offset="100%" stop-color="#02b34f" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#000" flood-opacity="0.15" />
+    </filter>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#naverGrad)" rx="45" />
+  <g filter="url(#shadow)">
+    <path d="M70 60v80l35-50 25 50V60h-16v43L91 60H70z" fill="#ffffff" />
+  </g>
+  <text x="100" y="170" font-family="'Inter', 'Outfit', sans-serif" font-weight="900" font-size="18" fill="#ffffff" text-anchor="middle" letter-spacing="1">SHOPPING</text>
+</svg>

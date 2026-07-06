@@ -57,8 +57,7 @@ if (Test-Path $keystorePath) {
     Copy-Item -Path $keystorePath -Destination $tempBackupKeystore -Force
 }
 
-Set-Location "d:\food"
-& git restore mobile_app
+# & git restore mobile_app
 
 if (Test-Path $tempBackupKeystore) {
     New-Item -ItemType Directory -Force -Path "d:\food\mobile_app\android\app"
@@ -87,8 +86,8 @@ $wrapperContent = $wrapperContent.Replace("gradle-7.6.3-all.zip", "gradle-8.4-al
 
 $settingsPath = "d:\food\mobile_app\android\settings.gradle"
 $settingsContent = [System.IO.File]::ReadAllText($settingsPath)
-$settingsContent = $settingsContent.Replace('id "com.android.application" version "7.3.0"', 'id "com.android.application" version "8.1.0"')
-$settingsContent = $settingsContent.Replace('id "org.jetbrains.kotlin.android" version "1.7.10"', 'id "org.jetbrains.kotlin.android" version "1.8.22"')
+$settingsContent = $settingsContent -replace 'id "com.android.application" version "[^"]+"', 'id "com.android.application" version "8.1.0"'
+$settingsContent = $settingsContent -replace 'id "org.jetbrains.kotlin.android" version "[^"]+"', 'id "org.jetbrains.kotlin.android" version "2.1.0"'
 [System.IO.File]::WriteAllText($settingsPath, $settingsContent)
 
 # 5. Pub get and launcher/splash generation

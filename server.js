@@ -6,7 +6,7 @@ const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
 const multer = require("multer");
 
 const app = express();
@@ -43,19 +43,35 @@ const kapi_host = "https://kapi.kakao.com";
 
 // Multer 메모리 스토리지 및 R2 설정 확인
 const upload = multer({ storage: multer.memoryStorage() });
-const hasR2Config = process.env.R2_ACCESS_KEY_ID && 
-                    process.env.R2_ACCESS_KEY_ID !== "your_access_key_id" &&
-                    process.env.R2_SECRET_ACCESS_KEY && 
-                    process.env.R2_ENDPOINT && 
-                    process.env.R2_BUCKET_NAME;
+const r2AccessKey = process.env.R2_ACCESS_KEY_ID && process.env.R2_ACCESS_KEY_ID !== "your_access_key_id"
+  ? process.env.R2_ACCESS_KEY_ID
+  : "c65e4f5b673b8c078bb45580a7048345";
+
+const r2SecretKey = process.env.R2_SECRET_ACCESS_KEY && process.env.R2_SECRET_ACCESS_KEY !== "your_secret_access_key"
+  ? process.env.R2_SECRET_ACCESS_KEY
+  : "b9d98a5f5140d5e906fa1d4adc6c683fbc8fe806df5f066d63cbdf5388696ce0";
+
+const r2Endpoint = process.env.R2_ENDPOINT && process.env.R2_ENDPOINT !== "your_endpoint"
+  ? process.env.R2_ENDPOINT
+  : "https://c71e0a51308ce79fa0dd89bb9d56876d.r2.cloudflarestorage.com";
+
+const r2Bucket = process.env.R2_BUCKET_NAME && process.env.R2_BUCKET_NAME !== "your_bucket_name"
+  ? process.env.R2_BUCKET_NAME
+  : "food-images";
+
+const r2PublicPrefix = process.env.R2_PUBLIC_URL_PREFIX && process.env.R2_PUBLIC_URL_PREFIX !== "your_public_url_prefix"
+  ? process.env.R2_PUBLIC_URL_PREFIX
+  : "https://pub-0452a32d8622413c88efc3f7d673805d.r2.dev";
+
+const hasR2Config = r2AccessKey && r2SecretKey && r2Endpoint && r2Bucket;
 
 let s3;
 if (hasR2Config) {
   s3 = new S3Client({
-    endpoint: process.env.R2_ENDPOINT,
+    endpoint: r2Endpoint,
     credentials: {
-      accessKeyId: process.env.R2_ACCESS_KEY_ID,
-      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+      accessKeyId: r2AccessKey,
+      secretAccessKey: r2SecretKey,
     },
     region: "auto",
   });
@@ -64,7 +80,78 @@ if (hasR2Config) {
   console.log("⚠️ R2 정보가 설정되지 않았습니다. 파일은 로컬 Fallback 스토리지(/uploads)에 저장됩니다.");
 }
 
+// R2 백업 및 복원 헬퍼 함수 정의
+async function uploadToR2(fileName, content, contentType = "application/json") {
+  if (!hasR2Config) return;
+  try {
+    const command = new PutObjectCommand({
+      Bucket: r2Bucket,
+      Key: fileName,
+      Body: typeof content === "string" ? Buffer.from(content, "utf-8") : content,
+      ContentType: contentType,
+    });
+    await s3.send(command);
+    console.log(`[R2 백업 성공] ${fileName}`);
+  } catch (err) {
+    console.error(`[R2 백업 실패] ${fileName}:`, err.message);
+  }
+}
+
+async function downloadFromR2(fileName, localPath) {
+  if (!hasR2Config) return;
+  try {
+    const command = new GetObjectCommand({
+      Bucket: r2Bucket,
+      Key: fileName,
+    });
+    const response = await s3.send(command);
+    
+    // Node.js 스트림을 문자열로 변환하는 호환성 헬퍼
+    const bodyToString = async (stream) => {
+      if (stream.transformToString) {
+        return await stream.transformToString("utf-8");
+      }
+      return new Promise((resolve, reject) => {
+        const chunks = [];
+        stream.on("data", (chunk) => chunks.push(chunk));
+        stream.on("error", reject);
+        stream.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+      });
+    };
+
+    const bodyContents = await bodyToString(response.Body);
+    fs.writeFileSync(localPath, bodyContents, "utf-8");
+    console.log(`[R2 복원 성공] ${fileName} -> ${localPath}`);
+  } catch (err) {
+    if (err.name !== "NoSuchKey" && err.code !== "NoSuchKey") {
+      console.error(`[R2 복원 에러] ${fileName}:`, err.message);
+    }
+  }
+}
+
+async function syncDbsFromR2() {
+  if (!hasR2Config) return;
+  console.log("🔄 R2에서 로컬 데이터베이스 복원을 시작합니다...");
+  try {
+    await downloadFromR2("users.json", USERS_DB_PATH);
+    await downloadFromR2("reports.json", REPORTS_DB_PATH);
+    await downloadFromR2("moderation_rules.json", MODERATION_RULES_PATH);
+    await downloadFromR2("admin_logs.json", ADMIN_LOGS_PATH);
+    await downloadFromR2("admin_config.json", ADMIN_CONFIG_PATH);
+    await downloadFromR2("recipe_posts.json", RECIPE_POSTS_DB_PATH);
+    await downloadFromR2("community_posts.json", COMMUNITY_POSTS_DB_PATH);
+    console.log("✅ 로컬 데이터베이스 복원 완료!");
+  } catch (err) {
+    console.error("로컬 데이터베이스 복원 실패:", err.message);
+  }
+}
+
+if (hasR2Config) {
+  syncDbsFromR2().catch(err => console.error("R2 복원 실행 실패:", err));
+}
+
 // 파일 업로드 API (R2 업로드, R2가 없는 경우 로컬 업로드 폴더에 fallback 저장)
+// 파일 업로드 API (Firebase Storage 업로드)
 app.post("/upload", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
@@ -72,36 +159,639 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     }
 
     const fileExtension = path.extname(req.file.originalname);
-    const fileName = `${crypto.randomUUID()}${fileExtension}`;
+    const fileName = `uploads/${crypto.randomUUID()}${fileExtension}`;
 
-    if (hasR2Config) {
-      // Cloudflare R2 버킷에 업로드
-      const command = new PutObjectCommand({
-        Bucket: process.env.R2_BUCKET_NAME,
-        Key: fileName,
-        Body: req.file.buffer,
-        ContentType: req.file.mimetype,
+    // Firebase Storage REST API를 통한 업로드 구현 (Service Account Key가 필요 없는 클라이언트 API 연동)
+    let bucket = "plating-app-db29f.firebasestorage.app";
+    let uploadSuccess = false;
+    let downloadUrl = "";
+
+    async function attemptStorageUpload(targetBucket) {
+      const url = `https://firebasestorage.googleapis.com/v0/b/${targetBucket}/o?name=${encodeURIComponent(fileName)}`;
+      const response = await axios.post(url, req.file.buffer, {
+        headers: {
+          'Content-Type': req.file.mimetype
+        }
       });
+      if (response.data && response.data.name) {
+        const downloadToken = response.data.downloadTokens || '';
+        return `https://firebasestorage.googleapis.com/v0/b/${targetBucket}/o/${encodeURIComponent(response.data.name)}?alt=media&token=${downloadToken}`;
+      }
+      throw new Error("Invalid storage response");
+    }
 
-      await s3.send(command);
-      const publicUrl = `${process.env.R2_PUBLIC_URL_PREFIX}/${fileName}`;
-      return res.json({ success: true, url: publicUrl });
+    try {
+      console.log(`[Firebase Storage] Uploading to bucket: ${bucket}...`);
+      downloadUrl = await attemptStorageUpload(bucket);
+      uploadSuccess = true;
+    } catch (err) {
+      console.warn(`[Firebase Storage] Upload to ${bucket} failed: ${err.message}. Trying appspot.com fallback...`);
+      try {
+        bucket = "plating-app-db29f.appspot.com";
+        downloadUrl = await attemptStorageUpload(bucket);
+        uploadSuccess = true;
+      } catch (err2) {
+        console.error("[Firebase Storage] Fallback upload also failed:", err2.message);
+      }
+    }
+
+    if (uploadSuccess) {
+      console.log("[Firebase Storage] Upload success! URL:", downloadUrl);
+      return res.json({ success: true, url: downloadUrl });
     } else {
-      // 로컬 Fallback 저장소에 업로드
+      // 로컬 Fallback 저장소에 업로드 (개발/비활성화 상태 대응)
       const uploadDir = path.join(__dirname, "uploads");
       if (!fs.existsSync(uploadDir)) {
         fs.mkdirSync(uploadDir);
       }
-      const localFilePath = path.join(uploadDir, fileName);
+      const localFileName = `${crypto.randomUUID()}${fileExtension}`;
+      const localFilePath = path.join(uploadDir, localFileName);
       fs.writeFileSync(localFilePath, req.file.buffer);
       
-      const localUrl = `${domain}/uploads/${fileName}`;
-      console.log("[R2 임시 업로드] 설정이 누락되어 로컬에 저장되었습니다:", localUrl);
+      const localUrl = `${domain}/uploads/${localFileName}`;
+      console.log("[Firebase Storage Fallback] Local storage saved:", localUrl);
       return res.json({ success: true, url: localUrl });
     }
   } catch (error) {
     console.error("파일 업로드 오류:", error);
     return res.status(500).json({ success: false, message: "파일 업로드 중 오류가 발생했습니다: " + error.message });
+  }
+});
+
+// --- 3.0. 레시피 및 커뮤니티 포스트 연동 API ---
+
+// 3.0.1. 레시피 포스트 조회
+app.get("/api/posts", (req, res) => {
+  const posts = readJsonFile(RECIPE_POSTS_DB_PATH, DEFAULT_RECIPE_POSTS);
+  const rules = readJsonFile(MODERATION_RULES_PATH, { deletedPosts: [], deletedComments: [], blockedUsers: [], hiddenPosts: [] });
+  
+  // 차단되거나 삭제/숨김 처리된 포스트 및 해당 댓글 필터링
+  const filtered = posts.filter(p => 
+    !rules.deletedPosts.includes(p.id) && 
+    !rules.hiddenPosts.includes(p.id) && 
+    !rules.blockedUsers.some(b => b.nickname === p.author)
+  ).map(p => ({
+    ...p,
+    comments: (p.comments || []).filter(c => 
+      !rules.deletedComments.includes(c.id) && 
+      !rules.blockedUsers.some(b => b.nickname === c.author)
+    )
+  }));
+  
+  res.json({ success: true, posts: filtered });
+});
+
+// 3.0.2. 레시피 포스트 작성
+app.post("/api/posts", async (req, res) => {
+  try {
+    if (!req.session.user) {
+      return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
+    }
+    const { title, body, category, image, productLinks, mediaType } = req.body;
+    const posts = readJsonFile(RECIPE_POSTS_DB_PATH, DEFAULT_RECIPE_POSTS);
+    
+    const newPost = {
+      id: crypto.randomUUID(),
+      author: req.session.user.nickname,
+      avatarImg: req.session.user.profile_image || "",
+      title,
+      body,
+      category,
+      mediaType: mediaType || "image",
+      image: image || [],
+      productLinks: productLinks || [],
+      likeCount: 0,
+      likedBy: [],
+      scrappedBy: [],
+      comments: [],
+      createdAt: new Date().toLocaleDateString(),
+      timestamp: new Date().toISOString()
+    };
+    
+    posts.unshift(newPost);
+    writeJsonFile(RECIPE_POSTS_DB_PATH, posts);
+    if (hasR2Config) {
+      await uploadToR2("recipe_posts.json", RECIPE_POSTS_DB_PATH);
+    }
+    res.json({ success: true, post: newPost });
+  } catch (err) {
+    console.error("포스트 추가 에러:", err);
+    res.status(500).json({ success: false, message: "포스트 추가 중 오류가 발생했습니다." });
+  }
+});
+
+// 3.0.3. 레시피 포스트 좋아요 토글
+app.post("/api/posts/like", async (req, res) => {
+  try {
+    if (!req.session.user) {
+      return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
+    }
+    const { postId } = req.body;
+    const posts = readJsonFile(RECIPE_POSTS_DB_PATH, DEFAULT_RECIPE_POSTS);
+    const post = posts.find(p => p.id === postId);
+    if (!post) {
+      return res.status(404).json({ success: false, message: "포스트를 찾을 수 없습니다." });
+    }
+    
+    post.likedBy = post.likedBy || [];
+    const nickname = req.session.user.nickname;
+    const isLiked = post.likedBy.includes(nickname);
+    
+    if (isLiked) {
+      post.likedBy = post.likedBy.filter(n => n !== nickname);
+      post.likeCount = Math.max(0, (post.likeCount || 1) - 1);
+    } else {
+      post.likedBy.push(nickname);
+      post.likeCount = (post.likeCount || 0) + 1;
+    }
+    
+    writeJsonFile(RECIPE_POSTS_DB_PATH, posts);
+    if (hasR2Config) {
+      await uploadToR2("recipe_posts.json", RECIPE_POSTS_DB_PATH);
+    }
+    res.json({ success: true, post });
+  } catch (err) {
+    console.error("좋아요 오류:", err);
+    res.status(500).json({ success: false, message: "좋아요 처리 중 오류가 발생했습니다." });
+  }
+});
+
+// 3.0.4. 레시피 포스트 스크랩 토글
+app.post("/api/posts/scrap", async (req, res) => {
+  try {
+    if (!req.session.user) {
+      return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
+    }
+    const { postId } = req.body;
+    const posts = readJsonFile(RECIPE_POSTS_DB_PATH, DEFAULT_RECIPE_POSTS);
+    const post = posts.find(p => p.id === postId);
+    if (!post) {
+      return res.status(404).json({ success: false, message: "포스트를 찾을 수 없습니다." });
+    }
+    
+    post.scrappedBy = post.scrappedBy || [];
+    const nickname = req.session.user.nickname;
+    const isScrapped = post.scrappedBy.includes(nickname);
+    
+    if (isScrapped) {
+      post.scrappedBy = post.scrappedBy.filter(n => n !== nickname);
+    } else {
+      post.scrappedBy.push(nickname);
+    }
+    
+    writeJsonFile(RECIPE_POSTS_DB_PATH, posts);
+    if (hasR2Config) {
+      await uploadToR2("recipe_posts.json", RECIPE_POSTS_DB_PATH);
+    }
+    res.json({ success: true, post });
+  } catch (err) {
+    console.error("스크랩 오류:", err);
+    res.status(500).json({ success: false, message: "스크랩 처리 중 오류가 발생했습니다." });
+  }
+});
+
+// 3.0.5. 레시피 포스트 댓글 작성
+app.post("/api/posts/comment", async (req, res) => {
+  try {
+    if (!req.session.user) {
+      return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
+    }
+    const { postId, text } = req.body;
+    const posts = readJsonFile(RECIPE_POSTS_DB_PATH, DEFAULT_RECIPE_POSTS);
+    const post = posts.find(p => p.id === postId);
+    if (!post) {
+      return res.status(404).json({ success: false, message: "포스트를 찾을 수 없습니다." });
+    }
+    
+    post.comments = post.comments || [];
+    const newComment = {
+      id: crypto.randomUUID(),
+      author: req.session.user.nickname,
+      text: text
+    };
+    post.comments.push(newComment);
+    
+    writeJsonFile(RECIPE_POSTS_DB_PATH, posts);
+    if (hasR2Config) {
+      await uploadToR2("recipe_posts.json", RECIPE_POSTS_DB_PATH);
+    }
+    res.json({ success: true, post });
+  } catch (err) {
+    console.error("댓글 오류:", err);
+    res.status(500).json({ success: false, message: "댓글 등록 중 오류가 발생했습니다." });
+  }
+});
+
+// 3.0.6. 레시피 포스트 댓글 수정
+app.post("/api/posts/comment/edit", async (req, res) => {
+  try {
+    if (!req.session.user) {
+      return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
+    }
+    const { postId, commentId, text } = req.body;
+    const posts = readJsonFile(RECIPE_POSTS_DB_PATH, DEFAULT_RECIPE_POSTS);
+    const post = posts.find(p => p.id === postId);
+    if (!post) {
+      return res.status(404).json({ success: false, message: "포스트를 찾을 수 없습니다." });
+    }
+    
+    post.comments = post.comments || [];
+    const comment = post.comments.find(c => c.id === commentId);
+    if (!comment) {
+      return res.status(404).json({ success: false, message: "댓글을 찾을 수 없습니다." });
+    }
+    if (comment.author !== req.session.user.nickname && req.session.user.role !== "admin") {
+      return res.status(403).json({ success: false, message: "수정 권한이 없습니다." });
+    }
+    
+    comment.text = text;
+    writeJsonFile(RECIPE_POSTS_DB_PATH, posts);
+    if (hasR2Config) {
+      await uploadToR2("recipe_posts.json", RECIPE_POSTS_DB_PATH);
+    }
+    res.json({ success: true, post });
+  } catch (err) {
+    console.error("댓글 수정 오류:", err);
+    res.status(500).json({ success: false, message: "댓글 수정 중 오류가 발생했습니다." });
+  }
+});
+
+// 3.0.7. 레시피 포스트 댓글 삭제
+app.post("/api/posts/comment/delete", async (req, res) => {
+  try {
+    if (!req.session.user) {
+      return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
+    }
+    const { postId, commentId } = req.body;
+    const posts = readJsonFile(RECIPE_POSTS_DB_PATH, DEFAULT_RECIPE_POSTS);
+    const post = posts.find(p => p.id === postId);
+    if (!post) {
+      return res.status(404).json({ success: false, message: "포스트를 찾을 수 없습니다." });
+    }
+    
+    post.comments = post.comments || [];
+    const comment = post.comments.find(c => c.id === commentId);
+    if (!comment) {
+      return res.status(404).json({ success: false, message: "댓글을 찾을 수 없습니다." });
+    }
+    if (comment.author !== req.session.user.nickname && req.session.user.role !== "admin") {
+      return res.status(403).json({ success: false, message: "삭제 권한이 없습니다." });
+    }
+    
+    post.comments = post.comments.filter(c => c.id !== commentId);
+    writeJsonFile(RECIPE_POSTS_DB_PATH, posts);
+    if (hasR2Config) {
+      await uploadToR2("recipe_posts.json", RECIPE_POSTS_DB_PATH);
+    }
+    res.json({ success: true, post });
+  } catch (err) {
+    console.error("댓글 삭제 오류:", err);
+    res.status(500).json({ success: false, message: "댓글 삭제 중 오류가 발생했습니다." });
+  }
+});
+
+// 3.0.8. 레시피 포스트 수정
+app.post("/api/posts/edit", async (req, res) => {
+  try {
+    if (!req.session.user) {
+      return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
+    }
+    const { postId, title, body } = req.body;
+    const posts = readJsonFile(RECIPE_POSTS_DB_PATH, DEFAULT_RECIPE_POSTS);
+    const post = posts.find(p => p.id === postId);
+    if (!post) {
+      return res.status(404).json({ success: false, message: "포스트를 찾을 수 없습니다." });
+    }
+    if (post.author !== req.session.user.nickname && req.session.user.role !== "admin") {
+      return res.status(403).json({ success: false, message: "수정 권한이 없습니다." });
+    }
+    
+    post.title = title;
+    post.body = body;
+    
+    writeJsonFile(RECIPE_POSTS_DB_PATH, posts);
+    if (hasR2Config) {
+      await uploadToR2("recipe_posts.json", RECIPE_POSTS_DB_PATH);
+    }
+    res.json({ success: true, post });
+  } catch (err) {
+    console.error("수정 오류:", err);
+    res.status(500).json({ success: false, message: "수정 중 오류가 발생했습니다." });
+  }
+});
+
+// 3.0.9. 레시피 포스트 삭제
+app.post("/api/posts/delete", async (req, res) => {
+  try {
+    if (!req.session.user) {
+      return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
+    }
+    const { postId } = req.body;
+    const posts = readJsonFile(RECIPE_POSTS_DB_PATH, DEFAULT_RECIPE_POSTS);
+    const postIdx = posts.findIndex(p => p.id === postId);
+    if (postIdx === -1) {
+      return res.status(404).json({ success: false, message: "포스트를 찾을 수 없습니다." });
+    }
+    const post = posts[postIdx];
+    if (post.author !== req.session.user.nickname && req.session.user.role !== "admin") {
+      return res.status(403).json({ success: false, message: "삭제 권한이 없습니다." });
+    }
+    
+    posts.splice(postIdx, 1);
+    writeJsonFile(RECIPE_POSTS_DB_PATH, posts);
+    if (hasR2Config) {
+      await uploadToR2("recipe_posts.json", RECIPE_POSTS_DB_PATH);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error("삭제 오류:", err);
+    res.status(500).json({ success: false, message: "삭제 중 오류가 발생했습니다." });
+  }
+});
+
+// --- 3.0.10. 커뮤니티 포스트 조회
+app.get("/api/community-posts", (req, res) => {
+  const posts = readJsonFile(COMMUNITY_POSTS_DB_PATH, DEFAULT_COMMUNITY_POSTS);
+  const rules = readJsonFile(MODERATION_RULES_PATH, { deletedPosts: [], deletedComments: [], blockedUsers: [], hiddenPosts: [] });
+  
+  // 차단되거나 삭제 처리된 포스트 및 해당 댓글 필터링
+  const filtered = posts.filter(p => 
+    !rules.deletedPosts.includes(p.id) && 
+    !rules.blockedUsers.some(b => b.nickname === p.author)
+  ).map(p => ({
+    ...p,
+    comments: (p.comments || []).filter(c => 
+      !rules.deletedComments.includes(c.id) && 
+      !rules.blockedUsers.some(b => b.nickname === c.author)
+    )
+  }));
+  
+  res.json({ success: true, communityPosts: filtered });
+});
+
+// --- 3.0.11. 커뮤니티 포스트 작성
+app.post("/api/community-posts", async (req, res) => {
+  try {
+    if (!req.session.user) {
+      return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
+    }
+    const { title, body, category, image } = req.body;
+    const posts = readJsonFile(COMMUNITY_POSTS_DB_PATH, DEFAULT_COMMUNITY_POSTS);
+    
+    const newPost = {
+      id: crypto.randomUUID(),
+      author: req.session.user.nickname,
+      avatarImg: req.session.user.profile_image || "",
+      title,
+      body,
+      category,
+      image: image || [],
+      likeCount: 0,
+      likedBy: [],
+      scrappedBy: [],
+      comments: [],
+      createdAt: "방금 전",
+      timestamp: new Date().toISOString()
+    };
+    
+    posts.unshift(newPost);
+    writeJsonFile(COMMUNITY_POSTS_DB_PATH, posts);
+    if (hasR2Config) {
+      await uploadToR2("community_posts.json", COMMUNITY_POSTS_DB_PATH);
+    }
+    res.json({ success: true, communityPost: newPost });
+  } catch (err) {
+    console.error("커뮤니티 포스트 추가 에러:", err);
+    res.status(500).json({ success: false, message: "포스트 추가 중 오류가 발생했습니다." });
+  }
+});
+
+// --- 3.0.12. 커뮤니티 포스트 좋아요 토글
+app.post("/api/community-posts/like", async (req, res) => {
+  try {
+    if (!req.session.user) {
+      return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
+    }
+    const { postId } = req.body;
+    const posts = readJsonFile(COMMUNITY_POSTS_DB_PATH, DEFAULT_COMMUNITY_POSTS);
+    const post = posts.find(p => p.id === postId);
+    if (!post) {
+      return res.status(404).json({ success: false, message: "포스트를 찾을 수 없습니다." });
+    }
+    
+    post.likedBy = post.likedBy || [];
+    const nickname = req.session.user.nickname;
+    const isLiked = post.likedBy.includes(nickname);
+    
+    if (isLiked) {
+      post.likedBy = post.likedBy.filter(n => n !== nickname);
+      post.likeCount = Math.max(0, (post.likeCount || 1) - 1);
+    } else {
+      post.likedBy.push(nickname);
+      post.likeCount = (post.likeCount || 0) + 1;
+    }
+    
+    writeJsonFile(COMMUNITY_POSTS_DB_PATH, posts);
+    if (hasR2Config) {
+      await uploadToR2("community_posts.json", COMMUNITY_POSTS_DB_PATH);
+    }
+    res.json({ success: true, communityPost: post });
+  } catch (err) {
+    console.error("좋아요 오류:", err);
+    res.status(500).json({ success: false, message: "좋아요 처리 중 오류가 발생했습니다." });
+  }
+});
+
+// --- 3.0.13. 커뮤니티 포스트 스크랩 토글
+app.post("/api/community-posts/scrap", async (req, res) => {
+  try {
+    if (!req.session.user) {
+      return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
+    }
+    const { postId } = req.body;
+    const posts = readJsonFile(COMMUNITY_POSTS_DB_PATH, DEFAULT_COMMUNITY_POSTS);
+    const post = posts.find(p => p.id === postId);
+    if (!post) {
+      return res.status(404).json({ success: false, message: "포스트를 찾을 수 없습니다." });
+    }
+    
+    post.scrappedBy = post.scrappedBy || [];
+    const nickname = req.session.user.nickname;
+    const isScrapped = post.scrappedBy.includes(nickname);
+    
+    if (isScrapped) {
+      post.scrappedBy = post.scrappedBy.filter(n => n !== nickname);
+    } else {
+      post.scrappedBy.push(nickname);
+    }
+    
+    writeJsonFile(COMMUNITY_POSTS_DB_PATH, posts);
+    if (hasR2Config) {
+      await uploadToR2("community_posts.json", COMMUNITY_POSTS_DB_PATH);
+    }
+    res.json({ success: true, communityPost: post });
+  } catch (err) {
+    console.error("스크랩 오류:", err);
+    res.status(500).json({ success: false, message: "스크랩 처리 중 오류가 발생했습니다." });
+  }
+});
+
+// --- 3.0.14. 커뮤니티 포스트 댓글 작성
+app.post("/api/community-posts/comment", async (req, res) => {
+  try {
+    if (!req.session.user) {
+      return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
+    }
+    const { postId, text } = req.body;
+    const posts = readJsonFile(COMMUNITY_POSTS_DB_PATH, DEFAULT_COMMUNITY_POSTS);
+    const post = posts.find(p => p.id === postId);
+    if (!post) {
+      return res.status(404).json({ success: false, message: "포스트를 찾을 수 없습니다." });
+    }
+    
+    post.comments = post.comments || [];
+    const newComment = {
+      id: crypto.randomUUID(),
+      author: req.session.user.nickname,
+      text: text
+    };
+    post.comments.push(newComment);
+    
+    writeJsonFile(COMMUNITY_POSTS_DB_PATH, posts);
+    if (hasR2Config) {
+      await uploadToR2("community_posts.json", COMMUNITY_POSTS_DB_PATH);
+    }
+    res.json({ success: true, communityPost: post });
+  } catch (err) {
+    console.error("댓글 오류:", err);
+    res.status(500).json({ success: false, message: "댓글 등록 중 오류가 발생했습니다." });
+  }
+});
+
+// --- 3.0.15. 커뮤니티 포스트 댓글 수정
+app.post("/api/community-posts/comment/edit", async (req, res) => {
+  try {
+    if (!req.session.user) {
+      return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
+    }
+    const { postId, commentId, text } = req.body;
+    const posts = readJsonFile(COMMUNITY_POSTS_DB_PATH, DEFAULT_COMMUNITY_POSTS);
+    const post = posts.find(p => p.id === postId);
+    if (!post) {
+      return res.status(404).json({ success: false, message: "포스트를 찾을 수 없습니다." });
+    }
+    
+    post.comments = post.comments || [];
+    const comment = post.comments.find(c => c.id === commentId);
+    if (!comment) {
+      return res.status(404).json({ success: false, message: "댓글을 찾을 수 없습니다." });
+    }
+    if (comment.author !== req.session.user.nickname && req.session.user.role !== "admin") {
+      return res.status(403).json({ success: false, message: "수정 권한이 없습니다." });
+    }
+    
+    comment.text = text;
+    writeJsonFile(COMMUNITY_POSTS_DB_PATH, posts);
+    if (hasR2Config) {
+      await uploadToR2("community_posts.json", COMMUNITY_POSTS_DB_PATH);
+    }
+    res.json({ success: true, communityPost: post });
+  } catch (err) {
+    console.error("댓글 수정 오류:", err);
+    res.status(500).json({ success: false, message: "댓글 수정 중 오류가 발생했습니다." });
+  }
+});
+
+// --- 3.0.16. 커뮤니티 포스트 댓글 삭제
+app.post("/api/community-posts/comment/delete", async (req, res) => {
+  try {
+    if (!req.session.user) {
+      return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
+    }
+    const { postId, commentId } = req.body;
+    const posts = readJsonFile(COMMUNITY_POSTS_DB_PATH, DEFAULT_COMMUNITY_POSTS);
+    const post = posts.find(p => p.id === postId);
+    if (!post) {
+      return res.status(404).json({ success: false, message: "포스트를 찾을 수 없습니다." });
+    }
+    
+    post.comments = post.comments || [];
+    const comment = post.comments.find(c => c.id === commentId);
+    if (!comment) {
+      return res.status(404).json({ success: false, message: "댓글을 찾을 수 없습니다." });
+    }
+    if (comment.author !== req.session.user.nickname && req.session.user.role !== "admin") {
+      return res.status(403).json({ success: false, message: "삭제 권한이 없습니다." });
+    }
+    
+    post.comments = post.comments.filter(c => c.id !== commentId);
+    writeJsonFile(COMMUNITY_POSTS_DB_PATH, posts);
+    if (hasR2Config) {
+      await uploadToR2("community_posts.json", COMMUNITY_POSTS_DB_PATH);
+    }
+    res.json({ success: true, communityPost: post });
+  } catch (err) {
+    console.error("댓글 삭제 오류:", err);
+    res.status(500).json({ success: false, message: "댓글 삭제 중 오류가 발생했습니다." });
+  }
+});
+
+// --- 3.0.17. 커뮤니티 포스트 수정
+app.post("/api/community-posts/edit", async (req, res) => {
+  try {
+    if (!req.session.user) {
+      return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
+    }
+    const { postId, title, body } = req.body;
+    const posts = readJsonFile(COMMUNITY_POSTS_DB_PATH, DEFAULT_COMMUNITY_POSTS);
+    const post = posts.find(p => p.id === postId);
+    if (!post) {
+      return res.status(404).json({ success: false, message: "포스트를 찾을 수 없습니다." });
+    }
+    if (post.author !== req.session.user.nickname && req.session.user.role !== "admin") {
+      return res.status(403).json({ success: false, message: "수정 권한이 없습니다." });
+    }
+    
+    post.title = title;
+    post.body = body;
+    
+    writeJsonFile(COMMUNITY_POSTS_DB_PATH, posts);
+    if (hasR2Config) {
+      await uploadToR2("community_posts.json", COMMUNITY_POSTS_DB_PATH);
+    }
+    res.json({ success: true, communityPost: post });
+  } catch (err) {
+    console.error("수정 오류:", err);
+    res.status(500).json({ success: false, message: "수정 중 오류가 발생했습니다." });
+  }
+});
+
+// --- 3.0.18. 커뮤니티 포스트 삭제
+app.post("/api/community-posts/delete", async (req, res) => {
+  try {
+    if (!req.session.user) {
+      return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
+    }
+    const { postId } = req.body;
+    const posts = readJsonFile(COMMUNITY_POSTS_DB_PATH, DEFAULT_COMMUNITY_POSTS);
+    const postIdx = posts.findIndex(p => p.id === postId);
+    if (postIdx === -1) {
+      return res.status(404).json({ success: false, message: "포스트를 찾을 수 없습니다." });
+    }
+    const post = posts[postIdx];
+    if (post.author !== req.session.user.nickname && req.session.user.role !== "admin") {
+      return res.status(403).json({ success: false, message: "삭제 권한이 없습니다." });
+    }
+    
+    posts.splice(postIdx, 1);
+    writeJsonFile(COMMUNITY_POSTS_DB_PATH, posts);
+    if (hasR2Config) {
+      await uploadToR2("community_posts.json", COMMUNITY_POSTS_DB_PATH);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error("삭제 오류:", err);
+    res.status(500).json({ success: false, message: "삭제 중 오류가 발생했습니다." });
   }
 });
 
@@ -114,11 +804,212 @@ const message_template = {
   },
 };
 
-// 로컬 회원 DB 파일 경로
+// 로컬 DB 파일 경로 정의
 const USERS_DB_PATH = path.join(__dirname, "users.json");
+const REPORTS_DB_PATH = path.join(__dirname, "reports.json");
+const MODERATION_RULES_PATH = path.join(__dirname, "moderation_rules.json");
+const ADMIN_LOGS_PATH = path.join(__dirname, "admin_logs.json");
+const ADMIN_CONFIG_PATH = path.join(__dirname, "admin_config.json");
+const RECIPE_POSTS_DB_PATH = path.join(__dirname, "recipe_posts.json");
+const COMMUNITY_POSTS_DB_PATH = path.join(__dirname, "community_posts.json");
 
-// 관리자 권한을 가질 카카오 고유 ID 목록
-const ADMIN_KAKAO_IDS = [4933844865];
+const DEFAULT_RECIPE_POSTS = [
+  {
+    id: "1",
+    author: "푸드스타일리스트",
+    title: "미니멀 주방에서 만드는 감성 바질 파스타",
+    body: "오늘 아침에는 직접 기른 #바질 로 #페스토 를 만들고, 엑스트라 버진 #올리브유 를 듬뿍 둘러 파스타를 요리해봤습니다. 무채색으로 정돈된 주방에서 만드는 요리는 늘 마음을 차분하게 해주네요. 제가 쓴 올리브유와 팬 정보는 하단에 달아둘게요!",
+    category: "레시피",
+    mediaType: "image",
+    image: [
+      "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800",
+      "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&q=80&w=800"
+    ],
+    likeCount: 42,
+    likedBy: [],
+    scrappedBy: [],
+    comments: [
+      { id: "c1", author: "요린이", text: "식기류 너무 예쁘네요. 팬 정보 링크 타고 구매했어요!" },
+      { id: "c2", author: "홈카페", text: "바질 페스토 레시피도 알려주실 수 있나요?" }
+    ],
+    productLinks: [
+      {
+        id: "l1",
+        title: "유기농 압착 올리브유 500ml (엑스트라 버진)",
+        image: "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&q=80&w=200",
+        url: "https://www.coupang.com/vp/products/12345",
+        host: "coupang.com"
+      }
+    ],
+    createdAt: "2026-06-01T00:00:00.000Z"
+  },
+  {
+    id: "2",
+    author: "카페투어러",
+    title: "성수동 핫플 감성 에스프레소 바 방문 후기",
+    body: "성수동 골목길에 새로 오픈한 모노톤의 에스프레소 바입니다. 화이트와 블랙 마블 테이블이 인상적이고 #크로플 이 아주 쫀득합니다! 매장 장소 정보와 함께 할인 쿠폰 링크를 걸어둘게요. #성수카페 #에스프레소",
+    category: "맛집",
+    mediaType: "image",
+    image: [
+      "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&q=80&w=800",
+      "https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&q=80&w=800"
+    ],
+    likeCount: 88,
+    likedBy: [],
+    scrappedBy: [],
+    comments: [
+      { id: "c3", author: "빵돌이", text: "여기 크로플 진짜 맛나요. 쿠폰 바로 구매했습니다!" }
+    ],
+    productLinks: [],
+    createdAt: "2026-06-02T00:00:00.000Z"
+  },
+  {
+    id: "3",
+    author: "푸드스타일리스트",
+    title: "모던 쿡웨어 세트로 에그 베네딕트 레시피 🍳",
+    body: "#에그베네딕트 브런치 홈카페용 레시피입니다. 사진을 보시면서 주방 연출 꿀팁도 얻어 가세요! 노른자를 톡 터뜨리는 게 포인트입니다. #브런치 #홈카페",
+    category: "레시피",
+    mediaType: "image",
+    image: [
+      "https://images.unsplash.com/photo-1484723091739-30a097e8f929?auto=format&fit=crop&q=80&w=800"
+    ],
+    likeCount: 125,
+    likedBy: [],
+    scrappedBy: [],
+    comments: [],
+    productLinks: [
+      {
+        id: "l4",
+        title: "무항생제 신선란 10구 (1등급)",
+        image: "https://images.unsplash.com/photo-1516448620398-c5f44bf9f441?auto=format&fit=crop&q=80&w=200",
+        url: "https://kurly.com/goods/5678",
+        host: "kurly.com"
+      }
+    ],
+    createdAt: "2026-06-03T00:00:00.000Z"
+  }
+];
+
+const DEFAULT_COMMUNITY_POSTS = [
+  {
+    id: "cp1",
+    title: "집에서 스테이크 맛있게 굽는 팁 알려드려요!",
+    body: "고기 온도, 팬 온도, 굽는 순서만 지켜도 맛이 달라져요. 굽기 1시간 전에 고기를 실온에 꺼내두는 것이 핵심입니다. 팬에 연기가 살짝 날 정도로 강하게 달군 뒤...",
+    category: "자유",
+    author: "요리하는곰",
+    createdAt: "3시간 전",
+    likeCount: 112,
+    likedBy: [],
+    scrappedBy: [],
+    viewCount: 3245,
+    comments: [
+      { id: "cc1", author: "스테이크러버", text: "꿀팁 감사합니다! 오늘 저녁에 바로 해볼게요." },
+      { id: "cc2", author: "고기대장", text: "로즈마리랑 마늘도 같이 넣어서 시어링해주면 향이 더 대박입니다." }
+    ],
+    image: [
+      "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400"
+    ]
+  },
+  {
+    id: "cp2",
+    title: "에어프라이어로 군고구마 만들기",
+    body: "진짜 달달하고 맛있어요! 시간도 별로 안걸려요 🥲 에어프라이어 200도에서 30분 정도 돌려주면 촉촉하고 달콤한 군고구마 완성!",
+    category: "자유",
+    author: "푸드로버",
+    createdAt: "5시간 전",
+    likeCount: 98,
+    likedBy: [],
+    scrappedBy: [],
+    viewCount: 2107,
+    comments: [
+      { id: "cc3", author: "고구마귀신", text: "와 온도 진짜 딱 맞네요! 감사합니다." }
+    ],
+    image: [
+      "https://images.unsplash.com/photo-1596797038530-2c107229654b?auto=format&fit=crop&q=80&w=400"
+    ]
+  },
+  {
+    id: "cp3",
+    title: "파스타 면 삶을 때 소금은 얼마나 넣어야 하나요?",
+    body: "항상 싱거워져서 고민이에요... 😭 물 1L 기준으로 소금 몇 그램 정도 넣는 게 가장 적절한가요? 파스타면 100g 1인분 삶을 때 팁 부탁드려요.",
+    category: "질문",
+    author: "요리초보",
+    createdAt: "7시간 전",
+    likeCount: 23,
+    likedBy: [],
+    scrappedBy: [],
+    viewCount: 1872,
+    comments: [
+      { id: "cc4", author: "파스타마스터", text: "물 1L에 소금 10g(대략 밥숟가락 깎아서 1스푼)이 국룰입니다. 면수 간이 짭짤해야 면에 간이 뱁니다!" }
+    ],
+    image: []
+  },
+  {
+    id: "cp4",
+    title: "강남역 근처 점심 맛집 추천해주세요!",
+    body: "1만원 이하 가성비 좋은 곳이면 더 좋을 것 같아요! 직장인들 매일 먹기 좋은 백반집이나 순대국밥 맛집 알고 계시면 정보 공유 부탁드려요.",
+    category: "맛집추천",
+    author: "맛집탐방러",
+    createdAt: "9시간 전",
+    likeCount: 31,
+    likedBy: [],
+    scrappedBy: [],
+    viewCount: 2356,
+    comments: [],
+    image: []
+  },
+  {
+    id: "cp5",
+    title: "[공동구매] 제주 감귤 10kg 오픈!",
+    body: "이번 제주 감귤 정말 맛있어요 🍊 마감 임박! 서귀포 산지 직송이라 싱싱하고 당도가 13브릭스 이상 나옵니다. 조기 품절될 수 있으니 서두르세요!",
+    category: "공동구매",
+    author: "공동구매알리미",
+    createdAt: "1일 전",
+    likeCount: 76,
+    likedBy: [],
+    scrappedBy: [],
+    viewCount: 1043,
+    comments: [],
+    image: [],
+    isAnnouncement: true
+  }
+];
+
+// 공통 JSON 파일 헬퍼 함수
+function readJsonFile(filePath, defaultVal = []) {
+  try {
+    if (!fs.existsSync(filePath)) {
+      fs.writeFileSync(filePath, JSON.stringify(defaultVal, null, 2), "utf-8");
+      return defaultVal;
+    }
+    const data = fs.readFileSync(filePath, "utf-8");
+    return JSON.parse(data);
+  } catch (err) {
+    console.error(`파일 읽기 실패 (${filePath}):`, err);
+    return defaultVal;
+  }
+}
+
+function writeJsonFile(filePath, data) {
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+    const fileName = path.basename(filePath);
+    uploadToR2(fileName, JSON.stringify(data, null, 2)).catch(e => console.error("R2 upload error:", e));
+  } catch (err) {
+    console.error(`파일 쓰기 실패 (${filePath}):`, err);
+  }
+}
+
+// 동적 관리자 ID 로드
+function getAdminIds() {
+  const defaultAdminConfig = { admins: [4933844865] };
+  const config = readJsonFile(ADMIN_CONFIG_PATH, defaultAdminConfig);
+  if (!Array.isArray(config.admins)) {
+    return [4933844865];
+  }
+  return config.admins;
+}
+
 
 // 로컬 DB 헬퍼 함수
 function readUsers() {
@@ -138,6 +1029,7 @@ function readUsers() {
 function writeUsers(users) {
   try {
     fs.writeFileSync(USERS_DB_PATH, JSON.stringify(users, null, 2), "utf-8");
+    uploadToR2("users.json", JSON.stringify(users, null, 2)).catch(e => console.error("R2 upload error:", e));
   } catch (err) {
     console.error("회원 DB 쓰기 실패:", err);
   }
@@ -267,12 +1159,12 @@ app.get("/redirect", async function (req, res) {
         email: userEmail
       };
       req.session.isNewUser = isNewUser;
-
-      // 로그인 성공 상태로 프론트엔드로 리다이렉트
-      res.status(302).redirect(`${domain}/index.html?login=success`);
-    } else {
-      res.status(500).send("카카오 프로필 정보를 가져오지 못했습니다.");
-    }
+ 
+       // 로그인 성공 상태로 프론트엔드로 리다이렉트 (토큰 전달)
+       res.status(302).redirect(`${domain}/index.html?login=success&token=${rtn.access_token}`);
+     } else {
+       res.status(500).send("카카오 프로필 정보를 가져오지 못했습니다.");
+     }
   } else {
     res.status(400).send("카카오 토큰 발급에 실패했습니다: " + JSON.stringify(rtn));
   }
@@ -288,49 +1180,336 @@ app.get("/terms", function (req, res) {
   res.sendFile(path.join(__dirname, "www", "terms.html"));
 });
 
-// 2.7. 구글 플레이 심사용 데모 로그인 API
-app.post("/api/demo-login", function (req, res) {
+// 2.7. 일반 로그인 API (데모 로그인 통합 지원)
+app.post("/api/login", function (req, res) {
   const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ success: false, message: "아이디와 비밀번호를 입력해주세요." });
+  }
+
+  const users = readUsers();
+  
+  // 1. 데모 계정 검증 (구글 심사용)
   if (username === "google-tester" && password === "plating1234") {
-    req.session.key = "demo-session-token";
-    req.session.user = {
-      kakao_id: 99999999,
-      nickname: "GoogleTester",
-      profile_image: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100",
-      email: "sosdml123@naver.com"
-    };
-    req.session.isNewUser = false;
+    let sessionToken = "demo-session-token-999999";
+    const existingTesterIdx = users.findIndex(u => u.kakao_id === 99999999 || u.username === "google-tester");
     
-    // DB에 해당 테스터 정보가 없으면 가입 처리
-    const users = readUsers();
-    if (!users.some(u => u.kakao_id === 99999999)) {
+    if (existingTesterIdx === -1) {
       users.push({
-        kakao_id: 99999999,
+        username: "google-tester",
         nickname: "GoogleTester",
         profile_image: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100",
         email: "sosdml123@naver.com",
+        session_token: sessionToken,
         registered_at: new Date().toISOString(),
-        last_login_at: new Date().toISOString()
+        last_login_at: new Date().toISOString(),
+        role: "user"
       });
       writeUsers(users);
+    } else {
+      if (!users[existingTesterIdx].session_token) {
+        users[existingTesterIdx].session_token = sessionToken;
+      } else {
+        sessionToken = users[existingTesterIdx].session_token;
+      }
+      users[existingTesterIdx].last_login_at = new Date().toISOString();
+      writeUsers(users);
     }
-    return res.json({ success: true });
+
+    req.session.key = sessionToken;
+    req.session.user = {
+      username: "google-tester",
+      nickname: "GoogleTester",
+      profile_image: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100",
+      email: "sosdml123@naver.com",
+      role: "user"
+    };
+    return res.json({ success: true, token: sessionToken });
+  }
+
+  // 2. 일반 계정 검증
+  const user = users.find(u => u.username === username && u.password === password);
+  if (user) {
+    // 차단 검사
+    const moderationRules = readModerationRules();
+    if (moderationRules.blockedUsers && moderationRules.blockedUsers.includes(user.nickname)) {
+      return res.status(403).json({ success: false, message: "차단된 사용자입니다. 이용이 정지되었습니다." });
+    }
+
+    let sessionToken = user.session_token;
+    if (!sessionToken) {
+      sessionToken = "local_token_" + Math.random().toString(36).substring(2) + "_" + Date.now();
+      user.session_token = sessionToken;
+    }
+    user.last_login_at = new Date().toISOString();
+    writeUsers(users);
+
+    req.session.key = sessionToken;
+    req.session.user = {
+      username: user.username,
+      nickname: user.nickname,
+      profile_image: user.profile_image || "",
+      email: user.email || "",
+      role: user.role || "user"
+    };
+
+    return res.json({ success: true, token: sessionToken });
   } else {
-    return res.status(401).json({ success: false, message: "Invalid username or password" });
+    return res.status(401).json({ success: false, message: "아이디 또는 비밀번호가 올바르지 않습니다." });
   }
 });
 
-// 3. 현재 로그인된 유저 프로필 조회 API
+// 2.8. 일반 회원가입 중복 및 제약 조건 선행 검증 API
+app.post("/api/signup/check", function (req, res) {
+  const { username, nickname, deviceId } = req.body;
+  if (!username || !nickname) {
+    return res.status(400).json({ success: false, message: "필수 입력 항목이 누락되었습니다." });
+  }
+
+  const users = readUsers();
+
+  // 1. 기기당 1개 계정 제한 검증
+  if (deviceId && deviceId.trim() !== "" && username !== "google-tester") {
+    const deviceExists = users.some(u => u.device_id === deviceId && u.username !== "google-tester");
+    if (deviceExists) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "이미 이 기기에서 생성된 계정이 존재합니다. 기기당 1개의 계정만 생성할 수 있습니다." 
+      });
+    }
+  }
+
+  // 2. 아이디 중복 검증
+  const idExists = users.some(u => u.username === username || (u.kakao_id && u.kakao_id.toString() === username));
+  if (idExists) {
+    return res.status(400).json({ success: false, message: "이미 사용 중인 아이디입니다." });
+  }
+
+  // 3. 닉네임 중복 검증
+  const nicknameExists = users.some(u => u.nickname.toLowerCase() === nickname.toLowerCase());
+  if (nicknameExists) {
+    return res.status(400).json({ success: false, message: "이미 사용 중인 닉네임입니다." });
+  }
+
+  return res.json({ success: true });
+});
+
+// 2.8. 일반 회원가입 API (1기기 1계정 제약 조건 추가)
+app.post("/api/signup", function (req, res) {
+  const { username, password, nickname, deviceId } = req.body;
+  if (!username || !password || !nickname) {
+    return res.status(400).json({ success: false, message: "필수 입력 항목이 누락되었습니다." });
+  }
+
+  const users = readUsers();
+
+  // 1. 기기당 1개 계정 제한 검증 (데모 계정 및 빈 기기 식별자는 제외)
+  if (deviceId && deviceId.trim() !== "" && username !== "google-tester") {
+    const deviceExists = users.some(u => u.device_id === deviceId && u.username !== "google-tester");
+    if (deviceExists) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "이미 이 기기에서 생성된 계정이 존재합니다. 기기당 1개의 계정만 생성할 수 있습니다." 
+      });
+    }
+  }
+
+  // 2. 아이디 중복 검증
+  const idExists = users.some(u => u.username === username || (u.kakao_id && u.kakao_id.toString() === username));
+  if (idExists) {
+    return res.status(400).json({ success: false, message: "이미 사용 중인 아이디입니다." });
+  }
+
+  // 3. 닉네임 중복 검증
+  const nicknameExists = users.some(u => u.nickname.toLowerCase() === nickname.toLowerCase());
+  if (nicknameExists) {
+    return res.status(400).json({ success: false, message: "이미 사용 중인 닉네임입니다." });
+  }
+
+  // 4. 새 회원 등록
+  const sessionToken = "local_token_" + Math.random().toString(36).substring(2) + "_" + Date.now();
+  const newUser = {
+    username: username,
+    password: password,
+    nickname: nickname,
+    device_id: deviceId || "",
+    session_token: sessionToken,
+    profile_image: "",
+    email: "",
+    registered_at: new Date().toISOString(),
+    last_login_at: new Date().toISOString(),
+    role: "user"
+  };
+
+  users.push(newUser);
+  writeUsers(users);
+
+  req.session.key = sessionToken;
+  req.session.user = {
+    username: username,
+    nickname: nickname,
+    profile_image: "",
+    email: "",
+    role: "user"
+  };
+
+  return res.json({ success: true, token: sessionToken, user: { username, nickname } });
+});
+
+// Firebase ID Token 검증 헬퍼 함수
+async function verifyFirebaseIdToken(token) {
+  try {
+    const apiKey = "AIzaSyBKat-tCeDuoRr-uzdOeoQXT6PpXHBWJno";
+    const res = await axios.post(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`, {
+      idToken: token
+    });
+    if (res.data && res.data.users && res.data.users[0]) {
+      return res.data.users[0]; // { localId, email, displayName, photoUrl, ... }
+    }
+  } catch (err) {
+    console.error("[verifyFirebaseIdToken] Error:", err.response ? err.response.data : err.message);
+  }
+  return null;
+}
+
+// 3. 현재 로그인된 유저 프로필 조회 API (세션 복원 완전 대응)
 app.get("/profile", async function (req, res) {
+  const queryToken = req.query.token;
+  if (queryToken && queryToken.trim() !== "" && (!req.session.key || !req.session.user)) {
+    console.log("[세션 복원 시도] 토큰 감지:", queryToken.substring(0, 10) + "...");
+    const users = readUsers();
+    
+    // 1. Firebase ID Token 검증 처리 (JWT 토큰은 보통 eyJ로 시작함)
+    if (queryToken.startsWith("eyJ")) {
+      const fbUser = await verifyFirebaseIdToken(queryToken);
+      if (fbUser) {
+        let user = users.find(u => u.uid === fbUser.localId || u.email === fbUser.email);
+        if (!user) {
+          user = {
+            uid: fbUser.localId,
+            nickname: fbUser.displayName || fbUser.email.split("@")[0],
+            email: fbUser.email,
+            profile_image: fbUser.photoUrl || "",
+            role: "user",
+            session_token: queryToken
+          };
+          users.push(user);
+          writeUsers(users);
+        } else {
+          user.session_token = queryToken;
+          writeUsers(users);
+        }
+        
+        req.session.key = queryToken;
+        req.session.user = {
+          uid: fbUser.localId,
+          nickname: user.nickname,
+          profile_image: user.profile_image || "",
+          email: user.email || "",
+          role: user.role || "user"
+        };
+        console.log(`[세션 복원 성공 - Firebase Auth] 닉네임: ${user.nickname}`);
+        return res.json({ isLoggedIn: true, user: req.session.user });
+      }
+    }
+
+    // 3.1. 로컬 DB의 session_token에서 우선 조회 (초고속 오프라인 매칭)
+    const localUser = users.find(u => u.session_token === queryToken);
+    if (localUser) {
+      req.session.key = queryToken;
+      req.session.user = {
+        kakao_id: localUser.kakao_id || null,
+        username: localUser.username || null,
+        nickname: localUser.nickname,
+        profile_image: localUser.profile_image || "",
+        email: localUser.email || "",
+        role: localUser.role || "user"
+      };
+      console.log(`[세션 복원 성공 - 로컬 DB 매칭] 닉네임: ${localUser.nickname}`);
+    } else {
+      // 3.2. 없으면 카카오 API로 유효성 확인 및 동기화 (최초 로그인 콜백 등)
+      try {
+        const profileUri = kapi_host + "/v2/user/me";
+        const profileHeader = {
+          "content-Type": "application/x-www-form-urlencoded",
+          Authorization: "Bearer " + queryToken,
+        };
+        const kakaoProfile = await call("POST", profileUri, {}, profileHeader);
+        
+        if (kakaoProfile && kakaoProfile.id) {
+          const existingUserIdx = users.findIndex(u => u.kakao_id === kakaoProfile.id);
+          let userNickname = kakaoProfile.properties && kakaoProfile.properties.nickname 
+            ? kakaoProfile.properties.nickname 
+            : `플레이터_${kakaoProfile.id.toString().slice(-4)}`;
+          let userProfileImg = kakaoProfile.properties && kakaoProfile.properties.profile_image 
+            ? kakaoProfile.properties.profile_image 
+            : "";
+          let userEmail = kakaoProfile.kakao_account && kakaoProfile.kakao_account.email 
+            ? kakaoProfile.kakao_account.email 
+            : "";
+
+          if (existingUserIdx !== -1) {
+            userNickname = users[existingUserIdx].nickname;
+            userProfileImg = users[existingUserIdx].profile_image || userProfileImg;
+            userEmail = users[existingUserIdx].email || userEmail;
+            // session_token 동기화
+            users[existingUserIdx].session_token = queryToken;
+            users[existingUserIdx].last_login_at = new Date().toISOString();
+            writeUsers(users);
+          } else {
+            // 카카오 최초 로그인 시 회원 가입 처리
+            let uniqueNickname = userNickname;
+            while (users.some(u => u.nickname.toLowerCase() === uniqueNickname.toLowerCase())) {
+              uniqueNickname = `${userNickname}_${Math.floor(100 + Math.random() * 900)}`;
+            }
+            users.push({
+              kakao_id: kakaoProfile.id,
+              nickname: uniqueNickname,
+              profile_image: userProfileImg,
+              email: userEmail,
+              session_token: queryToken,
+              registered_at: new Date().toISOString(),
+              last_login_at: new Date().toISOString(),
+              role: "user"
+            });
+            writeUsers(users);
+            userNickname = uniqueNickname;
+          }
+
+          req.session.key = queryToken;
+          req.session.user = {
+            kakao_id: kakaoProfile.id,
+            nickname: userNickname,
+            profile_image: userProfileImg,
+            email: userEmail,
+            role: (existingUserIdx !== -1 ? users[existingUserIdx].role : "user") || "user"
+          };
+          console.log(`[세션 복원 성공 - 카카오 API] 카카오 ID: ${kakaoProfile.id}, 닉네임: ${userNickname}`);
+        }
+      } catch (restoreErr) {
+        console.error("[세션 복원 실패] 에러:", restoreErr.message);
+      }
+    }
+  }
+
   if (!req.session.key || !req.session.user) {
     return res.json({ isLoggedIn: false });
+  }
+
+  // 차단 여부 검사
+  const rules = readJsonFile(MODERATION_RULES_PATH, { deletedPosts: [], deletedComments: [], blockedUsers: [], hiddenPosts: [] });
+  const isBlocked = rules.blockedUsers.includes(req.session.user.nickname);
+  if (isBlocked) {
+    req.session.destroy();
+    return res.json({ isLoggedIn: false, isBlocked: true, message: "차단된 사용자입니다." });
   }
 
   // 신규 가입 팝업 노출을 위해 세션에서 가져오고, 1회 확인 후 false로 초기화
   const isNewUser = req.session.isNewUser || false;
   req.session.isNewUser = false; 
 
-  const isAdmin = ADMIN_KAKAO_IDS.includes(req.session.user.kakao_id);
+  const admins = getAdminIds();
+  const isAdmin = req.session.user.kakao_id ? admins.includes(req.session.user.kakao_id) : (req.session.user.username === "google-tester" || req.session.user.role === "admin");
 
   res.json({
     isLoggedIn: true,
@@ -357,11 +1536,14 @@ app.post("/profile/update", async function (req, res) {
 
   const users = readUsers();
   const currentKakaoId = req.session.user.kakao_id;
+  const currentUsername = req.session.user.username;
 
   // 본인을 제외한 다른 가입 유저 중 닉네임 중복 체크
-  const isDuplicate = users.some(
-    u => u.kakao_id !== currentKakaoId && u.nickname.toLowerCase() === targetNickname.toLowerCase()
-  );
+  const isDuplicate = users.some(u => {
+    if (currentKakaoId && u.kakao_id === currentKakaoId) return false;
+    if (currentUsername && u.username === currentUsername) return false;
+    return u.nickname.toLowerCase() === targetNickname.toLowerCase();
+  });
 
   // 기본 시스템 mock 크리에이터명과 겹치는지 체크
   const systemCreators = ["푸드스타일리스트", "카페투어러"];
@@ -374,10 +1556,14 @@ app.post("/profile/update", async function (req, res) {
   }
 
   // users.json 업데이트
-  const userIdx = users.findIndex(u => u.kakao_id === currentKakaoId);
+  const userIdx = users.findIndex(u => {
+    if (currentKakaoId && u.kakao_id === currentKakaoId) return true;
+    if (currentUsername && u.username === currentUsername) return true;
+    return false;
+  });
+
   if (userIdx !== -1) {
     users[userIdx].nickname = targetNickname;
-    // bio와 profile_image 업데이트
     users[userIdx].bio = bio || "";
     if (avatarImg) {
       users[userIdx].profile_image = avatarImg;
@@ -419,6 +1605,10 @@ app.get("/message", async function (req, res) {
     "content-Type": "application/x-www-form-urlencoded",
     Authorization: "Bearer " + req.session.key,
   };
+  var rtn = await call("POST", uri, param, header);
+  res.send(rtn);
+});
+
 // 친구에게 메시지 보내기
 app.get("/friend-message", async function (req, res) {
   if (!req.session.key) return res.status(401).send("Unauthorized");
@@ -483,6 +1673,50 @@ app.get("/unlink", async function (req, res) {
   res.json({ success: true, detail: rtn });
 });
 
+// 쇼핑몰/사이트별 전용 고해상도 Fallback 데이터 맵 (매칭을 위해 단순 키 사용)
+const fallbackMappers = {
+  "coupang": {
+    title: "쿠팡 추천 상품",
+    image: "/assets/logos/coupang.svg"
+  },
+  "smartstore.naver": {
+    title: "네이버 스마트스토어 상품",
+    image: "/assets/logos/naver.svg"
+  },
+  "shopping.naver": {
+    title: "네이버 쇼핑 상품",
+    image: "/assets/logos/naver.svg"
+  },
+  "naver": {
+    title: "네이버 추천 상품",
+    image: "/assets/logos/naver.svg"
+  },
+  "11st": {
+    title: "11번가 추천 상품",
+    image: "/assets/logos/11st.svg"
+  },
+  "gmarket": {
+    title: "G마켓 추천 상품",
+    image: "/assets/logos/gmarket.svg"
+  },
+  "auction": {
+    title: "옥션 추천 상품",
+    image: "/assets/logos/auction.svg"
+  },
+  "ssg": {
+    title: "SSG.COM 추천 상품",
+    image: "/assets/logos/ssg.svg"
+  },
+  "oliveyoung": {
+    title: "올리브영 추천 상품",
+    image: "/assets/logos/oliveyoung.svg"
+  },
+  "musinsa": {
+    title: "무신사 추천 상품",
+    image: "/assets/logos/musinsa.svg"
+  }
+};
+
 // 실시간 링크 메타데이터 파싱 API (Naver Map 리다이렉트 및 플레이트 API 자동 추적 연동)
 app.get("/api/link-meta", async (req, res) => {
   const { url } = req.query;
@@ -495,6 +1729,24 @@ app.get("/api/link-meta", async (req, res) => {
   try {
     host = new URL(url).hostname.replace("www.", "");
   } catch (e) {}
+
+  // --- 특정 호스트별 Fallback 맵 매핑 확인 (도메인 포함 관계 확인) ---
+  let matchedFallback = null;
+  for (const domainKey of Object.keys(fallbackMappers)) {
+    if (lowerUrl.includes(domainKey)) {
+      matchedFallback = fallbackMappers[domainKey];
+      break;
+    }
+  }
+
+  // 상대 경로 이미지를 백엔드 절대 경로 URL로 바꾸는 헬퍼
+  const makeImageAbsolute = (img) => {
+    if (!img) return "";
+    if (img.startsWith("/")) {
+      return `${domain}${img}`;
+    }
+    return img;
+  };
 
   // --- 공통 헤더 ---
   const pcHeaders = {
@@ -557,7 +1809,7 @@ app.get("/api/link-meta", async (req, res) => {
               return res.json({
                 success: true,
                 title: detail.name || "네이버 지도 장소",
-                image: imgUrl,
+                image: makeImageAbsolute(imgUrl),
                 host: "naver.map"
               });
             }
@@ -573,7 +1825,7 @@ app.get("/api/link-meta", async (req, res) => {
         return res.json({
           success: true,
           title: ogData.title,
-          image: ogData.image || "https://ssl.pstatic.net/static/maps/m/navermap_80_80.png",
+          image: makeImageAbsolute(ogData.image || "https://ssl.pstatic.net/static/maps/m/navermap_80_80.png"),
           host: "naver.map"
         });
       }
@@ -583,9 +1835,9 @@ app.get("/api/link-meta", async (req, res) => {
   }
 
   // 1.5. 쿠팡 링크 파싱 (다중 전략: OG tags → JS redirect → URL 상품명)
-  if (lowerUrl.includes("coupang.com") || lowerUrl.includes("link.coupang.com") || lowerUrl.includes("coupa.ng")) {
+  if (lowerUrl.includes("coupang") || lowerUrl.includes("coupa.ng")) {
     let coupangTitle = "";
-    let coupangImage = "https://image.coupangcdn.com/image/coupang/common/logo308x76.png";
+    let coupangImage = matchedFallback ? matchedFallback.image : "/assets/logos/coupang.svg";
 
     try {
       const coupangRes = await axios.get(url, {
@@ -635,8 +1887,8 @@ app.get("/api/link-meta", async (req, res) => {
 
     return res.json({
       success: true,
-      title: coupangTitle || "쿠팡 추천 상품",
-      image: coupangImage,
+      title: coupangTitle || (matchedFallback ? matchedFallback.title : "쿠팡 추천 상품"),
+      image: makeImageAbsolute(coupangImage),
       host: "coupang.com"
     });
   }
@@ -670,10 +1922,19 @@ app.get("/api/link-meta", async (req, res) => {
         try { image = new URL(image, url).href; } catch (e) {}
       }
 
+      // 파싱 실패 시 Fallback 병합
+      if (!title && matchedFallback) title = matchedFallback.title;
+      if (!image && matchedFallback) image = matchedFallback.image;
+
+      // 이미지 최종 검증 (비어있거나 상대 경로인 경우 강제 처리)
+      if (!image || (!image.startsWith("http") && !image.startsWith("/"))) {
+        image = matchedFallback ? matchedFallback.image : "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400";
+      }
+
       return res.json({
         success: true,
-        title: title ? title.substring(0, 100) : "상세 링크",
-        image: image || "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+        title: title ? title.substring(0, 100) : (matchedFallback ? matchedFallback.title : "상세 링크"),
+        image: makeImageAbsolute(image),
         host: host
       });
     }
@@ -681,13 +1942,289 @@ app.get("/api/link-meta", async (req, res) => {
     console.error("일반 링크 크롤링 에러:", err.message);
   }
 
-  // Fallback
+  // Fallback (에러가 나도 지정된 Fallback 쇼핑몰 데이터는 정상 제공)
+  const finalFallbackImage = matchedFallback ? matchedFallback.image : "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400";
   return res.json({
     success: true,
-    title: "상세 링크",
-    image: "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+    title: matchedFallback ? matchedFallback.title : "상세 링크",
+    image: makeImageAbsolute(finalFallbackImage),
     host: host
   });
+});
+
+// --- 3. 신고 및 관리자 기능 API ---
+
+// 3.1. 신고 제출 API
+app.post("/api/reports", async (req, res) => {
+  try {
+    if (!req.session.user) {
+      return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
+    }
+
+    const { targetType, targetId, reason, author, text } = req.body;
+    if (!targetType || !targetId || !reason) {
+      return res.status(400).json({ success: false, message: "필수 항목이 누락되었습니다." });
+    }
+
+    const reports = readJsonFile(REPORTS_DB_PATH, []);
+    const newReport = {
+      id: crypto.randomUUID(),
+      targetType, // "post" 또는 "comment"
+      targetId,
+      author: author || "알 수 없음",
+      text: text || "",
+      reason,
+      reporter: req.session.user.nickname,
+      reporterKakaoId: req.session.user.kakao_id,
+      timestamp: new Date().toISOString(),
+      status: "Pending", // "Pending" -> "Resolved"
+      adminMemo: ""
+    };
+
+    reports.unshift(newReport);
+    writeJsonFile(REPORTS_DB_PATH, reports);
+
+    return res.json({ success: true, message: "신고가 정상 접수되었습니다." });
+  } catch (error) {
+    console.error("신고 제출 오류:", error);
+    return res.status(500).json({ success: false, message: "신고 제출 중 서버 오류가 발생했습니다." });
+  }
+});
+
+// 3.2. 관리자 권한 확인 미들웨어
+function requireAdmin(req, res, next) {
+  if (!req.session.user) {
+    return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
+  }
+  const admins = getAdminIds();
+  const isAdmin = req.session.user.kakao_id 
+    ? admins.includes(req.session.user.kakao_id) 
+    : (req.session.user.username === "google-tester" || req.session.user.role === "admin");
+  if (!isAdmin) {
+    return res.status(403).json({ success: false, message: "관리자 권한이 없습니다." });
+  }
+  next();
+}
+
+// 3.3. 신고 목록 조회 API (관리자 전용)
+app.get("/api/reports", requireAdmin, (req, res) => {
+  const reports = readJsonFile(REPORTS_DB_PATH, []);
+  res.json({ success: true, reports });
+});
+
+// 3.4. 신고 처리 API (관리자 전용)
+app.post("/api/reports/handle", requireAdmin, (req, res) => {
+  try {
+    const { reportId, action, adminMemo } = req.body; // action: "delete", "keep", "block", "ignore"
+    if (!reportId || !action) {
+      return res.status(400).json({ success: false, message: "필수 항목이 누락되었습니다." });
+    }
+
+    const reports = readJsonFile(REPORTS_DB_PATH, []);
+    const reportIdx = reports.findIndex(r => r.id === reportId);
+    if (reportIdx === -1) {
+      return res.status(404).json({ success: false, message: "존재하지 않는 신고 건입니다." });
+    }
+
+    const report = reports[reportIdx];
+    const rules = readJsonFile(MODERATION_RULES_PATH, { deletedPosts: [], deletedComments: [], blockedUsers: [], hiddenPosts: [] });
+    const logs = readJsonFile(ADMIN_LOGS_PATH, []);
+
+    let actionDetail = "";
+
+    if (action === "delete") {
+      if (report.targetType === "post") {
+        if (!rules.deletedPosts.includes(report.targetId)) {
+          rules.deletedPosts.push(report.targetId);
+        }
+      } else if (report.targetType === "comment") {
+        if (!rules.deletedComments.includes(report.targetId)) {
+          rules.deletedComments.push(report.targetId);
+        }
+      }
+      actionDetail = `콘텐츠 삭제 (유형: ${report.targetType}, ID: ${report.targetId})`;
+    } else if (action === "block") {
+      // 사용자 차단 (작성자 닉네임을 blockedUsers에 추가)
+      const isAlreadyBlocked = rules.blockedUsers.some(b => b.nickname === report.author);
+      if (!isAlreadyBlocked) {
+        rules.blockedUsers.push({
+          nickname: report.author,
+          blocked_at: new Date().toISOString(),
+          reason: report.reason
+        });
+      }
+      actionDetail = `사용자 차단 (닉네임: ${report.author})`;
+    } else if (action === "keep") {
+      actionDetail = `유지 결정 (ID: ${report.targetId})`;
+    } else if (action === "ignore") {
+      actionDetail = `신고 무시 (ID: ${report.targetId})`;
+    }
+
+    // 상태 업데이트
+    report.status = "Resolved";
+    report.adminMemo = adminMemo || "";
+    reports[reportIdx] = report;
+    writeJsonFile(REPORTS_DB_PATH, reports);
+    writeJsonFile(MODERATION_RULES_PATH, rules);
+
+    // 로그 남기기
+    const newLog = {
+      id: crypto.randomUUID(),
+      admin: req.session.user.nickname,
+      adminKakaoId: req.session.user.kakao_id,
+      action: action,
+      targetType: report.targetType,
+      targetId: report.targetId,
+      detail: actionDetail,
+      memo: adminMemo || "",
+      timestamp: new Date().toISOString()
+    };
+    logs.unshift(newLog);
+    writeJsonFile(ADMIN_LOGS_PATH, logs);
+
+    res.json({ success: true, message: "신고 처리가 완료되었습니다." });
+  } catch (error) {
+    console.error("신고 처리 오류:", error);
+    res.status(500).json({ success: false, message: "신고 처리 중 오류가 발생했습니다." });
+  }
+});
+
+// 3.5. 수동 콘텐츠 중재 API (글쓰기/댓글 삭제 시 호출 가능 - 관리자 전용)
+app.post("/api/moderate/delete", requireAdmin, (req, res) => {
+  try {
+    const { targetType, targetId, author } = req.body;
+    if (!targetType || !targetId) {
+      return res.status(400).json({ success: false, message: "필수 항목이 누락되었습니다." });
+    }
+
+    const rules = readJsonFile(MODERATION_RULES_PATH, { deletedPosts: [], deletedComments: [], blockedUsers: [], hiddenPosts: [] });
+    const logs = readJsonFile(ADMIN_LOGS_PATH, []);
+
+    if (targetType === "post") {
+      if (!rules.deletedPosts.includes(targetId)) {
+        rules.deletedPosts.push(targetId);
+      }
+    } else if (targetType === "comment") {
+      if (!rules.deletedComments.includes(targetId)) {
+        rules.deletedComments.push(targetId);
+      }
+    }
+
+    const newLog = {
+      id: crypto.randomUUID(),
+      admin: req.session.user.nickname,
+      adminKakaoId: req.session.user.kakao_id,
+      action: "delete",
+      targetType: targetType,
+      targetId: targetId,
+      detail: `수동 콘텐츠 삭제 (유형: ${targetType}, ID: ${targetId}, 작성자: ${author || 'N/A'})`,
+      memo: "직접 관리자 삭제",
+      timestamp: new Date().toISOString()
+    };
+    logs.unshift(newLog);
+    writeJsonFile(MODERATION_RULES_PATH, rules);
+    writeJsonFile(ADMIN_LOGS_PATH, logs);
+
+    res.json({ success: true, message: "콘텐츠 중재가 정상적으로 저장되었습니다." });
+  } catch (error) {
+    console.error("수동 콘텐츠 삭제 중재 에러:", error);
+    res.status(500).json({ success: false, message: "처리에 실패했습니다." });
+  }
+});
+
+// 3.6. 수동 콘텐츠 숨김/노출 API (관리자 전용)
+app.post("/api/moderate/hide", requireAdmin, (req, res) => {
+  try {
+    const { postId, isHidden } = req.body;
+    if (!postId) {
+      return res.status(400).json({ success: false, message: "postId가 필요합니다." });
+    }
+
+    const rules = readJsonFile(MODERATION_RULES_PATH, { deletedPosts: [], deletedComments: [], blockedUsers: [], hiddenPosts: [] });
+    const logs = readJsonFile(ADMIN_LOGS_PATH, []);
+
+    if (isHidden) {
+      if (!rules.hiddenPosts.includes(postId)) {
+        rules.hiddenPosts.push(postId);
+      }
+    } else {
+      rules.hiddenPosts = rules.hiddenPosts.filter(id => id !== postId);
+    }
+    writeJsonFile(MODERATION_RULES_PATH, rules);
+
+    const newLog = {
+      id: crypto.randomUUID(),
+      admin: req.session.user.nickname,
+      adminKakaoId: req.session.user.kakao_id,
+      action: isHidden ? "hide" : "unhide",
+      targetType: "post",
+      targetId: postId,
+      detail: `게시글 숨김 설정 (상태: ${isHidden ? '숨김' : '노출'}, ID: ${postId})`,
+      memo: "",
+      timestamp: new Date().toISOString()
+    };
+    logs.unshift(newLog);
+    writeJsonFile(ADMIN_LOGS_PATH, logs);
+
+    res.json({ success: true, message: isHidden ? "게시글이 숨김 처리되었습니다." : "게시글 숨김이 해제되었습니다." });
+  } catch (error) {
+    console.error("게시글 숨김 설정 오류:", error);
+    res.status(500).json({ success: false, message: "숨김 설정에 실패했습니다." });
+  }
+});
+
+// 3.7. 수동 사용자 차단 API (관리자 전용)
+app.post("/api/moderate/block-user", requireAdmin, (req, res) => {
+  try {
+    const { nickname, reason } = req.body;
+    if (!nickname) {
+      return res.status(400).json({ success: false, message: "nickname이 필요합니다." });
+    }
+
+    const rules = readJsonFile(MODERATION_RULES_PATH, { deletedPosts: [], deletedComments: [], blockedUsers: [], hiddenPosts: [] });
+    const logs = readJsonFile(ADMIN_LOGS_PATH, []);
+
+    const isAlreadyBlocked = rules.blockedUsers.some(b => b.nickname === nickname);
+    if (!isAlreadyBlocked) {
+      rules.blockedUsers.push({
+        nickname: nickname,
+        blocked_at: new Date().toISOString(),
+        reason: reason || "관리자에 의한 수동 차단"
+      });
+      writeJsonFile(MODERATION_RULES_PATH, rules);
+
+      const newLog = {
+        id: crypto.randomUUID(),
+        admin: req.session.user.nickname,
+        adminKakaoId: req.session.user.kakao_id,
+        action: "block",
+        targetType: "user",
+        targetId: nickname,
+        detail: `사용자 수동 차단 (닉네임: ${nickname})`,
+        memo: reason || "",
+        timestamp: new Date().toISOString()
+      };
+      logs.unshift(newLog);
+      writeJsonFile(ADMIN_LOGS_PATH, logs);
+    }
+
+    res.json({ success: true, message: "사용자가 정상적으로 차단되었습니다." });
+  } catch (error) {
+    console.error("사용자 수동 차단 오류:", error);
+    res.status(500).json({ success: false, message: "사용자 차단에 실패했습니다." });
+  }
+});
+
+// 3.8. 중재 규칙(필터링용 데이터) 조회 API (모든 사용자 접근 가능)
+app.get("/api/moderation-rules", (req, res) => {
+  const rules = readJsonFile(MODERATION_RULES_PATH, { deletedPosts: [], deletedComments: [], blockedUsers: [], hiddenPosts: [] });
+  res.json({ success: true, rules });
+});
+
+// 3.9. 관리자 로그 조회 API (관리자 전용)
+app.get("/api/admin/logs", requireAdmin, (req, res) => {
+  const logs = readJsonFile(ADMIN_LOGS_PATH, []);
+  res.json({ success: true, logs });
 });
 
 app.listen(port, () => {

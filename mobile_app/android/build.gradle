@@ -16,3 +16,22 @@ subprojects {
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }
+
+subprojects {
+    def configureProject = { proj ->
+        if (proj.hasProperty('android')) {
+            proj.android {
+                buildTypes {
+                    release {
+                        proguardFile "${rootProject.projectDir}/app/proguard-rules.pro"
+                    }
+                }
+            }
+        }
+    }
+    if (project.state.executed) {
+        configureProject(project)
+    } else {
+        project.afterEvaluate { configureProject(project) }
+    }
+}

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "455835477529",
+    "project_id": "plating-app-db29f",
+    "storage_bucket": "plating-app-db29f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:455835477529:android:816d67f1c3262873576c88",
+        "android_client_info": {
+          "package_name": "com.foodhouse.plating_mobile_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBKat-tCeDuoRr-uzdOeoQXT6PpXHBWJno"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

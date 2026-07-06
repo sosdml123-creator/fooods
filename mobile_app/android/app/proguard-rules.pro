@@ -17,3 +17,7 @@
 
 # Ignore missing Play Core classes referenced by Flutter split/deferred components
 -dontwarn com.google.android.play.core.**
+
+# Ignore missing android.window.BackEvent referenced by Flutter activity
+-dontwarn android.window.BackEvent
+-dontwarn android.window.**

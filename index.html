@@ -60,9 +60,37 @@
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.22.20/babel.min.js"></script>
 
+  <!-- Firebase SDK Compat -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
+
   <!-- 단일 파일 실행을 위한 React & Babel 인라인 스크립트 -->
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
+
+    // --- Firebase 초기화 ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyBKat-tCeDuoRr-uzdOeoQXT6PpXHBWJno",
+      authDomain: "plating-app-db29f.firebaseapp.com",
+      projectId: "plating-app-db29f",
+      storageBucket: "plating-app-db29f.firebasestorage.app",
+      messagingSenderId: "455835477529"
+    };
+
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+
+    const db = firebase.firestore();
+    const storage = firebase.storage();
+    const auth = firebase.auth();
+
+    // Firebase Auth Persistence LOCAL
+    auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+      .then(() => console.log("[Firebase Auth] Persistence set to LOCAL"))
+      .catch(err => console.error("[Firebase Auth] Persistence error:", err));
 
     // --- 1. IndexedDB Helper 및 LocalStorage Fallback 구현 ---
     const DB_NAME = "FoodHouseDatabase";
@@ -685,7 +713,7 @@
               
               <div className="flex items-center gap-3">
                 {/* 햄버거/케밥 드롭다운 메뉴 */}
-                {(isMyPost || isAdmin) && !isEditingMode && (
+                {!isEditingMode && (
                   <div className="kebab-dropdown-wrapper">
                     <button className="kebab-menu-btn" onClick={() => setShowKebabMenu(!showKebabMenu)} aria-label="메뉴">
                       <i className="fa-solid fa-ellipsis-vertical text-zinc-500"></i>
@@ -693,7 +721,21 @@
                     {showKebabMenu && (
                       <div className="kebab-dropdown">
                         {isMyPost && <button onClick={() => { setIsEditingMode(true); setShowKebabMenu(false); }}>수정</button>}
-                        <button className="delete-btn" onClick={() => { handleDelete(); setShowKebabMenu(false); }}>삭제</button>
+                        {(isMyPost || isAdmin) && <button className="delete-btn" onClick={() => { handleDelete(); setShowKebabMenu(false); }}>삭제</button>}
+                        {!isMyPost && (
+                          <button 
+                            type="button"
+                            className="text-red-500 font-bold" 
+                            onClick={() => {
+                              setShowKebabMenu(false);
+                              if (window.openReportModal) {
+                                window.openReportModal("post", post.id, post.author, post.title + "\n" + post.body);
+                              }
+                            }}
+                          >
+                            신고하기
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -940,8 +982,110 @@
       );
     }
 
+    // 신고 작성 제출 모달
+    function ReportModal({ isOpen, targetType, targetId, author, text, onClose }) {
+      const [reason, setReason] = useState("영리목적/홍보성");
+      const [customReason, setCustomReason] = useState("");
+      const [loading, setLoading] = useState(false);
+
+      if (!isOpen) return null;
+
+      async function handleSubmit(e) {
+        e.preventDefault();
+        const finalReason = reason === "기타" ? customReason.trim() : reason;
+        if (reason === "기타" && !finalReason) {
+          alert("신고 사유를 작성해 주세요.");
+          return;
+        }
+
+        setLoading(true);
+        try {
+          const res = await fetch("/api/reports", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              targetType,
+              targetId,
+              reason: finalReason,
+              author: author || "알 수 없음",
+              text: text || ""
+            })
+          });
+          const data = await res.json();
+          if (data.success) {
+            alert("신고가 정상적으로 접수되었습니다. 신속히 검토하겠습니다.");
+            onClose();
+          } else {
+            alert(data.message || "신고 제출에 실패했습니다.");
+          }
+        } catch (err) {
+          alert("네트워크 오류가 발생했습니다.");
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      return (
+        <div className="sheet-backdrop animate-fade-in" onClick={onClose} style={{ zIndex: 99999 }}>
+          <form className="sheet text-left animate-slide-up" onClick={(e) => e.stopPropagation()} onSubmit={handleSubmit} style={{ maxHeight: "85vh", overflowY: "auto" }}>
+            <header className="sheet-head">
+              <h2>🚨 콘텐츠 신고하기</h2>
+              <button type="button" onClick={onClose}>×</button>
+            </header>
+            <div className="py-2 flex flex-col gap-4">
+              <p className="text-[11px] text-zinc-500 leading-relaxed bg-zinc-50 p-2.5 rounded-lg">
+                접수된 신고는 서비스 이용 규칙(음란/광고/명예훼손 등)에 의거하여 즉각 검토 후 삭제 등의 제재 조치가 취해집니다.
+              </p>
+              
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase">신고 사유 선택</span>
+                <div className="flex flex-col gap-1">
+                  {["영리목적/홍보성", "개인정보노출", "음란성/선정성", "욕설/비방/혐오", "도배/스팸", "기타"].map(r => (
+                    <label key={r} className="flex items-center gap-2 py-2 px-3 border border-zinc-150 rounded-xl cursor-pointer hover:bg-zinc-50 active:scale-[0.99] transition-all">
+                      <input 
+                        type="radio" 
+                        name="reportReason" 
+                        value={r} 
+                        checked={reason === r} 
+                        onChange={() => setReason(r)}
+                        className="accent-black w-3.5 h-3.5"
+                      />
+                      <span className="text-xs text-zinc-800 font-medium">{r}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {reason === "기타" && (
+                <label className="text-[10px] font-bold text-zinc-400 flex flex-col gap-1">
+                  상세 신고 사유
+                  <textarea 
+                    value={customReason}
+                    onChange={(e) => setCustomReason(e.target.value)}
+                    maxLength={100}
+                    placeholder="신고 사유를 100자 이내로 자세히 입력해 주세요."
+                    className="border border-zinc-200 p-2 rounded-xl text-xs h-20 resize-none bg-white text-zinc-950 focus:outline-none focus:border-zinc-950"
+                    required
+                  />
+                </label>
+              )}
+
+              <div className="flex gap-2 mt-2">
+                <button type="submit" className="primary flex-1 py-2.5 rounded-xl text-xs font-bold" disabled={loading}>
+                  {loading ? "제출 중..." : "신고 제출"}
+                </button>
+                <button type="button" className="secondary flex-1 py-2.5 rounded-xl text-xs font-bold" onClick={onClose}>
+                  취소
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      );
+    }
+
     // 에타 스타일 커뮤니티 컴포넌트 (익명 제거, 오른쪽 아래 연필 모양 플로팅 글쓰기 버튼 탑재, 상세 페이지 이동 방식)
-    function CommunityView({ communityPosts, onPostClick, onOpenCommunityWrite, onLikePost, onScrapPost }) {
+    function CommunityView({ communityPosts, onPostClick, onOpenCommunityWrite, onLikePost, onScrapPost, onAuthorClick }) {
       const [comCategory, setComCategory] = useState("🔥 인기");
       const [showSearch, setShowSearch] = useState(false);
       const [comSearchQuery, setComSearchQuery] = useState("");
@@ -1051,7 +1195,13 @@
                   >
                     {/* 상단 작성자 정보 및 뱃지 */}
                     <div className="everytime-user-row">
-                      <div className="everytime-user-info">
+                      <div 
+                        className="everytime-user-info cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAuthorClick(post.author);
+                        }}
+                      >
                         <span className="everytime-avatar">
                           {post.avatarImg ? (
                             <img src={post.avatarImg} alt="" className="w-full h-full object-cover" />
@@ -1059,7 +1209,7 @@
                             post.author.slice(0, 1)
                           )}
                         </span>
-                        <span className="everytime-author">{post.author}</span>
+                        <span className="everytime-author hover:underline font-bold">{post.author}</span>
                         <span className="everytime-time">{post.createdAt}</span>
                       </div>
                       {badge && (
@@ -1132,7 +1282,7 @@
     }
 
     // 에타 스타일 커뮤니티 상세 페이지 (댓글 수정/삭제 CRUD, 공감 토글)
-    function CommunityDetailView({ activeComPostId, communityPosts, onBack, onLikePost, onDeletePost, onEditPost, onAddComment, onEditComment, onDeleteComment, onScrapPost, currentUserName, currentUserRole }) {
+    function CommunityDetailView({ activeComPostId, communityPosts, onBack, onLikePost, onDeletePost, onEditPost, onAddComment, onEditComment, onDeleteComment, onScrapPost, currentUserName, currentUserRole, onAuthorClick }) {
       const post = communityPosts.find(p => p.id === activeComPostId);
       if (!post) return (
         <div className="p-4 text-center">
@@ -1210,10 +1360,10 @@
               <div className="community-detail-meta">
                 <span className="font-bold text-zinc-800">{post.category}</span>
                 <span className="mx-1.5">·</span>
-                <span>{post.author}</span>
+                <span className="cursor-pointer hover:underline font-semibold text-zinc-950" onClick={() => onAuthorClick(post.author)}>{post.author}</span>
               </div>
               <div>
-                {(isMyPost || isAdmin) && !isEditingCom && (
+                {!isEditingCom && (
                   <div className="kebab-dropdown-wrapper">
                     <button className="kebab-menu-btn" onClick={() => setShowKebabMenu(!showKebabMenu)} aria-label="메뉴">
                       <i className="fa-solid fa-ellipsis-vertical text-zinc-500"></i>
@@ -1221,7 +1371,21 @@
                     {showKebabMenu && (
                       <div className="kebab-dropdown">
                         {isMyPost && <button onClick={() => { startEdit(); setShowKebabMenu(false); }}>수정</button>}
-                        <button className="delete-btn" onClick={() => { deletePost(); setShowKebabMenu(false); }}>삭제</button>
+                        {(isMyPost || isAdmin) && <button className="delete-btn" onClick={() => { deletePost(); setShowKebabMenu(false); }}>삭제</button>}
+                        {!isMyPost && (
+                          <button 
+                            type="button"
+                            className="text-red-500 font-bold"
+                            onClick={() => {
+                              setShowKebabMenu(false);
+                              if (window.openReportModal) {
+                                window.openReportModal("post", post.id, post.author, post.title + "\n" + post.body);
+                              }
+                            }}
+                          >
+                            신고하기
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1293,10 +1457,10 @@
                 return (
                   <div className="comment-item" key={c.id}>
                     <div className="comment-header">
-                      <span className="comment-author">{c.author}</span>
-                      {isMyComment && (
-                        <div className="comment-actions">
-                          {editingCommentId === c.id ? (
+                      <span className="comment-author cursor-pointer hover:underline" onClick={() => onAuthorClick(c.author)}>{c.author}</span>
+                      <div className="comment-actions">
+                        {isMyComment ? (
+                          editingCommentId === c.id ? (
                             <>
                               <button className="comment-action-btn" onClick={() => saveEditComment(c.id)}>완료</button>
                               <button className="comment-action-btn" onClick={() => setEditingCommentId(null)}>취소</button>
@@ -1306,9 +1470,22 @@
                               <button className="comment-action-btn" onClick={() => startEditComment(c)}><i className="fa-solid fa-pen"></i></button>
                               <button className="comment-action-btn delete" onClick={() => onDeleteComment(post.id, c.id)}><i className="fa-solid fa-trash"></i></button>
                             </>
-                          )}
-                        </div>
-                      )}
+                          )
+                        ) : (
+                          <button 
+                            type="button"
+                            className="comment-action-btn text-red-500" 
+                            title="신고하기"
+                            onClick={() => {
+                              if (window.openReportModal) {
+                                window.openReportModal("comment", c.id, c.author, c.text);
+                              }
+                            }}
+                          >
+                            <i className="fa-solid fa-flag text-[10px]"></i>
+                          </button>
+                        )}
+                      </div>
                     </div>
                     {editingCommentId === c.id ? (
                       <div className="comment-inline-edit">
@@ -1335,7 +1512,7 @@
       );
     }
 
-    function MyPage({ posts, profile, setProfile, categories, onCardClick, followingCount, onSettingsClick, communityPosts = [], onCommunityCardClick, onLikeCommunityPost, onScrapCommunityPost }) {
+    function MyPage({ posts, profile, setProfile, categories, onCardClick, followingList = [], creatorsData = {}, onFollowToggle, onAuthorClick, onAdminCenterClick, onSettingsClick, communityPosts = [], onCommunityCardClick, onLikeCommunityPost, onScrapCommunityPost }) {
       const [isEditing, setIsEditing] = useState(false);
       const [editName, setEditName] = useState(profile.name);
       const [editBio, setEditBio] = useState(profile.bio);
@@ -1345,6 +1522,8 @@
       const [myTab, setMyTab] = useState("posts");
       const [myCategory, setMyCategory] = useState("전체");
       const [scrapSubTab, setScrapSubTab] = useState("recipe"); // "recipe" or "community"
+      const [followModal, setFollowModal] = useState(null); // null, "followers", or "following"
+      const mockFollowers = ["카페투어러", "푸드스타일리스트"];
 
       const myPosts = posts.filter(post => post.author === "나" || post.author === profile.name);
       const scrappedPosts = posts.filter(post => post.scrapped);
@@ -1425,29 +1604,29 @@
 
       return (
         <section className="my-page">
-          <div className="my-card">
+          <div className="bg-zinc-50/50 pt-5 pb-4 border-b border-zinc-200">
             {isEditing ? (
-              <div className="flex flex-col gap-3">
+              <div className="px-4 flex flex-col gap-3">
                 {/* 앱 스타일 프로필 이미지 에디터 */}
-                <div className="flex flex-col items-center gap-2 mb-3 mt-1">
+                <div className="flex flex-col items-center gap-2 mb-2 mt-1">
                   <div 
-                    className="relative w-20 h-20 rounded-full border border-zinc-200 shadow-sm overflow-hidden bg-zinc-100 cursor-pointer active:scale-95 transition-transform"
+                    className="relative w-16 h-16 rounded-full border border-zinc-200 shadow-sm overflow-hidden bg-zinc-100 cursor-pointer active:scale-95 transition-transform"
                     onClick={() => fileInputRef.current.click()}
                   >
                     {editPhoto ? (
                       <img src={editPhoto} alt="프로필 사진" className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-zinc-400 text-2xl font-bold bg-zinc-200">
+                      <div className="w-full h-full flex items-center justify-center text-zinc-400 text-xl font-bold bg-zinc-200">
                         {editName.slice(0, 1)}
                       </div>
                     )}
                     <div className="absolute inset-0 bg-black bg-opacity-35 flex items-center justify-center">
-                      <i className="fa-solid fa-camera text-white text-xs"></i>
+                      <i className="fa-solid fa-camera text-white text-[10px]"></i>
                     </div>
                   </div>
                   <button 
                     type="button" 
-                    className="text-[10px] text-blue-500 font-semibold cursor-pointer"
+                    className="text-[10px] text-zinc-500 font-semibold cursor-pointer"
                     onClick={() => fileInputRef.current.click()}
                   >
                     사진 변경
@@ -1461,56 +1640,64 @@
                   />
                 </div>
 
-                <label className="text-xs font-bold text-zinc-500 flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-zinc-400 flex flex-col gap-1 uppercase">
                   닉네임
-                  <input value={editName} maxLength={12} onChange={(e) => setEditName(e.target.value)} className="border p-2 rounded text-xs" />
+                  <input value={editName} maxLength={12} onChange={(e) => setEditName(e.target.value)} className="border border-zinc-200 p-2 rounded-xl text-xs bg-white text-zinc-950 focus:outline-none focus:border-zinc-950" />
                 </label>
-                <label className="text-xs font-bold text-zinc-500 flex flex-col gap-1">
+                <label className="text-[10px] font-bold text-zinc-400 flex flex-col gap-1 uppercase">
                   한 줄 소개
-                  <textarea value={editBio} maxLength={40} onChange={(e) => setEditBio(e.target.value)} className="border p-2 rounded text-xs h-16 resize-none" placeholder="자기소개를 입력해주세요" />
+                  <textarea value={editBio} maxLength={40} onChange={(e) => setEditBio(e.target.value)} className="border border-zinc-200 p-2 rounded-xl text-xs h-16 resize-none bg-white text-zinc-950 focus:outline-none focus:border-zinc-950" placeholder="자기소개를 입력해주세요" />
                 </label>
                 <div className="flex gap-2 mt-2">
-                  <button className="primary flex-1 py-1.5 rounded text-xs font-bold" onClick={handleSave}>저장</button>
-                  <button className="secondary flex-1 py-1.5 rounded text-xs font-bold" onClick={() => setIsEditing(false)}>취소</button>
+                  <button className="primary flex-1 py-2 rounded-xl text-xs font-bold" onClick={handleSave}>저장</button>
+                  <button className="secondary flex-1 py-2 rounded-xl text-xs font-bold" onClick={() => setIsEditing(false)}>취소</button>
                 </div>
               </div>
             ) : (
-              <div>
-                <div className="flex justify-between items-start gap-3">
-                  <div className="my-profile" style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: "12px" }}>
-                    <span className="avatar overflow-hidden flex-shrink-0">
-                      {profile.avatarImg ? <img src={profile.avatarImg} alt="" className="w-full h-full object-cover" /> : profile.avatar}
-                    </span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <h2 className="font-bold text-zinc-900 truncate" style={{ margin: 0, fontSize: "15px" }}>{profile.name}</h2>
-                      <p style={{ wordBreak: "break-all", whiteSpace: "normal", fontSize: "11px", color: "#71717a", margin: "2px 0 0 0", lineHeight: "1.4" }}>{profile.bio}</p>
+              <div className="px-4">
+                <div className="flex items-center gap-4">
+                  {/* Large Premium Avatar */}
+                  <span className="w-16 h-16 rounded-full border-2 border-white shadow-md overflow-hidden bg-zinc-200 flex-shrink-0 flex items-center justify-center text-zinc-800 text-xl font-bold">
+                    {profile.avatarImg ? <img src={profile.avatarImg} alt="" className="w-full h-full object-cover" /> : profile.avatar}
+                  </span>
+                  
+                  {/* Nickname & Bio & Small Action Buttons */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="font-extrabold text-zinc-950 text-base truncate m-0">{profile.name}</h2>
+                      <button 
+                        className="bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[10px] font-bold px-2.5 py-0.5 rounded-md transition-all active:scale-95 flex-shrink-0"
+                        onClick={startEditing}
+                      >
+                        수정
+                      </button>
+                      {profile.role === "admin" && (
+                        <button 
+                          className="bg-red-50 hover:bg-red-100 text-red-650 border border-red-100 text-[10px] font-bold px-2 py-0.5 rounded-md transition-all active:scale-95 flex-shrink-0"
+                          onClick={() => onAdminCenterClick()}
+                          title="신고 접수 (관리자 센터)"
+                        >
+                          관리자
+                        </button>
+                      )}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <button className="secondary text-[11px] px-2 py-1.5 rounded font-bold" onClick={startEditing}>수정</button>
-                    
-                    <button 
-                      className="text-zinc-500 hover:text-zinc-950 p-1.5 text-xs border border-zinc-200 rounded-lg active:scale-95 transition-transform" 
-                      onClick={onSettingsClick} 
-                      title="설정"
-                    >
-                      <i className="fa-solid fa-gear"></i>
-                    </button>
+                    <p className="text-[10px] text-zinc-500 mt-1 line-clamp-2 leading-relaxed">{profile.bio || "자기소개가 등록되지 않았습니다."}</p>
                   </div>
                 </div>
-                
-                <div className="stats mt-4 border-t border-zinc-100 pt-3 text-center">
-                  <div className="stat">
-                    <strong>{myPosts.length}</strong>
-                    <span>내 게시글</span>
+
+                {/* Clean, borderless large stats (Instagram/TikTok style) */}
+                <div className="flex justify-around items-center mt-5 mb-1 px-2">
+                  <div className="flex flex-col items-center">
+                    <span className="text-lg font-black text-zinc-950 leading-none">{myPosts.length}</span>
+                    <span className="text-[10px] text-zinc-450 font-bold mt-2">게시물</span>
                   </div>
-                  <div className="stat">
-                    <strong>0</strong>
-                    <span>내 팔로워</span>
+                  <div className="flex flex-col items-center cursor-pointer active:scale-95 transition-transform" onClick={() => setFollowModal("followers")}>
+                    <span className="text-lg font-black text-zinc-950 leading-none">{mockFollowers.length}</span>
+                    <span className="text-[10px] text-zinc-450 font-bold mt-2 hover:text-zinc-800">팔로워</span>
                   </div>
-                  <div className="stat">
-                    <strong>{followingCount}</strong>
-                    <span>내 팔로잉</span>
+                  <div className="flex flex-col items-center cursor-pointer active:scale-95 transition-transform" onClick={() => setFollowModal("following")}>
+                    <span className="text-lg font-black text-zinc-950 leading-none">{followingList.length}</span>
+                    <span className="text-[10px] text-zinc-450 font-bold mt-2 hover:text-zinc-800">팔로잉</span>
                   </div>
                 </div>
               </div>
@@ -1685,6 +1872,69 @@
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {followModal && (
+            <div className="sheet-backdrop animate-fade-in" onClick={() => setFollowModal(null)} style={{ zIndex: 1200 }}>
+              <section className="sheet animate-slide-up" onClick={(e) => e.stopPropagation()}>
+                <header className="sheet-head">
+                  <h2>{followModal === "followers" ? "팔로워" : "팔로잉"}</h2>
+                  <button type="button" onClick={() => setFollowModal(null)}>×</button>
+                </header>
+                <div className="py-2 max-h-[350px] overflow-y-auto no-scrollbar">
+                  {(() => {
+                    const list = followModal === "followers" ? mockFollowers : followingList;
+                    if (!list || list.length === 0) {
+                      return (
+                        <div className="text-center py-12 text-zinc-400 text-xs">
+                          {followModal === "followers" ? "팔로워가 없습니다." : "팔로잉하는 사용자가 없습니다."}
+                        </div>
+                      );
+                    }
+                    return list.map(username => {
+                      const userData = creatorsData[username] || { 
+                        bio: "플레이팅 크리에이터입니다.", 
+                        avatarImg: "" 
+                      };
+                      const isFollowing = followingList.includes(username);
+                      return (
+                        <div key={username} className="flex items-center justify-between py-2.5 border-b border-zinc-100 last:border-none">
+                          <div 
+                            className="flex items-center gap-3 cursor-pointer min-w-0 flex-1"
+                            onClick={() => {
+                              setFollowModal(null);
+                              onAuthorClick(username);
+                            }}
+                          >
+                            <span className="w-9 h-9 rounded-full border border-zinc-200 overflow-hidden bg-zinc-100 flex items-center justify-center text-zinc-700 text-xs font-bold flex-shrink-0">
+                              {userData.avatarImg ? (
+                                <img src={userData.avatarImg} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                username.slice(0, 1)
+                              )}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <strong className="text-xs text-zinc-900 block truncate">{username}</strong>
+                              <span className="text-[10px] text-zinc-400 block truncate mt-0.5">{userData.bio}</span>
+                            </div>
+                          </div>
+                          <button 
+                            className={`text-[10px] font-bold px-3 py-1.5 rounded-lg active:scale-95 transition-all ${
+                              isFollowing 
+                                ? "bg-zinc-100 text-zinc-650 hover:bg-zinc-200" 
+                                : "bg-zinc-950 text-white hover:bg-zinc-800"
+                            }`}
+                            onClick={() => onFollowToggle(username)}
+                          >
+                            {isFollowing ? "팔로잉" : "팔로우"}
+                          </button>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </section>
             </div>
           )}
         </section>
@@ -2001,31 +2251,139 @@
         </div>
       );
     }
-    function LoginModal({ onClose, onLogin }) {
-      const [showDemo, setShowDemo] = React.useState(false);
+    function LoginModal({ onClose, onLogin, deviceId }) {
+      const [viewMode, setViewMode] = React.useState("login"); // "login" or "signup"
       const [username, setUsername] = React.useState("");
       const [password, setPassword] = React.useState("");
+      const [confirmPassword, setConfirmPassword] = React.useState("");
+      const [nickname, setNickname] = React.useState("");
       const [error, setError] = React.useState("");
+      const [showRulesModal, setShowRulesModal] = React.useState(false);
 
-      async function handleDemoLogin() {
+      async function handleLogin() {
         setError("");
+        const id = username.trim();
+        const pw = password.trim();
+        if (!id || !pw) {
+          setError("아이디와 비밀번호를 입력해주세요.");
+          return;
+        }
+
+        let targetEmail = id + "@myplating.kr";
+        let targetPw = pw;
+        if (id === "google-tester" && pw === "plating1234") {
+          targetEmail = "google-tester@myplating.kr";
+          targetPw = "plating1234";
+        }
+
         try {
-          const response = await fetch("/api/demo-login", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ username, password })
-          });
-          const result = await response.json();
-          if (result.success) {
-            onClose();
-            window.location.href = "/index.html?login=success";
-          } else {
-            setError(result.message || "Invalid credentials");
+          const userCredential = await auth.signInWithEmailAndPassword(targetEmail, targetPw);
+          const user = userCredential.user;
+          const token = await user.getIdToken();
+          
+          if (token && window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+            await window.flutter_inappwebview.callHandler('saveToken', { token });
           }
+          
+          await fetch(`/profile?token=${encodeURIComponent(token)}`);
+          onClose();
         } catch (e) {
-          setError("Network error");
+          console.error("Login error:", e);
+          if (e.code === "auth/user-not-found" || e.code === "auth/wrong-password" || e.code === "auth/invalid-credential") {
+            if (id === "google-tester" && pw === "plating1234") {
+              try {
+                const userCredential = await auth.createUserWithEmailAndPassword(targetEmail, targetPw);
+                const user = userCredential.user;
+                await user.updateProfile({ displayName: "GoogleTester" });
+                await db.collection("users").doc(user.uid).set({
+                  nickname: "GoogleTester",
+                  role: "user",
+                  username: "google-tester",
+                  registeredAt: new Date().toISOString()
+                });
+                const token = await user.getIdToken();
+                if (token && window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+                  await window.flutter_inappwebview.callHandler('saveToken', { token });
+                }
+                await fetch(`/profile?token=${encodeURIComponent(token)}`);
+                onClose();
+                return;
+              } catch (se) {
+                setError("데모 계정 자동 생성에 실패했습니다: " + se.message);
+                return;
+              }
+            }
+            setError("아이디 또는 비밀번호가 올바르지 않습니다.");
+          } else {
+            setError(e.message || "로그인 중 오류가 발생했습니다.");
+          }
+        }
+      }
+
+      async function handleSignup() {
+        setError("");
+        const id = username.trim();
+        const pw = password.trim();
+        const cpw = confirmPassword.trim();
+        const nick = nickname.trim();
+
+        if (!id || !pw || !cpw || !nick) {
+          setError("모든 필수 항목을 입력해주세요.");
+          return;
+        }
+        if (pw !== cpw) {
+          setError("비밀번호가 비밀번호 확인과 일치하지 않습니다.");
+          return;
+        }
+        if (id.length < 4) {
+          setError("아이디는 최소 4글자 이상이어야 합니다.");
+          return;
+        }
+        if (pw.length < 4) {
+          setError("비밀번호는 최소 4글자 이상이어야 합니다.");
+          return;
+        }
+
+        try {
+          const checkRes = await fetch("/api/signup/check", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: id, nickname: nick, deviceId })
+          });
+          const checkResult = await checkRes.json();
+          if (!checkResult.success) {
+            setError(checkResult.message || "이미 존재하는 회원 정보입니다.");
+            return;
+          }
+
+          const targetEmail = id + "@myplating.kr";
+          const userCredential = await auth.createUserWithEmailAndPassword(targetEmail, pw);
+          const user = userCredential.user;
+          
+          await user.updateProfile({ displayName: nick });
+          await db.collection("users").doc(user.uid).set({
+            nickname: nick,
+            role: "user",
+            username: id,
+            deviceId: deviceId || "",
+            registeredAt: new Date().toISOString()
+          });
+
+          const token = await user.getIdToken();
+          if (token && window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+            await window.flutter_inappwebview.callHandler('saveToken', { token });
+          }
+
+          await fetch(`/profile?token=${encodeURIComponent(token)}`);
+          alert("회원가입이 완료되었습니다!");
+          onClose();
+        } catch (e) {
+          console.error("Signup error:", e);
+          if (e.code === "auth/email-already-in-use") {
+            setError("이미 사용 중인 아이디입니다.");
+          } else {
+            setError(e.message || "회원가입에 실패했습니다.");
+          }
         }
       }
 
@@ -2033,61 +2391,296 @@
         <div className="sheet-backdrop" onClick={onClose}>
           <section className="sheet" onClick={(e) => e.stopPropagation()}>
             <header className="sheet-head">
-              <h2>간편 로그인</h2>
+              <h2>{viewMode === "login" ? "로그인" : "회원가입"}</h2>
               <button type="button" onClick={() => onClose()}>×</button>
             </header>
-            <div className="text-center py-4">
-              <p className="text-sm text-zinc-800 font-bold mb-1">플레이팅에 오신 것을 환영합니다</p>
-              <p className="text-xs text-zinc-400 mb-6">글쓰기와 링크 수익 창출은 로그인 후 사용 가능합니다.</p>
+            <div className="text-center py-4 px-2">
+              <p className="text-sm text-zinc-950 font-extrabold mb-1">플레이팅에 오신 것을 환영합니다</p>
+              <p className="text-[10px] text-zinc-400 mb-6">글쓰기와 장소 연동 수익 창출은 로그인 후 가능합니다.</p>
               
-              <button className="full kakao-btn mb-2" onClick={() => onLogin("kakao")}>
-                <i className="fa-solid fa-comment text-zinc-950"></i> 카카오로 시작하기
-              </button>
-              <p className="text-[10px] text-zinc-400 mb-4 bg-zinc-50 py-1.5 px-3 rounded-lg inline-block">
-                💡 계정과 비밀번호 입력 없이 <strong>카카오톡으로 간편하게 로그인</strong>해 보세요
-              </p>
+              {viewMode === "login" ? (
+                /* 로그인 모드 */
+                <div className="text-left max-w-sm mx-auto">
+                  {/* 카카오 소셜 간편 로그인 */}
+                  <button className="full kakao-btn mb-4 w-full" onClick={() => onLogin("kakao")}>
+                    <i className="fa-solid fa-comment text-zinc-950 mr-1.5"></i> 카카오톡 간편 시작하기
+                  </button>
 
-              <div className="mt-4">
-                <button 
-                  type="button"
-                  className="text-[11px] text-zinc-400 hover:text-zinc-600 underline" 
-                  onClick={() => setShowDemo(!showDemo)}
-                >
-                  Demo Account Login (for Reviewers)
-                </button>
-                
-                {showDemo && (
-                  <div className="mt-3 p-3 bg-zinc-50 border border-zinc-200 rounded-xl text-left">
-                    <label className="block text-[10px] font-bold text-zinc-500 mb-1">Username / Email</label>
+                  <div className="relative flex py-2 items-center mb-3">
+                    <div className="flex-grow border-t border-zinc-100"></div>
+                    <span className="flex-shrink mx-3 text-[10px] text-zinc-300 font-bold uppercase">또는 일반 아이디 로그인</span>
+                    <div className="flex-grow border-t border-zinc-100"></div>
+                  </div>
+
+                  {/* ID/PW 입력창 */}
+                  <div className="flex flex-col gap-2.5">
                     <input 
                       type="text" 
-                      className="w-full px-2.5 py-1.5 border border-zinc-200 rounded-md text-xs mb-2 focus:outline-none focus:border-zinc-900 bg-white text-zinc-900" 
-                      placeholder="Username" 
+                      className="w-full px-3 py-2 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:border-zinc-950 bg-white text-zinc-950" 
+                      placeholder="아이디" 
                       value={username} 
                       onChange={(e) => setUsername(e.target.value)} 
                     />
-                    <label className="block text-[10px] font-bold text-zinc-500 mb-1">Password</label>
                     <input 
                       type="password" 
-                      className="w-full px-2.5 py-1.5 border border-zinc-200 rounded-md text-xs mb-2 focus:outline-none focus:border-zinc-900 bg-white text-zinc-900" 
-                      placeholder="Password" 
+                      className="w-full px-3 py-2 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:border-zinc-950 bg-white text-zinc-950" 
+                      placeholder="비밀번호" 
                       value={password} 
                       onChange={(e) => setPassword(e.target.value)} 
                     />
-                    {error && <p className="text-[10px] text-red-500 mb-2">{error}</p>}
+                    
+                    {error && <p className="text-[10px] text-red-500 font-semibold mt-0.5">{error}</p>}
+                    
                     <button 
                       type="button"
-                      className="w-full py-2 bg-zinc-900 text-white rounded-md text-xs font-semibold active:bg-zinc-800"
-                      onClick={handleDemoLogin}
+                      className="w-full py-2.5 bg-zinc-950 text-white rounded-xl text-xs font-bold active:bg-zinc-800 transition-colors shadow-sm mt-1"
+                      onClick={handleLogin}
                     >
-                      Login
+                      로그인
                     </button>
                   </div>
-                )}
-              </div>
+
+                  <div className="text-center mt-5 flex justify-center gap-3 text-[11px]">
+                    <button type="button" className="text-zinc-400 hover:text-zinc-650 underline font-semibold" onClick={() => { setViewMode("signup"); setError(""); }}>
+                      일반 회원가입
+                    </button>
+                    <span className="text-zinc-200">|</span>
+                    <button type="button" className="text-zinc-400 hover:text-zinc-650 underline" onClick={() => { setUsername("google-tester"); setPassword("plating1234"); setError(""); }}>
+                      심사용 데모 계정 세팅
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* 회원가입 모드 */
+                <div className="text-left max-w-sm mx-auto flex flex-col gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-400 mb-1.5 uppercase">아이디</label>
+                    <input 
+                      type="text" 
+                      className="w-full px-3 py-2 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:border-zinc-950 bg-white text-zinc-950" 
+                      placeholder="4글자 이상의 영문/숫자 아이디" 
+                      value={username} 
+                      onChange={(e) => setUsername(e.target.value)} 
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-400 mb-1.5 uppercase">비밀번호</label>
+                    <input 
+                      type="password" 
+                      className="w-full px-3 py-2 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:border-zinc-950 bg-white text-zinc-950" 
+                      placeholder="4글자 이상의 비밀번호" 
+                      value={password} 
+                      onChange={(e) => setPassword(e.target.value)} 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-400 mb-1.5 uppercase">비밀번호 확인</label>
+                    <input 
+                      type="password" 
+                      className="w-full px-3 py-2 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:border-zinc-950 bg-white text-zinc-950" 
+                      placeholder="비밀번호 재입력" 
+                      value={confirmPassword} 
+                      onChange={(e) => setConfirmPassword(e.target.value)} 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-400 mb-1.5 uppercase">닉네임</label>
+                    <input 
+                      type="text" 
+                      className="w-full px-3 py-2 border border-zinc-200 rounded-xl text-xs focus:outline-none focus:border-zinc-950 bg-white text-zinc-950" 
+                      placeholder="활동할 닉네임" 
+                      value={nickname} 
+                      onChange={(e) => setNickname(e.target.value)} 
+                    />
+                  </div>
+
+                  <p className="text-[9px] text-zinc-400 bg-zinc-50 py-2 px-3 rounded-lg leading-relaxed">
+                    🔒 <strong>보안 및 권리남용 방지 고지</strong><br/>
+                    저희 서비스는 최소한의 기본 정보만 안전하게 보관합니다. 비정상 다중 계정 생성을 방지하기 위해 <strong>1개 기기당 1개의 계정만 생성</strong>할 수 있도록 정책적으로 제한됩니다.
+                  </p>
+
+                  {error && <p className="text-[10px] text-red-500 font-semibold mt-0.5">{error}</p>}
+
+                  <div className="flex gap-2 mt-2">
+                    <button 
+                      type="button"
+                      className="flex-1 py-2.5 bg-zinc-950 text-white rounded-xl text-xs font-bold active:bg-zinc-800 transition-colors shadow-sm"
+                      onClick={handleSignup}
+                    >
+                      가입하기
+                    </button>
+                    <button 
+                      type="button"
+                      className="flex-1 py-2.5 bg-zinc-100 text-zinc-700 rounded-xl text-xs font-bold active:bg-zinc-200 transition-colors"
+                      onClick={() => { setViewMode("login"); setError(""); }}
+                    >
+                      취소
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </section>
         </div>
+      );
+    }
+
+    // --- 3.2. 관리자 신고 관리 센터 화면 ---
+    function AdminReportsView({ onBack }) {
+      const [reports, setReports] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState("");
+      const [memoMap, setMemoMap] = useState({});
+
+      useEffect(() => {
+        fetchReports();
+      }, []);
+
+      async function fetchReports() {
+        setLoading(true);
+        setError("");
+        try {
+          const res = await fetch("/api/reports");
+          const data = await res.json();
+          if (data.success) {
+            setReports(data.reports || []);
+          } else {
+            setError(data.message || "신고 정보를 가져오지 못했습니다.");
+          }
+        } catch (err) {
+          setError("네트워크 오류가 발생했습니다.");
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      async function handleAction(reportId, action) {
+        const memo = (memoMap[reportId] || "").trim();
+        if (action === "block" && !confirm("정말로 이 사용자를 차단하시겠습니까?")) return;
+        if (action === "delete" && !confirm("정말로 이 콘텐츠를 삭제 처리하시겠습니까?")) return;
+
+        try {
+          const res = await fetch("/api/reports/handle", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              reportId,
+              action,
+              adminMemo: memo
+            })
+          });
+          const data = await res.json();
+          if (data.success) {
+            alert("정상 처리되었습니다.");
+            // Refresh list
+            fetchReports();
+          } else {
+            alert(data.message || "처리에 실패했습니다.");
+          }
+        } catch (err) {
+          alert("네트워크 오류가 발생했습니다.");
+        }
+      }
+
+      return (
+        <section className="p-4 pb-20 text-left">
+          <div className="mb-4 flex items-center justify-between">
+            <button className="text-zinc-500 text-xs py-1.5 active:scale-95 transition-transform" onClick={onBack}>
+              <i className="fa-solid fa-chevron-left mr-1"></i> 마이페이지
+            </button>
+            <h2 className="text-xs font-bold text-zinc-950">🚨 신고 관리 센터 (관리자 전용)</h2>
+          </div>
+
+          {loading ? (
+            <div className="py-12 text-center text-xs text-zinc-400">신고 목록을 불러오는 중...</div>
+          ) : error ? (
+            <div className="py-12 text-center text-xs text-red-500">{error}</div>
+          ) : reports.length === 0 ? (
+            <div className="py-12 text-center text-xs text-zinc-400">접수된 신고가 없습니다. 깨끗한 서비스 상태입니다!</div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {reports.map(r => (
+                <div key={r.id} className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm">
+                  <div className="flex justify-between items-start mb-2">
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                      r.status === "Pending" ? "bg-amber-50 text-amber-600 border border-amber-100" : "bg-zinc-100 text-zinc-500 border border-zinc-200"
+                    }`}>
+                      {r.status === "Pending" ? "대기 중" : "처리 완료"}
+                    </span>
+                    <span className="text-[10px] text-zinc-400 font-mono">{new Date(r.timestamp).toLocaleDateString()}</span>
+                  </div>
+
+                  <div className="text-xs text-zinc-800 mb-2">
+                    <div>
+                      <strong className="text-zinc-500 mr-2 uppercase tracking-wide text-[9px]">유형:</strong> 
+                      <span className="font-semibold">{r.targetType === "post" ? "게시글" : "댓글"}</span>
+                    </div>
+                    <div className="mt-1">
+                      <strong className="text-zinc-500 mr-2 uppercase tracking-wide text-[9px]">피신고자:</strong> 
+                      <span className="font-semibold text-zinc-900">{r.author}</span>
+                    </div>
+                    <div className="mt-1">
+                      <strong className="text-zinc-500 mr-2 uppercase tracking-wide text-[9px]">신고 사유:</strong> 
+                      <span className="text-red-650 font-bold">{r.reason}</span>
+                    </div>
+                    <div className="mt-1.5 bg-zinc-50 p-2.5 rounded-xl text-zinc-700 text-[11px] leading-relaxed border border-zinc-100">
+                      <strong className="text-[9px] text-zinc-400 block mb-1">신고 대상 본문</strong>
+                      {r.text || "(내용 없음)"}
+                    </div>
+                  </div>
+
+                  <div className="text-[10px] text-zinc-450 mb-3">
+                    신고자: <span className="font-medium text-zinc-700">{r.reporter}</span>
+                  </div>
+
+                  {r.status === "Pending" && (
+                    <div className="flex flex-col gap-2 border-t border-zinc-100 pt-3">
+                      <input 
+                        type="text" 
+                        placeholder="처리에 관한 관리자 메모를 작성해 주세요..." 
+                        value={memoMap[r.id] || ""} 
+                        onChange={(e) => setMemoMap({ ...memoMap, [r.id]: e.target.value })}
+                        className="w-full border border-zinc-200 p-2 rounded-xl text-xs bg-white text-zinc-950 focus:outline-none focus:border-zinc-950"
+                      />
+                      <div className="flex gap-1.5">
+                        <button 
+                          type="button"
+                          className="flex-1 bg-red-600 hover:bg-red-750 text-white text-[10px] font-bold py-1.5 rounded-lg transition-all active:scale-97"
+                          onClick={() => handleAction(r.id, "delete")}
+                        >
+                          콘텐츠 삭제
+                        </button>
+                        <button 
+                          type="button"
+                          className="flex-1 bg-zinc-900 hover:bg-zinc-800 text-white text-[10px] font-bold py-1.5 rounded-lg transition-all active:scale-97"
+                          onClick={() => handleAction(r.id, "block")}
+                        >
+                          작성자 차단
+                        </button>
+                        <button 
+                          type="button"
+                          className="flex-1 bg-zinc-150 hover:bg-zinc-200 text-zinc-700 text-[10px] font-bold py-1.5 rounded-lg transition-all active:scale-97"
+                          onClick={() => handleAction(r.id, "ignore")}
+                        >
+                          무시하기
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {r.status === "Resolved" && r.adminMemo && (
+                    <div className="mt-2 bg-zinc-50 border border-zinc-150 p-2 rounded-lg text-[10px] text-zinc-650">
+                      <strong>관리자 조치 메모:</strong> {r.adminMemo}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       );
     }
 
@@ -2126,8 +2719,40 @@
 
     // --- 3.1 설정 화면 및 커뮤니티 전용 글쓰기 화면 컴포넌트 선언 ---
     function SettingsView({ onBack, onLogout, onDeleteAccount }) {
-      const [pushEnabled, setPushEnabled] = useState(true);
-      const [marketingEnabled, setMarketingEnabled] = useState(false);
+      const [pushEnabled, setPushEnabled] = useState(() => {
+        const val = localStorage.getItem("push_enabled");
+        return val === null ? true : val === "true";
+      });
+      const [marketingEnabled, setMarketingEnabled] = useState(() => {
+        const val = localStorage.getItem("marketing_enabled");
+        return val === null ? false : val === "true";
+      });
+
+      function handlePushToggle(checked) {
+        setPushEnabled(checked);
+        localStorage.setItem("push_enabled", checked ? "true" : "false");
+        if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+          window.flutter_inappwebview.callHandler('togglePushNotification', { enabled: checked });
+        }
+        if (checked) {
+          alert("새로운 댓글 알림이 활성화되었습니다.");
+        } else {
+          alert("새로운 댓글 알림이 비활성화되었습니다.");
+        }
+      }
+
+      function handleMarketingToggle(checked) {
+        setMarketingEnabled(checked);
+        localStorage.setItem("marketing_enabled", checked ? "true" : "false");
+        if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+          window.flutter_inappwebview.callHandler('toggleMarketingNotification', { enabled: checked });
+        }
+        if (checked) {
+          alert("마케팅 정보 수신 동의 처리가 완료되었습니다.");
+        } else {
+          alert("마케팅 정보 수신 동의가 철회되었습니다.");
+        }
+      }
 
       async function handleClearCache() {
         if (await window.showConfirm("앱의 캐시 및 저장 데이터를 모두 초기화하시겠습니까?\n이 작업은 복구할 수 없습니다.")) {
@@ -2156,11 +2781,11 @@
             <h3 className="text-xs font-bold text-zinc-400 mb-3 uppercase tracking-wider">알림 설정</h3>
             <div className="flex justify-between items-center py-2.5 border-b border-zinc-100">
               <span className="text-xs font-medium text-zinc-800">새로운 댓글 알림</span>
-              <input type="checkbox" checked={pushEnabled} onChange={(e) => setPushEnabled(e.target.checked)} className="w-4 h-4 accent-black" />
+              <input type="checkbox" checked={pushEnabled} onChange={(e) => handlePushToggle(e.target.checked)} className="w-4 h-4 accent-black" />
             </div>
             <div className="flex justify-between items-center py-2.5">
               <span className="text-xs font-medium text-zinc-800">마케팅 정보 수신 동의</span>
-              <input type="checkbox" checked={marketingEnabled} onChange={(e) => setMarketingEnabled(e.target.checked)} className="w-4 h-4 accent-black" />
+              <input type="checkbox" checked={marketingEnabled} onChange={(e) => handleMarketingToggle(e.target.checked)} className="w-4 h-4 accent-black" />
             </div>
           </div>
 
@@ -2401,6 +3026,8 @@
       const [activePostId, setActivePostId] = useState(null); // ID 기반 조회로 변경
       const [activeUser, setActiveUser] = useState(null);
       const [activeComPostId, setActiveComPostId] = useState(null); // 커뮤니티 글 ID 기반 상세 뷰용
+      const [deviceId, setDeviceId] = useState("");
+      const [reportModalData, setReportModalData] = useState({ isOpen: false, targetType: "post", targetId: "", author: "", text: "" });
 
       const [profile, setProfile] = useState({
         name: "나의 플레이팅",
@@ -2416,9 +3043,61 @@
 
       const [dbLoaded, setDbLoaded] = useState(false); // IndexedDB 로드 완료 플래그
 
+      function loadBackendPosts() {
+        fetch("/api/posts")
+          .then(r => r.json())
+          .then(data => {
+            if (data.success && data.posts) {
+              const mapped = data.posts.map(p => ({
+                ...p,
+                liked: p.likedBy?.includes(profile.name) || false,
+                scrapped: p.scrappedBy?.includes(profile.name) || false
+              }));
+              setPosts(mapped);
+            }
+          })
+          .catch(e => console.error("Error loading posts:", e));
+      }
+
+      function loadBackendCommunityPosts() {
+        fetch("/api/community-posts")
+          .then(r => r.json())
+          .then(data => {
+            if (data.success && data.communityPosts) {
+              const mapped = data.communityPosts.map(p => ({
+                ...p,
+                liked: p.likedBy?.includes(profile.name) || false,
+                scrapped: p.scrappedBy?.includes(profile.name) || false
+              }));
+              setCommunityPosts(mapped);
+            }
+          })
+          .catch(e => console.error("Error loading community posts:", e));
+      }
+
+      useEffect(() => {
+        loadBackendPosts();
+        loadBackendCommunityPosts();
+      }, [isLoggedIn, profile.name]);
+
       // 뒤로가기 브라우저 역사 연동 (HTML5 History API)
       const isInitialMount = useRef(true);
       const isPoppingState = useRef(false);
+
+      useEffect(() => {
+        window.openReportModal = (targetType, targetId, author, text) => {
+          setReportModalData({
+            isOpen: true,
+            targetType,
+            targetId,
+            author,
+            text
+          });
+        };
+        return () => {
+          delete window.openReportModal;
+        };
+      }, []);
 
       useEffect(() => {
         if (dbLoaded) {
@@ -2469,47 +3148,217 @@
         return () => window.removeEventListener("popstate", handlePopState);
       }, []);
 
-      // 2. 마운트 시 IndexedDB 복원 (Hydration)
+      // 2. 마운트 시 디바이스 정보 조회, IndexedDB 및 네이티브 복원 (Hydration)
       useEffect(() => {
-        const loadPromises = [
-          getDBData("foodhouse_posts").then(saved => { if (saved) setPosts(saved); }),
-          getDBData("foodhouse_profile").then(saved => { if (saved) setProfile(saved); }),
-          getDBData("foodhouse_following").then(saved => { if (saved) setFollowingList(saved); }),
-          getDBData("foodhouse_creators_data").then(saved => { if (saved) setCreatorsData(saved); }),
-          getDBData("foodhouse_com_posts").then(saved => { if (saved) setCommunityPosts(saved); }),
-          getDBData("foodhouse_logged_in").then(saved => { if (saved === "true") setIsLoggedIn(true); })
-        ];
+        // 2.1. 네이티브 웹뷰 플랫폼 연동 및 디바이스 ID 획득
+        const handleReady = async () => {
+          if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+            window.flutter_inappwebview.callHandler('webAppReady').catch(e => console.error(e));
+            window.flutter_inappwebview.callHandler('getDeviceId')
+              .then(id => { if (id) setDeviceId(id); })
+              .catch(e => console.error(e));
 
-        Promise.all(loadPromises)
-          .then(() => {
-            setDbLoaded(true);
-            // 백엔드 세션 조회하여 로그인 정보 동기화
-            fetch("/profile")
-              .then(r => r.json())
-              .then(res => {
-                if (res.isLoggedIn && res.user) {
-                  setIsLoggedIn(true);
-                  setDBData("foodhouse_logged_in", "true").catch(e => console.error(e));
-                  setProfile(prev => ({
-                    ...prev,
-                    name: res.user.nickname,
-                    bio: res.user.email || "카카오 연동 프로필",
-                    avatarImg: res.user.profile_image || "",
-                    role: res.user.role || "user"
-                  }));
-                } else {
-                  // 백엔드가 로그아웃 상태이면 클라이언트 상태도 동기화
-                  setIsLoggedIn(false);
-                  setDBData("foodhouse_logged_in", "false").catch(e => console.error(e));
+            // 네이티브에서 크레덴셜 자동 복구 시도 (브릿지가 늦게 준비되었을 때 대응)
+            try {
+              const user = auth.currentUser;
+              if (!user) {
+                const nativeToken = await window.flutter_inappwebview.callHandler('readToken');
+                if (nativeToken) {
+                  console.log("[handleReady Recovery] Recovering session from native token:", nativeToken);
+                  const credential = JSON.parse(nativeToken);
+                  if (credential && credential.type === "local") {
+                    await auth.signInWithEmailAndPassword(credential.username + "@myplating.kr", credential.password);
+                  } else if (credential && credential.type === "kakao") {
+                    await auth.signInWithEmailAndPassword(`kakao_${credential.kakaoId}@myplating.kr`, `kakao_${credential.kakaoId}_plating`);
+                  }
                 }
-              })
-              .catch(err => console.error("Profile sync error:", err));
-          })
-          .catch(e => {
-            console.error("IndexedDB 로드 오류: ", e);
-            setDbLoaded(true); // 에러 발생 시 기본값으로 구동 지속
+              }
+            } catch (e) {
+              console.error("[handleReady Recovery] Error:", e);
+            }
+          }
+        };
+
+        if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+          handleReady();
+        } else {
+          window.addEventListener("flutterInAppWebViewPlatformReady", handleReady);
+        }
+
+        // 2.2. 세션 복원 및 토큰 동기화
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlToken = urlParams.get("token");
+
+        // Firebase Auth 상태 리스너 등록 (단 한 번 등록되어 생명주기 관리)
+        useEffect(() => {
+          console.log("[Firebase Auth] Registering onAuthStateChanged listener...");
+          const unsubscribe = auth.onAuthStateChanged(async (user) => {
+            console.log("[Firebase Auth] onAuthStateChanged active. User object:", user);
+            if (user) {
+              console.log("[Firebase Auth] Auto-login successful. User email:", user.email);
+              
+              // Get details from Firestore users collection
+              let nickname = user.displayName || user.email.split("@")[0];
+              let role = "user";
+              let bio = user.email;
+              let avatarImg = user.photoURL || "";
+
+              try {
+                const doc = await db.collection("users").doc(user.uid).get();
+                if (doc.exists) {
+                  const userData = doc.data();
+                  nickname = userData.nickname || nickname;
+                  role = userData.role || role;
+                  bio = userData.bio || bio;
+                  avatarImg = userData.avatarImg || avatarImg;
+                }
+              } catch (err) {
+                console.error("[Firebase Auth] Firestore user doc read error:", err);
+              }
+
+              const newProfile = {
+                name: nickname,
+                bio,
+                avatar: nickname.slice(0, 1),
+                avatarImg,
+                role
+              };
+
+              setProfile(newProfile);
+              setIsLoggedIn(true);
+
+              // Get fresh ID token
+              const token = await user.getIdToken();
+              console.log("[Firebase Auth] Synchronizing profile with Express session via ID token...");
+              
+              // Sync session with Express server
+              fetch(`/profile?token=${encodeURIComponent(token)}`)
+                .then(r => r.json())
+                .then(res => {
+                  console.log("[Express Session Sync] Sync response:", res);
+                });
+
+            } else {
+              console.log("[Firebase Auth] No active session found or logged out.");
+              setIsLoggedIn(false);
+              setProfile({
+                name: "나의 플레이팅",
+                bio: "내가 올린 레시피와 구매 링크를 관리합니다.",
+                avatar: "나",
+                avatarImg: "",
+                role: "user"
+              });
+              
+              // Clear express session
+              fetch("/profile/logout", { method: "POST" }).catch(e => console.error(e));
+            }
           });
+
+          return () => unsubscribe();
+        }, []);
+
+        async function initSession() {
+          // IndexedDB 로컬 기본 설정 로딩
+          const loadPromises = [
+            getDBData("foodhouse_posts").then(saved => { if (saved) setPosts(saved); }),
+            getDBData("foodhouse_profile").then(saved => { if (saved) setProfile(saved); }),
+            getDBData("foodhouse_following").then(saved => { if (saved) setFollowingList(saved); }),
+            getDBData("foodhouse_creators_data").then(saved => { if (saved) setCreatorsData(saved); }),
+            getDBData("foodhouse_com_posts").then(saved => { if (saved) setCommunityPosts(saved); }),
+            getDBData("foodhouse_logged_in").then(saved => { if (saved === "true") setIsLoggedIn(true); })
+          ];
+
+          try {
+            await Promise.all(loadPromises);
+          } catch (e) {
+            console.error("IndexedDB load error:", e);
+          }
+          setDbLoaded(true);
+
+          // URL에 카카오 토큰 파라미터가 들어온 경우 (카카오 로그인 성공 후 리다이렉트 콜백)
+          if (urlToken) {
+            console.log("[Kakao Callback] Detected URL token. Initiating backend sync...");
+            window.history.replaceState({}, document.title, window.location.pathname);
+            
+            try {
+              // 1. 카카오 유저 정보 조회
+              const response = await fetch(`/profile?token=${encodeURIComponent(urlToken)}`);
+              const res = await response.json();
+              if (res.isLoggedIn && res.user) {
+                console.log("[Kakao Callback] Successfully fetched Kakao user info. Linking to Firebase Auth...");
+                // 2. Firebase Auth 연동 및 로그인 처리
+                const email = `kakao_${res.user.kakao_id}@myplating.kr`;
+                const password = `kakao_${res.user.kakao_id}_plating`;
+                
+                let user;
+                try {
+                  const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                  user = userCredential.user;
+                  console.log("[Firebase Auth] Signed in linked Kakao user:", email);
+                } catch (err) {
+                  if (err.code === "auth/user-not-found" || err.code === "auth/invalid-credential") {
+                    console.log("[Firebase Auth] Linked Kakao user not found. Creating user account...");
+                    const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                    user = userCredential.user;
+                    await user.updateProfile({ displayName: res.user.nickname });
+                    await db.collection("users").doc(user.uid).set({
+                      nickname: res.user.nickname,
+                      role: res.user.role || "user",
+                      avatarImg: res.user.profile_image || "",
+                      kakaoId: res.user.kakao_id,
+                      registeredAt: new Date().toISOString()
+                    });
+                    console.log("[Firebase Auth] Created linked Kakao user successfully");
+                  } else {
+                    throw err;
+                  }
+                }
+
+                // 3. 네이티브 영구 저장소에 자동 로그인 크레덴셜 백업
+                const credential = { type: "kakao", kakaoId: res.user.kakao_id };
+                if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+                  await window.flutter_inappwebview.callHandler('saveToken', { token: JSON.stringify(credential) });
+                }
+              }
+            } catch (err) {
+              console.error("[Kakao Callback] Linking process failed:", err);
+            }
+          } else {
+            // URL Token이 없으면, SharedPreferences 백업 크레덴셜 복구 시도 (앱 재실행/업데이트/캐시초기화 시 자동로그인 복구 보장)
+            if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+              try {
+                console.log("[App Recovery] Reading native recovery credential...");
+                const nativeToken = await window.flutter_inappwebview.callHandler('readToken');
+                if (nativeToken) {
+                  console.log("[App Recovery] Native token read success:", nativeToken);
+                  try {
+                    const credential = JSON.parse(nativeToken);
+                    if (credential && credential.type === "local") {
+                      console.log("[App Recovery] Performing automatic local login for:", credential.username);
+                      await auth.signInWithEmailAndPassword(credential.username + "@myplating.kr", credential.password);
+                    } else if (credential && credential.type === "kakao") {
+                      console.log("[App Recovery] Performing automatic Kakao login for ID:", credential.kakaoId);
+                      await auth.signInWithEmailAndPassword(`kakao_${credential.kakaoId}@myplating.kr`, `kakao_${credential.kakaoId}_plating`);
+                    }
+                  } catch (jsonErr) {
+                    console.warn("[App Recovery] Token is not JSON format. Clearing invalid native token.", jsonErr);
+                    await window.flutter_inappwebview.callHandler('saveToken', { token: "" });
+                  }
+                }
+              } catch (e) {
+                console.error("[App Recovery] Error reading native token:", e);
+              }
+            }
+          }
+        }
+
+        initSession();
+
+        return () => {
+          window.removeEventListener("flutterInAppWebViewPlatformReady", handleReady);
+        };
       }, []);
+
 
       // 3. 상태 변경 시 IndexedDB 비동기 백업
       useEffect(() => {
@@ -2531,6 +3380,80 @@
       useEffect(() => {
         if (dbLoaded) setDBData("foodhouse_com_posts", communityPosts).catch(e => console.error(e));
       }, [communityPosts, dbLoaded]);
+
+      // --- Firestore 실시간 동기화 리스너 및 초기 Seeding ---
+      useEffect(() => {
+        if (!dbLoaded) return;
+
+        console.log("[Firestore Sync] Initializing Firestore onSnapshot listeners...");
+
+        const unsubscribePosts = db.collection("posts")
+          .orderBy("timestamp", "desc")
+          .onSnapshot((snapshot) => {
+            const list = [];
+            snapshot.forEach(doc => {
+              const data = doc.data();
+              list.push({
+                id: doc.id,
+                ...data,
+                liked: data.likedBy?.includes(profile.name) || false,
+                scrapped: data.scrappedBy?.includes(profile.name) || false
+              });
+            });
+            console.log("[Firestore Sync] posts updated:", list.length);
+            setPosts(list);
+          }, (err) => {
+            console.error("[Firestore Sync] posts onSnapshot error:", err);
+          });
+
+        const unsubscribeCommunity = db.collection("community_posts")
+          .orderBy("timestamp", "desc")
+          .onSnapshot((snapshot) => {
+            const list = [];
+            snapshot.forEach(doc => {
+              const data = doc.data();
+              list.push({
+                id: doc.id,
+                ...data,
+                liked: data.likedBy?.includes(profile.name) || false,
+                scrapped: data.scrappedBy?.includes(profile.name) || false
+              });
+            });
+            console.log("[Firestore Sync] communityPosts updated:", list.length);
+            setCommunityPosts(list);
+          }, (err) => {
+            console.error("[Firestore Sync] community onSnapshot error:", err);
+          });
+
+        db.collection("posts").limit(1).get().then(snapshot => {
+          if (snapshot.empty) {
+            console.log("[Firestore Seed] Seeding default recipe posts...");
+            defaultPosts.forEach((post, index) => {
+              const seedPost = { ...post };
+              delete seedPost.id;
+              seedPost.timestamp = new Date(Date.now() - (index * 60000)).toISOString();
+              db.collection("posts").doc(post.id).set(seedPost);
+            });
+          }
+        });
+
+        db.collection("community_posts").limit(1).get().then(snapshot => {
+          if (snapshot.empty) {
+            console.log("[Firestore Seed] Seeding default community posts...");
+            initialCommunityPosts.forEach((post, index) => {
+              const seedPost = { ...post };
+              delete seedPost.id;
+              seedPost.timestamp = new Date(Date.now() - (index * 60000)).toISOString();
+              db.collection("community_posts").doc(post.id).set(seedPost);
+            });
+          }
+        });
+
+        return () => {
+          unsubscribePosts();
+          unsubscribeCommunity();
+        };
+      }, [dbLoaded, profile.name]);
 
       // 4. 이벤트 핸들러
       function handleWriteClick() {
@@ -2556,6 +3479,11 @@
       function handleLogout() {
         setIsLoggedIn(false);
         setDBData("foodhouse_logged_in", "false").catch(e => console.error(e));
+        setDBData("foodhouse_kakao_token", "").catch(e => console.error(e));
+        if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+          window.flutter_inappwebview.callHandler('saveToken', { token: "" }).catch(e => console.error(e));
+        }
+        fetch("/logout").catch(e => console.error("Logout request error:", e));
         alert("로그아웃되었습니다.");
         setActiveTab("home");
       }
@@ -2563,6 +3491,9 @@
       async function handleDeleteAccount() {
         if (await window.showConfirm("정말로 회원 탈퇴를 진행하시겠습니까?\n작성하신 게시물과 댓글, 저장된 모든 정보가 영구 삭제됩니다.")) {
           localStorage.clear();
+          if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+            window.flutter_inappwebview.callHandler('saveToken', { token: "" }).catch(e => console.error(e));
+          }
           const req = indexedDB.deleteDatabase(DB_NAME);
           req.onsuccess = () => {
             alert("회원 탈퇴 및 계정 정보 삭제가 완료되었습니다.");
@@ -2576,79 +3507,128 @@
       }
 
       function handleCreatePost(newPostData) {
+        if (!isLoggedIn) {
+          setLoginOpen(true);
+          return;
+        }
+        const user = auth.currentUser;
+        if (!user) return;
+
         const newPost = {
-          id: generateId(),
           author: profile.name,
-          avatarImg: profile.avatarImg,
+          avatarImg: profile.avatarImg || "",
+          title: newPostData.title,
+          body: newPostData.body,
+          category: newPostData.category,
+          mediaType: newPostData.mediaType || "image",
+          image: newPostData.image || [],
+          productLinks: newPostData.productLinks || [],
           likeCount: 0,
-          liked: false,
-          scrapped: false,
+          likedBy: [],
+          scrappedBy: [],
           comments: [],
-          ...newPostData
+          createdAt: new Date().toLocaleDateString(),
+          timestamp: new Date().toISOString(),
+          userId: user.uid
         };
-        setPosts([newPost, ...posts]);
-        setWriteOpen(false);
-        setActiveTab("home");
+
+        db.collection("posts").add(newPost)
+          .then((docRef) => {
+            console.log("[Firestore] Post added with ID:", docRef.id);
+            setWriteOpen(false);
+            setActiveTab("home");
+          })
+          .catch((err) => {
+            alert("포스트 추가 중 오류가 발생했습니다: " + err.message);
+          });
       }
 
       function handleLike(id) {
-        setPosts(posts.map(post => {
-          if (post.id === id) {
-            return {
-              ...post,
-              liked: !post.liked,
-              likeCount: post.liked ? post.likeCount - 1 : post.likeCount + 1
-            };
+        if (!isLoggedIn) {
+          setLoginOpen(true);
+          return;
+        }
+        const postRef = db.collection("posts").doc(id);
+        db.runTransaction(async (transaction) => {
+          const doc = await transaction.get(postRef);
+          if (!doc.exists) return;
+          const data = doc.data();
+          const likedBy = data.likedBy || [];
+          let likeCount = data.likeCount || 0;
+          if (likedBy.includes(profile.name)) {
+            likedBy.splice(likedBy.indexOf(profile.name), 1);
+            likeCount = Math.max(0, likeCount - 1);
+          } else {
+            likedBy.push(profile.name);
+            likeCount += 1;
           }
-          return post;
-        }));
+          transaction.update(postRef, { likedBy, likeCount });
+        }).catch(err => console.error("[Firestore Transaction] Like error:", err));
       }
 
       function handleScrap(id) {
-        setPosts(posts.map(post => {
-          if (post.id === id) {
-            return { ...post, scrapped: !post.scrapped };
+        if (!isLoggedIn) {
+          setLoginOpen(true);
+          return;
+        }
+        const postRef = db.collection("posts").doc(id);
+        db.runTransaction(async (transaction) => {
+          const doc = await transaction.get(postRef);
+          if (!doc.exists) return;
+          const data = doc.data();
+          const scrappedBy = data.scrappedBy || [];
+          if (scrappedBy.includes(profile.name)) {
+            scrappedBy.splice(scrappedBy.indexOf(profile.name), 1);
+          } else {
+            scrappedBy.push(profile.name);
           }
-          return post;
-        }));
+          transaction.update(postRef, { scrappedBy });
+        }).catch(err => console.error("[Firestore Transaction] Scrap error:", err));
       }
 
       function handleComment(postId, text) {
-        setPosts(posts.map(post => {
-          if (post.id === postId) {
-            return {
-              ...post,
-              comments: [...post.comments, { id: generateId(), author: profile.name, text }]
-            };
-          }
-          return post;
-        }));
+        if (!isLoggedIn) {
+          setLoginOpen(true);
+          return;
+        }
+        const postRef = db.collection("posts").doc(postId);
+        db.runTransaction(async (transaction) => {
+          const doc = await transaction.get(postRef);
+          if (!doc.exists) return;
+          const comments = doc.data().comments || [];
+          comments.push({
+            id: generateId(),
+            author: profile.name,
+            text: text
+          });
+          transaction.update(postRef, { comments });
+        }).catch(err => console.error("[Firestore Transaction] Comment error:", err));
       }
 
       // 댓글 수정/삭제
       function handleEditComment(postId, commentId, text) {
-        setPosts(posts.map(post => {
-          if (post.id === postId) {
-            return {
-              ...post,
-              comments: post.comments.map(c => c.id === commentId ? { ...c, text } : c)
-            };
-          }
-          return post;
-        }));
+        if (!isLoggedIn) return;
+        const postRef = db.collection("posts").doc(postId);
+        db.runTransaction(async (transaction) => {
+          const doc = await transaction.get(postRef);
+          if (!doc.exists) return;
+          const comments = doc.data().comments || [];
+          const updated = comments.map(c => c.id === commentId ? { ...c, text } : c);
+          transaction.update(postRef, { comments: updated });
+        }).catch(err => console.error("[Firestore Transaction] Edit comment error:", err));
       }
 
       async function handleDeleteComment(postId, commentId) {
+        if (!isLoggedIn) return;
         if (await window.showConfirm("댓글을 삭제하시겠습니까?")) {
-          setPosts(posts.map(post => {
-            if (post.id === postId) {
-              return {
-                ...post,
-                comments: post.comments.filter(c => c.id !== commentId)
-              };
-            }
-            return post;
-          }));
+          const postRef = db.collection("posts").doc(postId);
+          db.runTransaction(async (transaction) => {
+            const doc = await transaction.get(postRef);
+            if (!doc.exists) return;
+            const comments = doc.data().comments || [];
+            const filtered = comments.filter(c => c.id !== commentId);
+            transaction.update(postRef, { comments: filtered });
+          }).catch(err => console.error("[Firestore Transaction] Delete comment error:", err));
         }
       }
 
@@ -2697,112 +3677,202 @@
         }
       }
 
-      function handleDeletePost(id) {
-        setPosts(posts.filter(p => p.id !== id));
+      async function deleteStorageImages(imageUrls) {
+        if (!imageUrls || imageUrls.length === 0) return;
+        for (const url of imageUrls) {
+          if (url.includes("firebasestorage.googleapis.com")) {
+            try {
+              const ref = storage.refFromURL(url);
+              await ref.delete();
+              console.log("[Firebase Storage] Image deleted successfully:", url);
+            } catch (err) {
+              console.error("[Firebase Storage] Error deleting image:", url, err);
+            }
+          }
+        }
+      }
+
+      async function handleDeletePost(id) {
+        if (!isLoggedIn) return;
+        const post = posts.find(p => p.id === id);
+        if (!post) return;
+
+        const user = auth.currentUser;
+        const isMyPost = post.userId === user?.uid || post.author === profile.name;
+        const isAdmin = profile.role === "admin";
+        if (!isMyPost && !isAdmin) {
+          alert("삭제 권한이 없습니다.");
+          return;
+        }
+
+        if (await window.showConfirm("정말로 이 포스팅을 삭제하시겠습니까?")) {
+          await deleteStorageImages(post.image);
+          db.collection("posts").doc(id).delete()
+            .then(() => console.log("[Firestore] Post deleted successfully"))
+            .catch(err => console.error("[Firestore] Delete post error:", err));
+        }
       }
 
       function handleEditPost(id, newTitle, newBody) {
-        setPosts(posts.map(p => {
-          if (p.id === id) {
-            return { ...p, title: newTitle, body: newBody };
-          }
-          return p;
-        }));
+        if (!isLoggedIn) return;
+        db.collection("posts").doc(id).update({ title: newTitle, body: newBody })
+          .then(() => console.log("[Firestore] Post updated successfully"))
+          .catch(err => console.error("[Firestore] Update post error:", err));
       }
 
       // 커뮤니티 CRUD 핸들러
       function handleAddCommunityPost(newComPost) {
-        const finalPost = {
-          id: generateId(),
-          ...newComPost
+        if (!isLoggedIn) {
+          setLoginOpen(true);
+          return;
+        }
+        const user = auth.currentUser;
+        if (!user) return;
+
+        const newPost = {
+          author: profile.name,
+          avatarImg: profile.avatarImg || "",
+          title: newComPost.title,
+          body: newComPost.body,
+          category: newComPost.category,
+          image: newComPost.image || [],
+          likeCount: 0,
+          likedBy: [],
+          scrappedBy: [],
+          comments: [],
+          createdAt: "방금 전",
+          timestamp: new Date().toISOString(),
+          userId: user.uid
         };
-        setCommunityPosts([finalPost, ...communityPosts]);
+
+        db.collection("community_posts").add(newPost)
+          .then(() => console.log("[Firestore] Community post added"))
+          .catch(err => console.error("[Firestore] Add community post error:", err));
       }
 
       function handleAddCommunityComment(postId, commentText) {
-        setCommunityPosts(communityPosts.map(p => {
-          if (p.id === postId) {
-            return {
-              ...p,
-              comments: [...p.comments, { id: generateId(), author: profile.name, text: commentText }]
-            };
-          }
-          return p;
-        }));
+        if (!isLoggedIn) {
+          setLoginOpen(true);
+          return;
+        }
+        const postRef = db.collection("community_posts").doc(postId);
+        db.runTransaction(async (transaction) => {
+          const doc = await transaction.get(postRef);
+          if (!doc.exists) return;
+          const comments = doc.data().comments || [];
+          comments.push({
+            id: generateId(),
+            author: profile.name,
+            text: commentText
+          });
+          transaction.update(postRef, { comments });
+        }).catch(err => console.error("[Firestore Transaction] Community comment error:", err));
       }
 
       // 공감 토글
       function handleLikeCommunityPost(postId) {
-        setCommunityPosts(communityPosts.map(p => {
-          if (p.id === postId) {
-            const isLiked = p.liked;
-            return {
-              ...p,
-              liked: !isLiked,
-              likeCount: isLiked ? Math.max(0, p.likeCount - 1) : p.likeCount + 1
-            };
+        if (!isLoggedIn) {
+          setLoginOpen(true);
+          return;
+        }
+        const postRef = db.collection("community_posts").doc(postId);
+        db.runTransaction(async (transaction) => {
+          const doc = await transaction.get(postRef);
+          if (!doc.exists) return;
+          const data = doc.data();
+          const likedBy = data.likedBy || [];
+          let likeCount = data.likeCount || 0;
+          if (likedBy.includes(profile.name)) {
+            likedBy.splice(likedBy.indexOf(profile.name), 1);
+            likeCount = Math.max(0, likeCount - 1);
+          } else {
+            likedBy.push(profile.name);
+            likeCount += 1;
           }
-          return p;
-        }));
+          transaction.update(postRef, { likedBy, likeCount });
+        }).catch(err => console.error("[Firestore Transaction] Like community post error:", err));
       }
 
-      function handleDeleteCommunityPost(postId) {
-        setCommunityPosts(communityPosts.filter(p => p.id !== postId));
+      async function handleDeleteCommunityPost(postId) {
+        if (!isLoggedIn) return;
+        const post = communityPosts.find(p => p.id === postId);
+        if (!post) return;
+
+        const user = auth.currentUser;
+        const isMyPost = post.userId === user?.uid || post.author === profile.name;
+        const isAdmin = profile.role === "admin";
+        if (!isMyPost && !isAdmin) {
+          alert("삭제 권한이 없습니다.");
+          return;
+        }
+
+        if (await window.showConfirm("정말로 이 게시글을 삭제하시겠습니까?")) {
+          await deleteStorageImages(post.image);
+          db.collection("community_posts").doc(postId).delete()
+            .then(() => console.log("[Firestore] Community post deleted"))
+            .catch(err => console.error("[Firestore] Delete community post error:", err));
+        }
       }
 
       function handleEditCommunityPost(postId, editTitle, editBody) {
-        setCommunityPosts(communityPosts.map(p => {
-          if (p.id === postId) {
-            return { ...p, title: editTitle, body: editBody };
-          }
-          return p;
-        }));
+        if (!isLoggedIn) return;
+        db.collection("community_posts").doc(postId).update({ title: editTitle, body: editBody })
+          .then(() => console.log("[Firestore] Community post updated"))
+          .catch(err => console.error("[Firestore] Edit community post error:", err));
       }
 
       function handleEditCommunityComment(postId, commentId, text) {
-        setCommunityPosts(communityPosts.map(p => {
-          if (p.id === postId) {
-            return {
-              ...p,
-              comments: p.comments.map(c => c.id === commentId ? { ...c, text } : c)
-            };
-          }
-          return p;
-        }));
+        if (!isLoggedIn) return;
+        const postRef = db.collection("community_posts").doc(postId);
+        db.runTransaction(async (transaction) => {
+          const doc = await transaction.get(postRef);
+          if (!doc.exists) return;
+          const comments = doc.data().comments || [];
+          const updated = comments.map(c => c.id === commentId ? { ...c, text } : c);
+          transaction.update(postRef, { comments: updated });
+        }).catch(err => console.error("[Firestore Transaction] Edit community comment error:", err));
       }
 
       async function handleDeleteCommunityComment(postId, commentId) {
+        if (!isLoggedIn) return;
         if (await window.showConfirm("댓글을 삭제하시겠습니까?")) {
-          setCommunityPosts(communityPosts.map(p => {
-            if (p.id === postId) {
-              return {
-                ...p,
-                comments: p.comments.filter(c => c.id !== commentId)
-              };
-            }
-            return p;
-          }));
+          const postRef = db.collection("community_posts").doc(postId);
+          db.runTransaction(async (transaction) => {
+            const doc = await transaction.get(postRef);
+            if (!doc.exists) return;
+            const comments = doc.data().comments || [];
+            const filtered = comments.filter(c => c.id !== commentId);
+            transaction.update(postRef, { comments: filtered });
+          }).catch(err => console.error("[Firestore Transaction] Delete community comment error:", err));
         }
       }
 
       function handleCommunityPostClick(id) {
-        setCommunityPosts(prevPosts => prevPosts.map(p => {
-          if (p.id === id) {
-            return { ...p, viewCount: (p.viewCount || 0) + 1 };
-          }
-          return p;
-        }));
+        db.collection("community_posts").doc(id).update({
+          viewCount: firebase.firestore.FieldValue.increment(1)
+        }).catch(e => console.error("Increment viewCount error:", e));
         setActiveComPostId(id);
         setActiveTab("community_detail");
       }
 
       function handleScrapCommunityPost(postId) {
-        setCommunityPosts(prevPosts => prevPosts.map(p => {
-          if (p.id === postId) {
-            return { ...p, scrapped: !p.scrapped };
+        if (!isLoggedIn) {
+          setLoginOpen(true);
+          return;
+        }
+        const postRef = db.collection("community_posts").doc(postId);
+        db.runTransaction(async (transaction) => {
+          const doc = await transaction.get(postRef);
+          if (!doc.exists) return;
+          const data = doc.data();
+          const scrappedBy = data.scrappedBy || [];
+          if (scrappedBy.includes(profile.name)) {
+            scrappedBy.splice(scrappedBy.indexOf(profile.name), 1);
+          } else {
+            scrappedBy.push(profile.name);
           }
-          return p;
-        }));
+          transaction.update(postRef, { scrappedBy });
+        }).catch(err => console.error("[Firestore Transaction] Scrap community post error:", err));
       }
 
       const currentFollowing = Array.isArray(followingList) ? followingList : [];
@@ -2832,8 +3902,15 @@
           {activeTab !== "community" && activeTab !== "community_detail" && activeTab !== "community_write" && (
             <header className="app-header">
               <h1 className="cursor-pointer" onClick={() => { setActiveTab("home"); setSelectedCategory("전체"); }}>PLAYTING</h1>
-              {!isLoggedIn && (
-                <button className="text-xs font-semibold text-zinc-900 border border-zinc-200 px-3 py-1.5 rounded-full active:bg-zinc-100" onClick={() => setLoginOpen(true)}>로그인</button>
+              {activeTab === "mypage" && (
+                <button 
+                  className="text-zinc-600 hover:text-zinc-950 p-2 border-none bg-transparent active:scale-95 transition-transform" 
+                  onClick={() => setActiveTab("settings")} 
+                  title="설정"
+                  style={{ cursor: "pointer" }}
+                >
+                  <i className="fa-solid fa-gear text-base"></i>
+                </button>
               )}
             </header>
           )}
@@ -2950,6 +4027,7 @@
                 }}
                 onLikePost={handleLikeCommunityPost}
                 onScrapPost={handleScrapCommunityPost}
+                onAuthorClick={handleAuthorClick}
               />
             )}
 
@@ -2970,6 +4048,7 @@
                 onScrapPost={handleScrapCommunityPost}
                 currentUserName={profile.name}
                 currentUserRole={profile.role || "user"}
+                onAuthorClick={handleAuthorClick}
               />
             )}
 
@@ -2993,7 +4072,11 @@
                 setProfile={setProfile} 
                 categories={categories}
                 onCardClick={(post) => setActivePostId(post.id)}
-                followingCount={currentFollowing.length}
+                followingList={followingList}
+                creatorsData={creatorsData}
+                onFollowToggle={handleFollowToggle}
+                onAuthorClick={handleAuthorClick}
+                onAdminCenterClick={() => setActiveTab("admin_reports")}
                 onSettingsClick={() => setActiveTab("settings")}
                 communityPosts={communityPosts}
                 onCommunityCardClick={handleCommunityPostClick}
@@ -3007,6 +4090,12 @@
                 onBack={() => setActiveTab("mypage")}
                 onLogout={handleLogout}
                 onDeleteAccount={handleDeleteAccount}
+              />
+            )}
+
+            {activeTab === "admin_reports" && (
+              <AdminReportsView
+                onBack={() => setActiveTab("mypage")}
               />
             )}
 
@@ -3080,6 +4169,7 @@
             <LoginModal 
               onClose={() => setLoginOpen(false)}
               onLogin={handleLogin}
+              deviceId={deviceId}
             />
           )}
 
@@ -3089,6 +4179,15 @@
             message={confirmState.message}
             onConfirm={() => handleConfirmClose(true)}
             onCancel={() => handleConfirmClose(false)}
+          />
+
+          <ReportModal 
+            isOpen={reportModalData.isOpen}
+            targetType={reportModalData.targetType}
+            targetId={reportModalData.targetId}
+            author={reportModalData.author}
+            text={reportModalData.text}
+            onClose={() => setReportModalData({ isOpen: false, targetType: "post", targetId: "", author: "", text: "" })}
           />
         </div>
       );

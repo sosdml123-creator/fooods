@@ -13,10 +13,10 @@
         android:label="플레이팅"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
-        <!-- Google AdMob Application ID (Test ID, replace with your actual ID later) -->
+        <!-- Google AdMob Application ID -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713"/>
+            android:value="ca-app-pub-3878859120989916~6785126111"/>
         <activity
             android:name=".MainActivity"
             android:exported="true"
