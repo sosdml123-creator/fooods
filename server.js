@@ -1316,7 +1316,7 @@ app.post("/api/signup/check", function (req, res) {
 
 // 2.8. 일반 회원가입 API (1기기 1계정 제약 조건 추가)
 app.post("/api/signup", function (req, res) {
-  const { username, password, nickname, deviceId } = req.body;
+  const { username, password, nickname, deviceId, uid, email } = req.body;
   if (!username || !password || !nickname) {
     return res.status(400).json({ success: false, message: "필수 입력 항목이 누락되었습니다." });
   }
@@ -1349,13 +1349,14 @@ app.post("/api/signup", function (req, res) {
   // 4. 새 회원 등록
   const sessionToken = "local_token_" + Math.random().toString(36).substring(2) + "_" + Date.now();
   const newUser = {
+    uid: uid || "",
     username: username,
     password: password,
     nickname: nickname,
     device_id: deviceId || "",
     session_token: sessionToken,
     profile_image: "",
-    email: "",
+    email: email || "",
     registered_at: new Date().toISOString(),
     last_login_at: new Date().toISOString(),
     role: "user"
@@ -1366,10 +1367,11 @@ app.post("/api/signup", function (req, res) {
 
   req.session.key = sessionToken;
   req.session.user = {
+    uid: uid || "",
     username: username,
     nickname: nickname,
     profile_image: "",
-    email: "",
+    email: email || "",
     role: "user"
   };
 

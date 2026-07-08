@@ -2423,6 +2423,28 @@
             registeredAt: new Date().toISOString()
           });
 
+          // 2. 로컬 백엔드 서버(users.json)에도 사용자 정보 동기화 등록
+          try {
+            const registerRes = await fetch("/api/signup", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                username: id,
+                password: pw,
+                nickname: nick,
+                deviceId: deviceId || "",
+                uid: user.uid,
+                email: targetEmail
+              })
+            });
+            const registerResult = await registerRes.json();
+            if (!registerResult.success) {
+              console.warn("[Local server signup] 로컬 DB 등록 경고:", registerResult.message);
+            }
+          } catch (regErr) {
+            console.error("[Local server signup] 로컬 DB 등록 실패:", regErr);
+          }
+
           const token = await user.getIdToken();
           if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
             const credential = { type: "local", username: id, password: pw };
