@@ -80,23 +80,56 @@
       messagingSenderId: "455835477529"
     };
 
-    if (!firebase.apps.length) {
-      firebase.initializeApp(firebaseConfig);
-    }
-
-    const db = firebase.firestore();
-    const storage = firebase.storage();
-    const auth = firebase.auth();
-
-    // Firebase Auth Persistence LOCAL
-    auth.setPersistence('local')
-      .then(() => console.log("[Firebase Auth] Persistence set to LOCAL"))
-      .catch(err => console.error("[Firebase Auth] Persistence error:", err));
-
+    let db, storage, auth;
     let resolveAuthReady;
     const authReadyPromise = new Promise((resolve) => {
       resolveAuthReady = resolve;
     });
+
+    let resolveSessionSyncReady;
+    const sessionSyncReadyPromise = new Promise((resolve) => {
+      resolveSessionSyncReady = resolve;
+    });
+
+    if (typeof firebase !== "undefined") {
+      if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+      }
+      db = firebase.firestore();
+      storage = firebase.storage();
+      auth = firebase.auth();
+
+      // Firebase Auth Persistence LOCAL
+      auth.setPersistence('local')
+        .then(() => console.log("[Firebase Auth] Persistence set to LOCAL"))
+        .catch(err => console.error("[Firebase Auth] Persistence error:", err));
+    } else {
+      console.error("Firebase SDK is not loaded. Please check your internet connection.");
+      // Resolve immediately to prevent lockups when offline
+      if (resolveAuthReady) resolveAuthReady();
+      if (resolveSessionSyncReady) resolveSessionSyncReady();
+      
+      db = {
+        collection: () => ({
+          doc: () => ({
+            get: () => Promise.resolve({ exists: false }),
+            set: () => Promise.resolve(),
+            add: () => Promise.resolve({ id: "mock" }),
+            onSnapshot: () => (() => {})
+          }),
+          orderBy: () => ({
+            limit: () => ({
+              onSnapshot: () => (() => {})
+            })
+          })
+        })
+      };
+      auth = {
+        currentUser: null,
+        onAuthStateChanged: () => (() => {}),
+        signOut: () => Promise.resolve()
+      };
+    }
 
     // --- 1. IndexedDB Helper 및 LocalStorage Fallback 구현 ---
     const DB_NAME = "FoodHouseDatabase";
@@ -3206,6 +3239,7 @@
               // 모든 로그인 동기화 처리가 완료된 뒤에야 주소창 토큰 파라미터를 제거함
               window.history.replaceState({}, document.title, window.location.pathname);
               kakaoSyncInProgressRef.current = false;
+              if (resolveSessionSyncReady) resolveSessionSyncReady();
             }
           } else if (!kakaoSyncInProgressRef.current) {
             // URL Token이 없고 카카오 연동 중이 아닐 때만, SharedPreferences 백업 크레덴셜 복구 시도
@@ -3238,6 +3272,9 @@
                 console.error("[App Recovery] Error reading native token:", e);
               }
             }
+            if (resolveSessionSyncReady) resolveSessionSyncReady();
+          } else {
+            if (resolveSessionSyncReady) resolveSessionSyncReady();
           }
         }
 
@@ -3414,8 +3451,11 @@
       }, [dbLoaded, profile.name]);
 
       // 4. 이벤트 핸들러
-      function handleWriteClick() {
-        if (!isLoggedIn) {
+      async function handleWriteClick() {
+        await authReadyPromise;
+        await sessionSyncReadyPromise;
+        const user = auth.currentUser;
+        if (!user) {
           setLoginOpen(true);
         } else if (window.flutter_inappwebview) {
           window.flutter_inappwebview.callHandler('openCustomGallery', { type: 'recipe' });
@@ -3474,11 +3514,8 @@
       }
 
       async function handleCreatePost(newPostData) {
-        if (!isLoggedIn) {
-          setLoginOpen(true);
-          return;
-        }
         await authReadyPromise;
+        await sessionSyncReadyPromise;
         const user = auth.currentUser;
         if (!user) {
           alert("로그인 세션이 만료되었습니다. 다시 로그인해 주세요.");
@@ -3737,8 +3774,9 @@
       // 커뮤니티 CRUD 핸들러
       async function handleAddCommunityPost(newComPost) {
         await authReadyPromise;
+        await sessionSyncReadyPromise;
         const user = auth.currentUser;
-        if (!isLoggedIn || !user) {
+        if (!user) {
           alert("로그인 세션이 만료되었습니다. 다시 로그인해 주세요.");
           setLoginOpen(true);
           return;
@@ -4139,8 +4177,11 @@
               <CommunityView 
                 communityPosts={communityPosts}
                 onPostClick={handleCommunityPostClick}
-                onOpenCommunityWrite={() => {
-                  if (!isLoggedIn) {
+                onOpenCommunityWrite={async () => {
+                  await authReadyPromise;
+                  await sessionSyncReadyPromise;
+                  const user = auth.currentUser;
+                  if (!user) {
                     setLoginOpen(true);
                     return;
                   }
