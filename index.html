@@ -2284,10 +2284,7 @@
 
         let targetEmail = id + "@myplating.kr";
         let targetPw = pw;
-        if (id === "google-tester" && pw === "plating1234") {
-          targetEmail = "google-tester@myplating.kr";
-          targetPw = "plating1234";
-        }
+
 
         try {
           const userCredential = await auth.signInWithEmailAndPassword(targetEmail, targetPw);
@@ -2342,31 +2339,7 @@
               console.warn("[Login Migration] 마이그레이션 실패:", migrationErr.message);
             }
 
-            if (id === "google-tester" && pw === "plating1234") {
-              try {
-                const userCredential = await auth.createUserWithEmailAndPassword(targetEmail, targetPw);
-                const user = userCredential.user;
-                await user.updateProfile({ displayName: "GoogleTester" });
-                await db.collection("users").doc(user.uid).set({
-                  nickname: "GoogleTester",
-                  role: "user",
-                  username: "google-tester",
-                  registeredAt: new Date().toISOString()
-                });
-                const token = await user.getIdToken();
-                if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-                  const credential = { type: "local", username: id, password: pw };
-                  await window.flutter_inappwebview.callHandler('saveToken', { token: JSON.stringify(credential) });
-                }
-                await fetch(`/profile?token=${encodeURIComponent(token)}`);
-                onLogin("local");
-                onClose();
-                return;
-              } catch (se) {
-                setError("데모 계정 자동 생성에 실패했습니다: " + se.message);
-                return;
-              }
-            }
+
             setError("아이디 또는 비밀번호가 올바르지 않습니다.");
           } else {
             setError(e.message || "로그인 중 오류가 발생했습니다.");
@@ -2522,10 +2495,7 @@
                     <button type="button" className="text-zinc-400 hover:text-zinc-650 underline font-semibold" onClick={() => { setViewMode("signup"); setError(""); }}>
                       일반 회원가입
                     </button>
-                    <span className="text-zinc-200">|</span>
-                    <button type="button" className="text-zinc-400 hover:text-zinc-650 underline" onClick={() => { setUsername("google-tester"); setPassword("plating1234"); setError(""); }}>
-                      심사용 데모 계정 세팅
-                    </button>
+
                   </div>
                 </div>
               ) : (
@@ -3059,6 +3029,41 @@
                 {loading ? "사진 최적화 및 등록 중..." : "등록하기"}
               </button>
             </form>
+          </div>
+        </section>
+      );
+    }
+
+    function NotificationCenterView({ onBack }) {
+      const dummyNotifications = [
+        { id: 1, title: "새로운 추천 요리", body: "오늘 주말에 딱 맞는 '바질 토마토 파스타' 요리를 확인해 보세요!", time: "2시간 전" },
+        { id: 2, title: "댓글 알림", body: "내가 작성한 레시피 포스팅에 새로운 댓글이 달렸습니다.", time: "1일 전" },
+        { id: 3, title: "업데이트 안내", body: "플레이팅 앱이 최신 버전으로 업데이트되었습니다. 이제 로그인 끊김 및 업로드 기능이 개선되었습니다.", time: "2일 전" }
+      ];
+
+      return (
+        <section className="p-4 pb-20 text-left">
+          <div className="mb-4">
+            <button className="text-zinc-500 text-xs py-1.5 active:scale-95 transition-transform" onClick={onBack}>
+              <i className="fa-solid fa-chevron-left mr-1"></i> 홈 피드로 가기
+            </button>
+          </div>
+          
+          <div className="bg-white border border-zinc-200 rounded-xl p-4 shadow-sm">
+            <h2 className="text-sm font-bold text-zinc-950 mb-4 flex items-center gap-1.5">
+              <i className="fa-solid fa-bell text-zinc-500"></i> 나의 알림 센터
+            </h2>
+            <div className="flex flex-col gap-3">
+              {dummyNotifications.map(n => (
+                <div key={n.id} className="border-b border-zinc-100 pb-3 last:border-b-0 last:pb-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold text-zinc-900">{n.title}</span>
+                    <span className="text-[9px] text-zinc-400">{n.time}</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-600 leading-relaxed">{n.body}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
       );
@@ -3839,16 +3844,14 @@
 
       // 커뮤니티 CRUD 핸들러
       function handleAddCommunityPost(newComPost) {
-        if (!isLoggedIn) {
-          setLoginOpen(true);
-          return;
-        }
         const user = auth.currentUser;
-        if (!user) return;
+        const authorName = isLoggedIn && profile.name && profile.name !== "나의 플레이팅" 
+          ? profile.name 
+          : "익명 플레이터";
 
         const newPost = {
-          author: profile.name,
-          avatarImg: profile.avatarImg || "",
+          author: authorName,
+          avatarImg: isLoggedIn ? (profile.avatarImg || "") : "",
           title: newComPost.title,
           body: newComPost.body,
           category: newComPost.category,
@@ -3859,7 +3862,7 @@
           comments: [],
           createdAt: "방금 전",
           timestamp: new Date().toISOString(),
-          userId: user.uid
+          userId: user ? user.uid : "anonymous"
         };
 
         db.collection("community_posts").add(newPost)
@@ -3873,10 +3876,10 @@
       }
 
       function handleAddCommunityComment(postId, commentText) {
-        if (!isLoggedIn) {
-          setLoginOpen(true);
-          return;
-        }
+        const authorName = isLoggedIn && profile.name && profile.name !== "나의 플레이팅" 
+          ? profile.name 
+          : "익명 플레이터";
+
         const postRef = db.collection("community_posts").doc(postId);
         db.runTransaction(async (transaction) => {
           const doc = await transaction.get(postRef);
@@ -3884,7 +3887,7 @@
           const comments = doc.data().comments || [];
           comments.push({
             id: generateId(),
-            author: profile.name,
+            author: authorName,
             text: commentText
           });
           transaction.update(postRef, { comments });
@@ -4021,19 +4024,31 @@
         <div className="app-container">
           <AdBanner />
 
-          {activeTab !== "community" && activeTab !== "community_detail" && activeTab !== "community_write" && (
-            <header className="app-header">
+          {activeTab !== "community" && activeTab !== "community_detail" && activeTab !== "community_write" && activeTab !== "notifications" && (
+            <header className="app-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <h1 className="cursor-pointer" onClick={() => { setActiveTab("home"); setSelectedCategory("전체"); }}>PLAYTING</h1>
-              {activeTab === "mypage" && (
-                <button 
-                  className="text-zinc-600 hover:text-zinc-950 p-2 border-none bg-transparent active:scale-95 transition-transform" 
-                  onClick={() => setActiveTab("settings")} 
-                  title="설정"
-                  style={{ cursor: "pointer" }}
-                >
-                  <i className="fa-solid fa-gear text-base"></i>
-                </button>
-              )}
+              <div className="flex items-center gap-1.5" style={{ marginLeft: "auto", display: "flex", gap: "8px", alignItems: "center" }}>
+                {activeTab === "home" && (
+                  <button 
+                    className="text-zinc-600 hover:text-zinc-950 p-2 border-none bg-transparent active:scale-95 transition-transform" 
+                    onClick={() => setActiveTab("notifications")} 
+                    title="알림"
+                    style={{ cursor: "pointer" }}
+                  >
+                    <i className="fa-regular fa-bell text-lg"></i>
+                  </button>
+                )}
+                {activeTab === "mypage" && (
+                  <button 
+                    className="text-zinc-600 hover:text-zinc-950 p-2 border-none bg-transparent active:scale-95 transition-transform" 
+                    onClick={() => setActiveTab("settings")} 
+                    title="설정"
+                    style={{ cursor: "pointer" }}
+                  >
+                    <i className="fa-solid fa-gear text-base"></i>
+                  </button>
+                )}
+              </div>
             </header>
           )}
 
@@ -4077,6 +4092,8 @@
                   <div className="text-center py-20 text-zinc-400 text-sm" style={{ columnSpan: "all" }}>등록된 글이 없습니다.</div>
                 )}
               </div>
+            {activeTab === "notifications" && (
+              <NotificationCenterView onBack={() => setActiveTab("home")} />
             )}
 
             {activeTab === "search" && (
@@ -4139,9 +4156,7 @@
                 communityPosts={communityPosts}
                 onPostClick={handleCommunityPostClick}
                 onOpenCommunityWrite={() => {
-                  if (!isLoggedIn) {
-                    setLoginOpen(true);
-                  } else if (window.flutter_inappwebview) {
+                  if (window.flutter_inappwebview) {
                     window.flutter_inappwebview.callHandler('openCustomGallery', { type: 'community' });
                   } else {
                     setActiveTab("community_write");

@@ -1210,45 +1210,7 @@ app.post("/api/login", function (req, res) {
 
   const users = readUsers();
   
-  // 1. 데모 계정 검증 (구글 심사용)
-  const demoUser = process.env.DEMO_USERNAME || "google-tester";
-  const demoPassword = process.env.DEMO_PASSWORD || "plating1234";
-  if (username === demoUser && password === demoPassword) {
-    let sessionToken = "demo-session-token-999999";
-    const existingTesterIdx = users.findIndex(u => u.kakao_id === 99999999 || u.username === "google-tester");
-    
-    if (existingTesterIdx === -1) {
-      users.push({
-        username: "google-tester",
-        nickname: "GoogleTester",
-        profile_image: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100",
-        email: "sosdml123@naver.com",
-        session_token: sessionToken,
-        registered_at: new Date().toISOString(),
-        last_login_at: new Date().toISOString(),
-        role: "user"
-      });
-      writeUsers(users);
-    } else {
-      if (!users[existingTesterIdx].session_token) {
-        users[existingTesterIdx].session_token = sessionToken;
-      } else {
-        sessionToken = users[existingTesterIdx].session_token;
-      }
-      users[existingTesterIdx].last_login_at = new Date().toISOString();
-      writeUsers(users);
-    }
 
-    req.session.key = sessionToken;
-    req.session.user = {
-      username: "google-tester",
-      nickname: "GoogleTester",
-      profile_image: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100",
-      email: "sosdml123@naver.com",
-      role: "user"
-    };
-    return res.json({ success: true, token: sessionToken });
-  }
 
   // 2. 일반 계정 검증
   const user = users.find(u => u.username === username && u.password === password);
@@ -1284,31 +1246,20 @@ app.post("/api/login", function (req, res) {
 
 // 2.8. 일반 회원가입 중복 및 제약 조건 선행 검증 API
 app.post("/api/signup/check", function (req, res) {
-  const { username, nickname, deviceId } = req.body;
+  const { username, nickname } = req.body;
   if (!username || !nickname) {
     return res.status(400).json({ success: false, message: "필수 입력 항목이 누락되었습니다." });
   }
 
   const users = readUsers();
 
-  // 1. 기기당 1개 계정 제한 검증
-  if (deviceId && deviceId.trim() !== "" && username !== "google-tester") {
-    const deviceExists = users.some(u => u.device_id === deviceId && u.username !== "google-tester");
-    if (deviceExists) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "이미 이 기기에서 생성된 계정이 존재합니다. 기기당 1개의 계정만 생성할 수 있습니다." 
-      });
-    }
-  }
-
-  // 2. 아이디 중복 검증
+  // 1. 아이디 중복 검증
   const idExists = users.some(u => u.username === username || (u.kakao_id && u.kakao_id.toString() === username));
   if (idExists) {
     return res.status(400).json({ success: false, message: "이미 사용 중인 아이디입니다." });
   }
 
-  // 3. 닉네임 중복 검증
+  // 2. 닉네임 중복 검증
   const nicknameExists = users.some(u => u.nickname.toLowerCase() === nickname.toLowerCase());
   if (nicknameExists) {
     return res.status(400).json({ success: false, message: "이미 사용 중인 닉네임입니다." });
@@ -1326,18 +1277,7 @@ app.post("/api/signup", function (req, res) {
 
   const users = readUsers();
 
-  // 1. 기기당 1개 계정 제한 검증 (데모 계정 및 빈 기기 식별자는 제외)
-  if (deviceId && deviceId.trim() !== "" && username !== "google-tester") {
-    const deviceExists = users.some(u => u.device_id === deviceId && u.username !== "google-tester");
-    if (deviceExists) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "이미 이 기기에서 생성된 계정이 존재합니다. 기기당 1개의 계정만 생성할 수 있습니다." 
-      });
-    }
-  }
-
-  // 2. 아이디 중복 검증
+  // 1. 아이디 중복 검증
   const idExists = users.some(u => u.username === username || (u.kakao_id && u.kakao_id.toString() === username));
   if (idExists) {
     return res.status(400).json({ success: false, message: "이미 사용 중인 아이디입니다." });
