@@ -3247,46 +3247,54 @@
           if (user) {
             console.log("[Firebase Auth] Auto-login successful. User email:", user.email);
             
-            // Get details from Firestore users collection
+            // 1. 로그인 완료 판정을 즉시 수행하여 글쓰기 권한이 딜레이 없이 활성화되도록 보장
+            setIsLoggedIn(true);
+            
+            // 2. 기본 임시 프로필 즉시 반영
             let nickname = user.displayName || (user.email ? user.email.split("@")[0] : "플레이터");
             let role = "user";
             let bio = user.email || "";
             let avatarImg = user.photoURL || "";
 
-            try {
-              const doc = await db.collection("users").doc(user.uid).get();
-              if (doc.exists) {
-                const userData = doc.data();
-                nickname = userData.nickname || nickname;
-                role = userData.role || role;
-                bio = userData.bio || bio;
-                avatarImg = userData.avatarImg || avatarImg;
-              }
-            } catch (err) {
-              console.error("[Firebase Auth] Firestore user doc read error:", err);
-            }
-
-            const newProfile = {
+            const initialProfile = {
               name: nickname,
               bio,
               avatar: nickname.slice(0, 1),
               avatarImg,
               role
             };
+            setProfile(initialProfile);
 
-            setProfile(newProfile);
-            setIsLoggedIn(true);
+            // 3. 비동기 Firestore 정보 및 백엔드 세션 동기화는 백그라운드 처리하여 UI 블로킹 방지
+            (async () => {
+              try {
+                const doc = await db.collection("users").doc(user.uid).get();
+                if (doc.exists) {
+                  const userData = doc.data();
+                  const updatedNickname = userData.nickname || nickname;
+                  const updatedProfile = {
+                    name: updatedNickname,
+                    bio: userData.bio || bio,
+                    avatar: updatedNickname.slice(0, 1),
+                    avatarImg: userData.avatarImg || avatarImg,
+                    role: userData.role || role
+                  };
+                  setProfile(updatedProfile);
+                }
+              } catch (err) {
+                console.error("[Firebase Auth] Firestore user doc read error:", err);
+              }
 
-            // Get fresh ID token
-            const token = await user.getIdToken();
-            console.log("[Firebase Auth] Synchronizing profile with Express session via ID token...");
-            
-            // Sync session with Express server
-            fetch(`/profile?token=${encodeURIComponent(token)}`)
-              .then(r => r.json())
-              .then(res => {
+              try {
+                const token = await user.getIdToken();
+                console.log("[Firebase Auth] Synchronizing profile with Express session via ID token...");
+                const r = await fetch(`/profile?token=${encodeURIComponent(token)}`);
+                const res = await r.json();
                 console.log("[Express Session Sync] Sync response:", res);
-              });
+              } catch (syncErr) {
+                console.error("[Express Session Sync] Sync error:", syncErr);
+              }
+            })();
 
           } else {
             console.log("[Firebase Auth] No active session found or logged out.");
