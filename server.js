@@ -1558,6 +1558,134 @@ app.post("/api/report", async function (req, res) {
   }
 });
 
+// 2.11. 게시물 키워드 검색 API (제목/카테고리/본문 부분 일치 한글 매칭 지원)
+app.get("/api/search/posts", async function (req, res) {
+  const query = (req.query.q || "").trim().toLowerCase();
+  if (!query) {
+    return res.json({ success: true, posts: [] });
+  }
+
+  try {
+    // 1. Firestore에서 전체 posts 문서를 가져옴
+    // (대량 문서 시 Algolia 등의 전문 검색 엔진이 유용하나, 현재 중소규모 서비스에서는 메모리 내 부분일치 매칭이 가장 유연하고 완전한 한글 검색을 지원합니다)
+    const url = `${FIRESTORE_BASE_URL}/posts`;
+    const response = await axios.get(url);
+    const documents = response.data.documents || [];
+
+    const matchedPosts = [];
+    for (const doc of documents) {
+      const fields = doc.fields || {};
+      const title = (fields.title?.stringValue || "").toLowerCase();
+      const body = (fields.body?.stringValue || "").toLowerCase();
+      const category = (fields.category?.stringValue || "").toLowerCase();
+      const author = (fields.author?.stringValue || "").toLowerCase();
+      const hidden = fields.hidden?.booleanValue || false;
+
+      if (hidden) continue; // 신고 숨김 글 배제
+
+      // 부분 일치 매칭 판정
+      if (title.includes(query) || body.includes(query) || category.includes(query) || author.includes(query)) {
+        // Firestore Document 구조에서 일반 JavaScript 객체로 디코딩
+        const productLinks = [];
+        if (fields.productLinks?.arrayValue?.values) {
+          fields.productLinks.arrayValue.values.forEach(v => {
+            const f = v.mapValue?.fields || {};
+            productLinks.push({
+              id: f.id?.stringValue || "",
+              url: f.url?.stringValue || "",
+              title: f.title?.stringValue || "",
+              image: f.image?.stringValue || "",
+              host: f.host?.stringValue || ""
+            });
+          });
+        }
+
+        const likedBy = [];
+        if (fields.likedBy?.arrayValue?.values) {
+          fields.likedBy.arrayValue.values.forEach(v => {
+            likedBy.push(v.stringValue);
+          });
+        }
+
+        const scrappedBy = [];
+        if (fields.scrappedBy?.arrayValue?.values) {
+          fields.scrappedBy.arrayValue.values.forEach(v => {
+            scrappedBy.push(v.stringValue);
+          });
+        }
+
+        const imageList = [];
+        if (fields.image?.arrayValue?.values) {
+          fields.image.arrayValue.values.forEach(v => {
+            imageList.push(v.stringValue);
+          });
+        } else if (fields.image?.stringValue) {
+          imageList.push(fields.image.stringValue);
+        }
+
+        matchedPosts.push({
+          id: doc.name.split("/").pop(),
+          title: fields.title?.stringValue || "",
+          body: fields.body?.stringValue || "",
+          category: fields.category?.stringValue || "레시피",
+          author: fields.author?.stringValue || "",
+          avatarImg: fields.avatarImg?.stringValue || "",
+          userId: fields.userId?.stringValue || "",
+          image: imageList,
+          likeCount: parseInt(fields.likeCount?.integerValue || "0", 10),
+          likedBy: likedBy,
+          scrappedBy: scrappedBy,
+          productLinks: productLinks,
+          createdAt: fields.createdAt?.stringValue || "방금 전",
+          timestamp: fields.timestamp?.stringValue || ""
+        });
+      }
+    }
+
+    return res.json({ success: true, posts: matchedPosts });
+  } catch (err) {
+    console.error("[Search Posts API] Error performing search:", err.message);
+    return res.status(500).json({ success: false, message: "검색 중 내부 오류가 발생했습니다." });
+  }
+});
+
+// 2.12. 사용자 닉네임 키워드 검색 API
+app.get("/api/search/users", async function (req, res) {
+  const query = (req.query.q || "").trim().toLowerCase();
+  if (!query) {
+    return res.json({ success: true, users: [] });
+  }
+
+  try {
+    const url = `${FIRESTORE_BASE_URL}/users`;
+    const response = await axios.get(url);
+    const documents = response.data.documents || [];
+
+    const matchedUsers = [];
+    for (const doc of documents) {
+      const fields = doc.fields || {};
+      const nickname = (fields.nickname?.stringValue || "").toLowerCase();
+      const username = (fields.username?.stringValue || "").toLowerCase();
+
+      if (nickname.includes(query) || username.includes(query)) {
+        matchedUsers.push({
+          uid: doc.name.split("/").pop(),
+          username: fields.username?.stringValue || "",
+          nickname: fields.nickname?.stringValue || "",
+          profileImage: fields.profileImage?.stringValue || "",
+          bio: fields.bio?.stringValue || "플레이팅 크리에이터입니다.",
+          role: fields.role?.stringValue || "user"
+        });
+      }
+    }
+
+    return res.json({ success: true, users: matchedUsers });
+  } catch (err) {
+    console.error("[Search Users API] Error performing user search:", err.message);
+    return res.status(500).json({ success: false, message: "사용자 검색 중 오류가 발생했습니다." });
+  }
+});
+
 // Firebase ID Token 검증 헬퍼 함수
 async function verifyFirebaseIdToken(token) {
   try {
