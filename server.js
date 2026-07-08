@@ -1273,7 +1273,7 @@ app.post("/api/login", function (req, res) {
       role: user.role || "user"
     };
 
-    return res.json({ success: true, token: sessionToken });
+    return res.json({ success: true, token: sessionToken, nickname: user.nickname, role: user.role || "user" });
   } else {
     return res.status(401).json({ success: false, message: "아이디 또는 비밀번호가 올바르지 않습니다." });
   }

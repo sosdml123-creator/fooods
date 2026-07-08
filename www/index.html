@@ -2305,6 +2305,43 @@
         } catch (e) {
           console.error("Login error:", e);
           if (e.code === "auth/user-not-found" || e.code === "auth/wrong-password" || e.code === "auth/invalid-credential") {
+            // === 기존 JSON 사용자 자동 마이그레이션 ===
+            // Firebase에 계정이 없는 경우, 서버 JSON DB로 인증 후 Firebase 계정 자동 생성
+            try {
+              const legacyRes = await fetch("/api/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username: id, password: pw })
+              });
+              const legacyResult = await legacyRes.json();
+              
+              if (legacyResult.success) {
+                // 서버 인증 성공 → Firebase 계정 새로 생성 (마이그레이션)
+                console.log("[Login Migration] 기존 계정을 Firebase로 마이그레이션 중...");
+                const userCredential = await auth.createUserWithEmailAndPassword(targetEmail, targetPw);
+                const user = userCredential.user;
+                const nick = legacyResult.nickname || id;
+                await user.updateProfile({ displayName: nick });
+                await db.collection("users").doc(user.uid).set({
+                  nickname: nick,
+                  role: legacyResult.role || "user",
+                  username: id,
+                  registeredAt: new Date().toISOString()
+                });
+                const token = await user.getIdToken();
+                if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+                  const credential = { type: "local", username: id, password: pw };
+                  await window.flutter_inappwebview.callHandler('saveToken', { token: JSON.stringify(credential) });
+                }
+                await fetch(`/profile?token=${encodeURIComponent(token)}`);
+                onLogin("local");
+                onClose();
+                return;
+              }
+            } catch (migrationErr) {
+              console.warn("[Login Migration] 마이그레이션 실패:", migrationErr.message);
+            }
+
             if (id === "google-tester" && pw === "plating1234") {
               try {
                 const userCredential = await auth.createUserWithEmailAndPassword(targetEmail, targetPw);
