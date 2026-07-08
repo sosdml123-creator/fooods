@@ -2066,7 +2066,20 @@
             }
             const formData = new FormData();
             formData.append("file", uploadBlob, file.name);
-            const resp = await fetch("/upload", { method: "POST", body: formData });
+
+            // Firebase Auth ID Token 헤더 첨부 (인증된 업로드)
+            const headers = {};
+            try {
+              const currentUser = auth.currentUser;
+              if (currentUser) {
+                const idToken = await currentUser.getIdToken();
+                headers["Authorization"] = `Bearer ${idToken}`;
+              }
+            } catch (tokenErr) {
+              console.warn("[Upload] ID Token 취득 실패, 익명 업로드:", tokenErr.message);
+            }
+
+            const resp = await fetch("/upload", { method: "POST", body: formData, headers });
             const result = await resp.json();
             if (result.success) {
               uploadedUrls.push(result.url);
@@ -2079,7 +2092,7 @@
           }
         }
 
-        setImages(uploadedUrls);
+        setImages(prev => [...prev, ...uploadedUrls]);
         setLoading(false);
       }
 
@@ -2880,7 +2893,20 @@
             }
             const formData = new FormData();
             formData.append("file", uploadBlob, file.name);
-            const resp = await fetch("/upload", { method: "POST", body: formData });
+
+            // Firebase Auth ID Token 헤더 첨부 (인증된 업로드)
+            const headers = {};
+            try {
+              const currentUser = auth.currentUser;
+              if (currentUser) {
+                const idToken = await currentUser.getIdToken();
+                headers["Authorization"] = `Bearer ${idToken}`;
+              }
+            } catch (tokenErr) {
+              console.warn("[Upload] ID Token 취득 실패, 익명 업로드:", tokenErr.message);
+            }
+
+            const resp = await fetch("/upload", { method: "POST", body: formData, headers });
             const result = await resp.json();
             if (result.success) {
               uploadedUrls.push(result.url);
@@ -2893,7 +2919,7 @@
           }
         }
 
-        setImages(uploadedUrls);
+        setImages(prev => [...prev, ...uploadedUrls]);
         setLoading(false);
       }
 
@@ -3752,8 +3778,13 @@
         };
 
         db.collection("community_posts").add(newPost)
-          .then(() => console.log("[Firestore] Community post added"))
-          .catch(err => console.error("[Firestore] Add community post error:", err));
+          .then(() => {
+            console.log("[Firestore] Community post added");
+          })
+          .catch(err => {
+            console.error("[Firestore] Add community post error:", err);
+            alert("글 등록 중 오류가 발생했습니다: " + err.message);
+          });
       }
 
       function handleAddCommunityComment(postId, commentText) {
