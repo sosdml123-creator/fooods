@@ -3424,35 +3424,51 @@
             console.error("[Firestore Sync] community onSnapshot error:", err);
           });
 
-        db.collection("posts").limit(1).get().then(snapshot => {
-          if (snapshot.empty) {
-            console.log("[Firestore Seed] Seeding default recipe posts...");
-            defaultPosts.forEach((post, index) => {
-              const seedPost = { ...post };
-              delete seedPost.id;
-              seedPost.timestamp = new Date(Date.now() - (index * 60000)).toISOString();
-              db.collection("posts").doc(post.id).set(seedPost);
-            });
-          }
-        });
-
-        db.collection("community_posts").limit(1).get().then(snapshot => {
-          if (snapshot.empty) {
-            console.log("[Firestore Seed] Seeding default community posts...");
-            initialCommunityPosts.forEach((post, index) => {
-              const seedPost = { ...post };
-              delete seedPost.id;
-              seedPost.timestamp = new Date(Date.now() - (index * 60000)).toISOString();
-              db.collection("community_posts").doc(post.id).set(seedPost);
-            });
-          }
-        });
+        // 시드 코드는 별도 useEffect로 이동됨 (인증 완료 후에만 실행 보장)
 
         return () => {
           unsubscribePosts();
           unsubscribeCommunity();
         };
-      }, [dbLoaded, profile.name]);
+      }, [dbLoaded]);
+
+      // --- 4.3. Firestore 시드 — sessionSyncReadyPromise 대기 후 실행 ---
+      // 인증 미완료 상태에서 컬렉션이 비어있다고 오인해 기존 글을 덮어쓰는 버그 방지
+      useEffect(() => {
+        if (!dbLoaded) return;
+        sessionSyncReadyPromise.then(() => {
+          const user = auth.currentUser;
+          if (!user) {
+            console.log("[Firestore Seed] 비로그인 상태 — 기존 데이터 보호를 위해 시드 건너뜀.");
+            return;
+          }
+          db.collection("posts").limit(1).get().then(snapshot => {
+            if (snapshot.empty) {
+              console.log("[Firestore Seed] Seeding default recipe posts...");
+              defaultPosts.forEach((post, index) => {
+                const seedPost = { ...post };
+                delete seedPost.id;
+                seedPost.timestamp = new Date(Date.now() - (index * 60000)).toISOString();
+                seedPost.userId = user.uid;
+                db.collection("posts").doc(post.id).set(seedPost)
+                  .catch(e => console.warn("[Firestore Seed] posts seed failed:", e.message));
+              });
+            }
+          });
+          db.collection("community_posts").limit(1).get().then(snapshot => {
+            if (snapshot.empty) {
+              console.log("[Firestore Seed] Seeding default community posts...");
+              initialCommunityPosts.forEach((post, index) => {
+                const seedPost = { ...post };
+                delete seedPost.id;
+                seedPost.timestamp = new Date(Date.now() - (index * 60000)).toISOString();
+                db.collection("community_posts").doc(post.id).set(seedPost)
+                  .catch(e => console.warn("[Firestore Seed] community seed failed:", e.message));
+              });
+            }
+          });
+        });
+      }, [dbLoaded]);
 
       // 4. 이벤트 핸들러
       async function handleWriteClick() {
