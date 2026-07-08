@@ -744,10 +744,9 @@
       }
 
       async function handleDelete() {
-        if (await window.showConfirm("정말로 이 포스팅을 삭제하시겠습니까?")) {
-          onDeletePost(post.id);
-          onClose();
-        }
+        // 확인창은 onDeletePost(handleDeletePost) 내부에서 1회만 띄움
+        const confirmed = await onDeletePost(post.id);
+        if (confirmed !== false) onClose();
       }
 
       function startEditComment(comment) {
@@ -1303,10 +1302,9 @@
       }
 
       async function deletePost() {
-        if (await window.showConfirm("정말로 이 커뮤니티 게시글을 삭제하시겠습니까?")) {
-          onDeletePost(post.id);
-          onBack();
-        }
+        // 확인창은 onDeletePost(handleDeleteCommunityPost) 내부에서 1회만 띄움
+        const confirmed = await onDeletePost(post.id);
+        if (confirmed !== false) onBack();
       }
 
       function startEditComment(comment) {
@@ -3764,16 +3762,16 @@
       }
 
       async function handleDeletePost(id) {
-        if (!isLoggedIn) return;
+        if (!isLoggedIn) return false;
         const post = posts.find(p => p.id === id);
-        if (!post) return;
+        if (!post) return false;
 
         const user = auth.currentUser;
         const isMyPost = post.userId === user?.uid || post.author === profile.name;
         const isAdmin = profile.role === "admin";
         if (!isMyPost && !isAdmin) {
           alert("삭제 권한이 없습니다.");
-          return;
+          return false;
         }
 
         if (await window.showConfirm("정말로 이 포스팅을 삭제하시겠습니까?")) {
@@ -3781,7 +3779,9 @@
           db.collection("posts").doc(id).delete()
             .then(() => console.log("[Firestore] Post deleted successfully"))
             .catch(err => console.error("[Firestore] Delete post error:", err));
+          return true;
         }
+        return false;
       }
 
       function handleEditPost(id, newTitle, newBody) {
@@ -3884,16 +3884,16 @@
       }
 
       async function handleDeleteCommunityPost(postId) {
-        if (!isLoggedIn) return;
+        if (!isLoggedIn) return false;
         const post = communityPosts.find(p => p.id === postId);
-        if (!post) return;
+        if (!post) return false;
 
         const user = auth.currentUser;
         const isMyPost = post.userId === user?.uid || post.author === profile.name;
         const isAdmin = profile.role === "admin";
         if (!isMyPost && !isAdmin) {
           alert("삭제 권한이 없습니다.");
-          return;
+          return false;
         }
 
         if (await window.showConfirm("정말로 이 게시글을 삭제하시겠습니까?")) {
@@ -3901,7 +3901,9 @@
           db.collection("community_posts").doc(postId).delete()
             .then(() => console.log("[Firestore] Community post deleted"))
             .catch(err => console.error("[Firestore] Delete community post error:", err));
+          return true;
         }
+        return false;
       }
 
       function handleEditCommunityPost(postId, editTitle, editBody) {
