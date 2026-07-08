@@ -3696,6 +3696,7 @@
       }
 
       function handleLogout() {
+        auth.signOut().catch(e => console.error("Firebase SignOut Error:", e));
         setIsLoggedIn(false);
         setDBData("foodhouse_logged_in", "false").catch(e => console.error(e));
         setDBData("foodhouse_kakao_token", "").catch(e => console.error(e));
@@ -3709,6 +3710,14 @@
 
       async function handleDeleteAccount() {
         if (await window.showConfirm("정말로 회원 탈퇴를 진행하시겠습니까?\n작성하신 게시물과 댓글, 저장된 모든 정보가 영구 삭제됩니다.")) {
+          try {
+            if (auth.currentUser) {
+              await auth.currentUser.delete();
+            }
+          } catch (e) {
+            console.error("Firebase user delete error:", e);
+          }
+          auth.signOut().catch(e => console.error("Firebase SignOut Error:", e));
           localStorage.clear();
           if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
             window.flutter_inappwebview.callHandler('saveToken', { token: "" }).catch(e => console.error(e));
@@ -3731,7 +3740,11 @@
           return;
         }
         const user = auth.currentUser;
-        if (!user) return;
+        if (!user) {
+          alert("로그인 정보가 유효하지 않거나 초기화 중입니다. 다시 로그인해 주세요.");
+          setLoginOpen(true);
+          return;
+        }
 
         const newPost = {
           author: profile.name,
@@ -3984,7 +3997,12 @@
       // 커뮤니티 CRUD 핸들러
       function handleAddCommunityPost(newComPost) {
         const user = auth.currentUser;
-        const authorName = isLoggedIn && profile.name && profile.name !== "나의 플레이팅" 
+        if (!isLoggedIn || !user) {
+          alert("로그인 정보가 유효하지 않습니다. 다시 로그인해 주세요.");
+          setLoginOpen(true);
+          return;
+        }
+        const authorName = profile.name && profile.name !== "나의 플레이팅" 
           ? profile.name 
           : "익명 플레이터";
 
@@ -3996,8 +4014,9 @@
             body: newComPost.body,
             category: newComPost.category,
             author: authorName,
-            avatarImg: isLoggedIn ? (profile.avatarImg || "") : "",
-            userId: user ? user.uid : "anonymous"
+            avatarImg: profile.avatarImg || "",
+            userId: user.uid,
+            image: newComPost.image || []
           })
         })
         .then(r => r.json())
@@ -4127,6 +4146,13 @@
         setActiveTab("community_detail");
       }
 
+      function handleRecipePostClick(id) {
+        db.collection("posts").doc(id).update({
+          viewCount: firebase.firestore.FieldValue.increment(1)
+        }).catch(e => console.error("Increment recipe viewCount error:", e));
+        setActivePostId(id);
+      }
+
       function handleScrapCommunityPost(postId) {
         if (!isLoggedIn) {
           setLoginOpen(true);
@@ -4239,7 +4265,7 @@
                       key={post.id} 
                       post={post} 
                       onLike={() => handleLike(post.id)}
-                      onCardClick={() => setActivePostId(post.id)}
+                      onCardClick={() => handleRecipePostClick(post.id)}
                       onAuthorClick={() => handleAuthorClick(post.author)}
                     />
                   ))
@@ -4313,7 +4339,7 @@
                             <div 
                               key={post.id} 
                               className="bg-white border border-zinc-200 rounded-lg overflow-hidden cursor-pointer active:scale-98 transition-transform"
-                              onClick={() => setActivePostId(post.id)}
+                              onClick={() => handleRecipePostClick(post.id)}
                             >
                               <div className="aspect-[4/5] bg-zinc-100 overflow-hidden">
                                 <img src={Array.isArray(post.image) ? post.image[0] : post.image} alt="" className="w-full h-full object-cover" />
@@ -4373,6 +4399,10 @@
                 communityPosts={communityPosts}
                 onPostClick={handleCommunityPostClick}
                 onOpenCommunityWrite={() => {
+                  if (!isLoggedIn) {
+                    setLoginOpen(true);
+                    return;
+                  }
                   if (window.flutter_inappwebview) {
                     window.flutter_inappwebview.callHandler('openCustomGallery', { type: 'community' });
                   } else {
@@ -4425,7 +4455,7 @@
                 profile={profile} 
                 setProfile={setProfile} 
                 categories={categories}
-                onCardClick={(post) => setActivePostId(post.id)}
+                onCardClick={(post) => handleRecipePostClick(post.id)}
                 followingList={followingList}
                 creatorsData={creatorsData}
                 onFollowToggle={handleFollowToggle}
@@ -4461,7 +4491,7 @@
                 isFollowing={currentFollowing.includes(activeUser)}
                 onFollowToggle={() => handleFollowToggle(activeUser)}
                 onBack={() => setActiveTab("home")}
-                onCardClick={(post) => setActivePostId(post.id)}
+                onCardClick={(post) => handleRecipePostClick(post.id)}
               />
             )}
           </main>

@@ -1432,7 +1432,7 @@ app.post("/api/signup", signupLimiter, async function (req, res) {
 
 // 2.9. 익명 커뮤니티 글쓰기 대리 API (1분 5회 Rate Limiting 적용)
 app.post("/api/community/posts", communityWriteLimiter, async function (req, res) {
-  const { title, body, category, author, avatarImg, userId } = req.body;
+  const { title, body, category, author, avatarImg, userId, image } = req.body;
   if (!title || !body || !category) {
     return res.status(400).json({ success: false, message: "제목, 본문, 카테고리는 필수 입력 사항입니다." });
   }
@@ -1452,7 +1452,12 @@ app.post("/api/community/posts", communityWriteLimiter, async function (req, res
         scrappedBy: { arrayValue: { values: [] } },
         comments: { arrayValue: { values: [] } },
         createdAt: { stringValue: "방금 전" },
-        timestamp: { stringValue: new Date().toISOString() }
+        timestamp: { stringValue: new Date().toISOString() },
+        image: {
+          arrayValue: {
+            values: (image || []).map(url => ({ stringValue: url }))
+          }
+        }
       }
     };
 
