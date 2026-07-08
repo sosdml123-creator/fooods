@@ -89,7 +89,7 @@
     const auth = firebase.auth();
 
     // Firebase Auth Persistence LOCAL
-    auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+    const authPersistenceReady = auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
       .then(() => console.log("[Firebase Auth] Persistence set to LOCAL"))
       .catch(err => console.error("[Firebase Auth] Persistence error:", err));
 
@@ -2281,6 +2281,7 @@
 
 
         try {
+          await authPersistenceReady;
           const userCredential = await auth.signInWithEmailAndPassword(targetEmail, targetPw);
           const user = userCredential.user;
           const token = await user.getIdToken();
@@ -2366,6 +2367,7 @@
         }
 
         try {
+          await authPersistenceReady;
           const checkRes = await fetch("/api/signup/check", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -3165,6 +3167,8 @@
       const [creatorsData, setCreatorsData] = useState(initialCreatorsData);
       const [communityPosts, setCommunityPosts] = useState(initialCommunityPosts);
 
+      const kakaoSyncInProgressRef = useRef(new URLSearchParams(window.location.search).has("token"));
+
       const [dbLoaded, setDbLoaded] = useState(false); // IndexedDB 로드 완료 플래그
 
       function loadBackendPosts() {
@@ -3333,6 +3337,10 @@
             })();
 
           } else {
+            if (kakaoSyncInProgressRef.current) {
+              console.log("[Firebase Auth] Ignoring temporary signed-out state during Kakao callback sync.");
+              return;
+            }
             console.log("[Firebase Auth] No active session found or logged out.");
             setIsLoggedIn(false);
             setDBData("foodhouse_logged_in", "false").catch(e => console.error(e));
@@ -3366,6 +3374,7 @@
 
             // 네이티브에서 크레덴셜 자동 복구 시도 (브릿지가 늦게 준비되었을 때 대응)
             try {
+              await authPersistenceReady;
               const user = auth.currentUser;
               if (!user) {
                 const nativeToken = await window.flutter_inappwebview.callHandler('readToken');
@@ -3394,7 +3403,6 @@
         // 2.2. 세션 복원 및 토큰 동기화
         const urlParams = new URLSearchParams(window.location.search);
         const urlToken = urlParams.get("token");
-        let isPerformingKakaoSync = false;
 
         async function initSession() {
           // IndexedDB 로컬 기본 설정 로딩 (로컬 캐시 꼬임 방지를 위해 posts 목록 캐싱은 제거)
@@ -3414,10 +3422,11 @@
 
           // URL에 카카오 토큰 파라미터가 들어온 경우 (카카오 로그인 성공 후 리다이렉트 콜백)
           if (urlToken) {
-            isPerformingKakaoSync = true;
+            kakaoSyncInProgressRef.current = true;
             console.log("[Kakao Callback] Detected URL token. Initiating backend sync...");
             
             try {
+              await authPersistenceReady;
               // 1. 카카오 유저 정보 조회
               const response = await fetch(`/profile?token=${encodeURIComponent(urlToken)}`);
               const res = await response.json();
@@ -3453,6 +3462,7 @@
 
                 // 로그인 판정 활성화 및 프로필 즉시 갱신
                 setIsLoggedIn(true);
+                setLoginOpen(false);
                 setDBData("foodhouse_logged_in", "true").catch(e => console.error(e));
                 const linkedProfile = {
                   name: res.user.nickname,
@@ -3475,12 +3485,13 @@
             } finally {
               // 모든 로그인 동기화 처리가 완료된 뒤에야 주소창 토큰 파라미터를 제거함
               window.history.replaceState({}, document.title, window.location.pathname);
-              isPerformingKakaoSync = false;
+              kakaoSyncInProgressRef.current = false;
             }
-          } else if (!isPerformingKakaoSync) {
+          } else if (!kakaoSyncInProgressRef.current) {
             // URL Token이 없고 카카오 연동 중이 아닐 때만, SharedPreferences 백업 크레덴셜 복구 시도
             if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
               try {
+                await authPersistenceReady;
                 console.log("[App Recovery] Reading native recovery credential...");
                 const nativeToken = await window.flutter_inappwebview.callHandler('readToken');
                 if (nativeToken) {
