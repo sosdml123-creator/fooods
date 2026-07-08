@@ -3355,6 +3355,7 @@
         // 2.2. 세션 복원 및 토큰 동기화
         const urlParams = new URLSearchParams(window.location.search);
         const urlToken = urlParams.get("token");
+        let isPerformingKakaoSync = false;
 
         async function initSession() {
           // IndexedDB 로컬 기본 설정 로딩
@@ -3376,8 +3377,8 @@
 
           // URL에 카카오 토큰 파라미터가 들어온 경우 (카카오 로그인 성공 후 리다이렉트 콜백)
           if (urlToken) {
+            isPerformingKakaoSync = true;
             console.log("[Kakao Callback] Detected URL token. Initiating backend sync...");
-            window.history.replaceState({}, document.title, window.location.pathname);
             
             try {
               // 1. 카카오 유저 정보 조회
@@ -3413,6 +3414,19 @@
                   }
                 }
 
+                // 로그인 판정 활성화 및 프로필 즉시 갱신
+                setIsLoggedIn(true);
+                setDBData("foodhouse_logged_in", "true").catch(e => console.error(e));
+                const linkedProfile = {
+                  name: res.user.nickname,
+                  bio: res.user.email || "",
+                  avatar: res.user.nickname.slice(0, 1),
+                  avatarImg: res.user.profile_image || "",
+                  role: res.user.role || "user"
+                };
+                setProfile(linkedProfile);
+                setDBData("foodhouse_profile", linkedProfile).catch(e => console.error(e));
+
                 // 3. 네이티브 영구 저장소에 자동 로그인 크레덴셜 백업
                 const credential = { type: "kakao", kakaoId: res.user.kakao_id };
                 if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
@@ -3421,9 +3435,13 @@
               }
             } catch (err) {
               console.error("[Kakao Callback] Linking process failed:", err);
+            } finally {
+              // 모든 로그인 동기화 처리가 완료된 뒤에야 주소창 토큰 파라미터를 제거함
+              window.history.replaceState({}, document.title, window.location.pathname);
+              isPerformingKakaoSync = false;
             }
-          } else {
-            // URL Token이 없으면, SharedPreferences 백업 크레덴셜 복구 시도 (앱 재실행/업데이트/캐시초기화 시 자동로그인 복구 보장)
+          } else if (!isPerformingKakaoSync) {
+            // URL Token이 없고 카카오 연동 중이 아닐 때만, SharedPreferences 백업 크레덴셜 복구 시도
             if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
               try {
                 console.log("[App Recovery] Reading native recovery credential...");
