@@ -19,6 +19,7 @@
   
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.min.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -2051,44 +2052,39 @@
         }
       }, [initialImages]);
 
-      // R2 클라우드 스토리지 직접 업로드 (모바일 최적화)
+      // Firebase Storage 직접 업로드 (압축 및 로딩 처리)
       async function handlePhoto(e) {
         const files = Array.from(e.target.files).slice(0, 10);
         if (files.length === 0) return;
         setLoading(true);
 
         const uploadedUrls = [];
+        const options = {
+          maxSizeMB: 1, // 최대 용량 제한 1MB
+          maxWidthOrHeight: 1200, // 최대 해상도 1200px
+          useWebWorker: true,
+          initialQuality: 0.8 // 품질 80%
+        };
+
         for (const file of files) {
           try {
-            let uploadBlob = file;
-            if (file.size > 2 * 1024 * 1024) {
-              uploadBlob = await compressImage(file, 1200, 1500, 0.75);
-            }
-            const formData = new FormData();
-            formData.append("file", uploadBlob, file.name);
-
-            // Firebase Auth ID Token 헤더 첨부 (인증된 업로드)
-            const headers = {};
-            try {
-              const currentUser = auth.currentUser;
-              if (currentUser) {
-                const idToken = await currentUser.getIdToken();
-                headers["Authorization"] = `Bearer ${idToken}`;
-              }
-            } catch (tokenErr) {
-              console.warn("[Upload] ID Token 취득 실패, 익명 업로드:", tokenErr.message);
-            }
-
-            const resp = await fetch("/upload", { method: "POST", body: formData, headers });
-            const result = await resp.json();
-            if (result.success) {
-              uploadedUrls.push(result.url);
-            } else {
-              alert("사진 업로드 실패: " + (result.message || ""));
-            }
+            console.log(`[Image Compression] Compressing file: ${file.name}`);
+            const compressedBlob = await imageCompression(file, options);
+            const compressedFile = new File([compressedBlob], file.name, { type: file.type });
+            
+            const filename = `recipe_${Date.now()}_${Math.random().toString(36).substring(2)}_${file.name}`;
+            const storageRef = firebase.storage().ref().child(`images/${filename}`);
+            
+            console.log(`[Firebase Storage] Uploading ${filename}...`);
+            const uploadTask = storageRef.put(compressedFile);
+            
+            const snapshot = await uploadTask;
+            const downloadUrl = await snapshot.ref.getDownloadURL();
+            uploadedUrls.push(downloadUrl);
+            console.log(`[Firebase Storage] Upload success:`, downloadUrl);
           } catch (err) {
             console.error("Upload error:", err);
-            alert("사진 업로드 중 오류가 발생했습니다.");
+            alert(`사진 업로드 중 오류가 발생했습니다: ${err.message || err}`);
           }
         }
 
@@ -2907,44 +2903,39 @@
         }
       }, [initialImages]);
 
-      // R2 클라우드 스토리지 직접 업로드 (모바일 최적화)
+      // Firebase Storage 직접 업로드 (압축 및 로딩 처리)
       async function handlePhoto(e) {
         const files = Array.from(e.target.files).slice(0, 10);
         if (files.length === 0) return;
         setLoading(true);
 
         const uploadedUrls = [];
+        const options = {
+          maxSizeMB: 1, // 최대 용량 제한 1MB
+          maxWidthOrHeight: 1200, // 최대 해상도 1200px
+          useWebWorker: true,
+          initialQuality: 0.8 // 품질 80%
+        };
+
         for (const file of files) {
           try {
-            let uploadBlob = file;
-            if (file.size > 2 * 1024 * 1024) {
-              uploadBlob = await compressImage(file, 1200, 1500, 0.75);
-            }
-            const formData = new FormData();
-            formData.append("file", uploadBlob, file.name);
-
-            // Firebase Auth ID Token 헤더 첨부 (인증된 업로드)
-            const headers = {};
-            try {
-              const currentUser = auth.currentUser;
-              if (currentUser) {
-                const idToken = await currentUser.getIdToken();
-                headers["Authorization"] = `Bearer ${idToken}`;
-              }
-            } catch (tokenErr) {
-              console.warn("[Upload] ID Token 취득 실패, 익명 업로드:", tokenErr.message);
-            }
-
-            const resp = await fetch("/upload", { method: "POST", body: formData, headers });
-            const result = await resp.json();
-            if (result.success) {
-              uploadedUrls.push(result.url);
-            } else {
-              alert("사진 업로드 실패: " + (result.message || ""));
-            }
+            console.log(`[Image Compression] Compressing file: ${file.name}`);
+            const compressedBlob = await imageCompression(file, options);
+            const compressedFile = new File([compressedBlob], file.name, { type: file.type });
+            
+            const filename = `community_${Date.now()}_${Math.random().toString(36).substring(2)}_${file.name}`;
+            const storageRef = firebase.storage().ref().child(`images/${filename}`);
+            
+            console.log(`[Firebase Storage] Uploading ${filename}...`);
+            const uploadTask = storageRef.put(compressedFile);
+            
+            const snapshot = await uploadTask;
+            const downloadUrl = await snapshot.ref.getDownloadURL();
+            uploadedUrls.push(downloadUrl);
+            console.log(`[Firebase Storage] Upload success:`, downloadUrl);
           } catch (err) {
             console.error("Upload error:", err);
-            alert("사진 업로드 중 오류가 발생했습니다.");
+            alert(`사진 업로드 중 오류가 발생했습니다: ${err.message || err}`);
           }
         }
 

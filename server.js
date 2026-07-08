@@ -1032,6 +1032,62 @@ function getAdminIds() {
   return config.admins;
 }
 
+// --- Firestore REST API 헬퍼 함수 (users.json 종속성 제거) ---
+const FIRESTORE_BASE_URL = "https://firestore.googleapis.com/v1/projects/plating-app-db29f/databases/(default)/documents";
+
+async function findFirestoreUserByField(fieldName, fieldValue) {
+  try {
+    const url = `${FIRESTORE_BASE_URL}:runQuery`;
+    const payload = {
+      structuredQuery: {
+        from: [{ collectionId: "users" }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: fieldName },
+            op: "EQUAL",
+            value: { stringValue: String(fieldValue) }
+          }
+        },
+        limit: 1
+      }
+    };
+    const response = await axios.post(url, payload);
+    if (!response.data || !Array.isArray(response.data) || response.data.length === 0 || !response.data[0].document) {
+      return null;
+    }
+    const doc = response.data[0].document;
+    const fields = doc.fields || {};
+    return {
+      uid: doc.name.split("/").pop(),
+      username: fields.username?.stringValue || "",
+      password: fields.password?.stringValue || "",
+      nickname: fields.nickname?.stringValue || "",
+      device_id: fields.deviceId?.stringValue || "",
+      role: fields.role?.stringValue || "user",
+      email: fields.email?.stringValue || "",
+      session_token: fields.sessionToken?.stringValue || ""
+    };
+  } catch (err) {
+    console.error(`[Firestore REST] Error finding user by ${fieldName}:`, err.message);
+    return null;
+  }
+}
+
+async function writeFirestoreUser(uid, userData) {
+  try {
+    const url = `${FIRESTORE_BASE_URL}/users/${uid}`;
+    const fields = {};
+    for (const [key, val] of Object.entries(userData)) {
+      if (val === undefined || val === null) continue;
+      fields[key] = { stringValue: String(val) };
+    }
+    await axios.patch(url, { fields });
+    return true;
+  } catch (err) {
+    console.error("[Firestore REST] Error writing user:", err.message);
+    return false;
+  }
+}
 
 // 로컬 DB 헬퍼 함수
 function readUsers() {
@@ -1203,149 +1259,157 @@ app.get("/terms", function (req, res) {
 });
 
 // 2.7. 일반 로그인 API (데모 로그인 통합 지원 및 bcrypt 해싱 적용)
-app.post("/api/login", function (req, res) {
+app.post("/api/login", async function (req, res) {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ success: false, message: "아이디와 비밀번호를 입력해주세요." });
   }
 
-  const users = readUsers();
-  
-  // 1. 유저 아이디 검색
-  const userIndex = users.findIndex(u => u.username === username);
-  if (userIndex !== -1) {
-    const user = users[userIndex];
-    let isPasswordValid = false;
-    let needsMigration = false;
+  try {
+    // 1. Firestore에서 유저 아이디 검색
+    const user = await findFirestoreUserByField("username", username);
+    if (user) {
+      let isPasswordValid = false;
+      let needsMigration = false;
 
-    // 패스워드가 bcrypt 해시된 형태인지 체크
-    const isHashed = typeof user.password === "string" && (user.password.startsWith("$2a$") || user.password.startsWith("$2b$"));
+      // 패스워드가 bcrypt 해시된 형태인지 체크
+      const isHashed = typeof user.password === "string" && (user.password.startsWith("$2a$") || user.password.startsWith("$2b$"));
 
-    if (isHashed) {
-      isPasswordValid = bcrypt.compareSync(password, user.password);
-    } else {
-      // 평문 비밀번호 시절 가입 유저 대조
-      if (user.password === password) {
-        isPasswordValid = true;
-        needsMigration = true; // 해싱 마이그레이션 필요 대상 표시
+      if (isHashed) {
+        isPasswordValid = bcrypt.compareSync(password, user.password);
+      } else {
+        // 평문 비밀번호 시절 가입 유저 대조
+        if (user.password === password) {
+          isPasswordValid = true;
+          needsMigration = true; // 해싱 마이그레이션 필요 대상 표시
+        }
+      }
+
+      if (isPasswordValid) {
+        // 차단 검사
+        const moderationRules = readJsonFile(MODERATION_RULES_PATH, { deletedPosts: [], deletedComments: [], blockedUsers: [], hiddenPosts: [] });
+        if (moderationRules.blockedUsers && moderationRules.blockedUsers.includes(user.nickname)) {
+          return res.status(403).json({ success: false, message: "차단된 사용자입니다. 이용이 정지되었습니다." });
+        }
+
+        let sessionToken = user.session_token;
+        if (!sessionToken) {
+          sessionToken = "local_token_" + Math.random().toString(36).substring(2) + "_" + Date.now();
+        }
+
+        // 평문 비밀번호 마이그레이션 및 로그인 갱신 데이터 Firestore 저장
+        const updatePayload = {
+          sessionToken: sessionToken,
+          lastLoginAt: new Date().toISOString()
+        };
+        if (needsMigration) {
+          console.log(`[Bcrypt Migration] Migrating plain password to hash in Firestore for user: ${username}`);
+          updatePayload.password = bcrypt.hashSync(password, 10);
+        }
+        await writeFirestoreUser(user.uid, updatePayload);
+
+        req.session.key = sessionToken;
+        req.session.user = {
+          username: user.username,
+          nickname: user.nickname,
+          profile_image: user.profile_image || "",
+          email: user.email || "",
+          role: user.role || "user"
+        };
+
+        return res.json({ success: true, token: sessionToken, nickname: user.nickname, role: user.role || "user" });
       }
     }
-
-    if (isPasswordValid) {
-      // 차단 검사
-      const moderationRules = readJsonFile(MODERATION_RULES_PATH, { deletedPosts: [], deletedComments: [], blockedUsers: [], hiddenPosts: [] });
-      if (moderationRules.blockedUsers && moderationRules.blockedUsers.includes(user.nickname)) {
-        return res.status(403).json({ success: false, message: "차단된 사용자입니다. 이용이 정지되었습니다." });
-      }
-
-      // 평문 비밀번호인 경우 해싱 값으로 마이그레이션 적용 및 users.json 영구 보존
-      if (needsMigration) {
-        console.log(`[Bcrypt Migration] Migrating plain password to hash for user: ${username}`);
-        user.password = bcrypt.hashSync(password, 10);
-      }
-
-      let sessionToken = user.session_token;
-      if (!sessionToken) {
-        sessionToken = "local_token_" + Math.random().toString(36).substring(2) + "_" + Date.now();
-        user.session_token = sessionToken;
-      }
-      user.last_login_at = new Date().toISOString();
-      writeUsers(users);
-
-      req.session.key = sessionToken;
-      req.session.user = {
-        username: user.username,
-        nickname: user.nickname,
-        profile_image: user.profile_image || "",
-        email: user.email || "",
-        role: user.role || "user"
-      };
-
-      return res.json({ success: true, token: sessionToken, nickname: user.nickname, role: user.role || "user" });
-    }
+  } catch (err) {
+    console.error("[Login API] Firestore authentication error:", err.message);
   }
 
   return res.status(401).json({ success: false, message: "아이디 또는 비밀번호가 올바르지 않습니다." });
 });
 
 // 2.8. 일반 회원가입 중복 및 제약 조건 선행 검증 API
-app.post("/api/signup/check", function (req, res) {
+app.post("/api/signup/check", async function (req, res) {
   const { username, nickname } = req.body;
   if (!username || !nickname) {
     return res.status(400).json({ success: false, message: "필수 입력 항목이 누락되었습니다." });
   }
 
-  const users = readUsers();
+  try {
+    // 1. 아이디 중복 검증
+    const idExists = await findFirestoreUserByField("username", username);
+    if (idExists) {
+      return res.status(400).json({ success: false, message: "이미 사용 중인 아이디입니다." });
+    }
 
-  // 1. 아이디 중복 검증
-  const idExists = users.some(u => u.username === username || (u.kakao_id && u.kakao_id.toString() === username));
-  if (idExists) {
-    return res.status(400).json({ success: false, message: "이미 사용 중인 아이디입니다." });
+    // 2. 닉네임 중복 검증
+    const nicknameExists = await findFirestoreUserByField("nickname", nickname);
+    if (nicknameExists) {
+      return res.status(400).json({ success: false, message: "이미 사용 중인 닉네임입니다." });
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("[Signup Check API] Firestore query error:", err.message);
+    return res.status(500).json({ success: false, message: "중복 확인 중 오류가 발생했습니다." });
   }
-
-  // 2. 닉네임 중복 검증
-  const nicknameExists = users.some(u => u.nickname.toLowerCase() === nickname.toLowerCase());
-  if (nicknameExists) {
-    return res.status(400).json({ success: false, message: "이미 사용 중인 닉네임입니다." });
-  }
-
-  return res.json({ success: true });
 });
 
 // 2.8. 일반 회원가입 API (bcrypt 해싱 적용)
-app.post("/api/signup", function (req, res) {
+app.post("/api/signup", async function (req, res) {
   const { username, password, nickname, deviceId, uid, email } = req.body;
-  if (!username || !password || !nickname) {
-    return res.status(400).json({ success: false, message: "필수 입력 항목이 누락되었습니다." });
+  if (!username || !password || !nickname || !uid) {
+    return res.status(400).json({ success: false, message: "필수 입력 항목(아이디, 비번, 닉네임, UID)이 누락되었습니다." });
   }
 
-  const users = readUsers();
+  try {
+    // 1. 아이디 중복 검증
+    const idExists = await findFirestoreUserByField("username", username);
+    if (idExists) {
+      return res.status(400).json({ success: false, message: "이미 사용 중인 아이디입니다." });
+    }
 
-  // 1. 아이디 중복 검증
-  const idExists = users.some(u => u.username === username || (u.kakao_id && u.kakao_id.toString() === username));
-  if (idExists) {
-    return res.status(400).json({ success: false, message: "이미 사용 중인 아이디입니다." });
+    // 2. 닉네임 중복 검증
+    const nicknameExists = await findFirestoreUserByField("nickname", nickname);
+    if (nicknameExists) {
+      return res.status(400).json({ success: false, message: "이미 사용 중인 닉네임입니다." });
+    }
+
+    // 비밀번호 Bcrypt 해싱 처리
+    const hashedPassword = bcrypt.hashSync(password, 10);
+    const sessionToken = "local_token_" + Math.random().toString(36).substring(2) + "_" + Date.now();
+
+    // 3. Firestore의 users 컬렉션에 회원 등록 저장
+    const newUserData = {
+      uid: uid,
+      username: username,
+      password: hashedPassword,
+      nickname: nickname,
+      deviceId: deviceId || "",
+      sessionToken: sessionToken,
+      profileImage: "",
+      email: email || `${username}@myplating.kr`,
+      role: "user",
+      registeredAt: new Date().toISOString(),
+      lastLoginAt: new Date().toISOString()
+    };
+
+    await writeFirestoreUser(uid, newUserData);
+
+    req.session.key = sessionToken;
+    req.session.user = {
+      uid: uid,
+      username: username,
+      nickname: nickname,
+      profile_image: "",
+      email: email || `${username}@myplating.kr`,
+      role: "user"
+    };
+
+    return res.json({ success: true, token: sessionToken, user: { username, nickname } });
+  } catch (err) {
+    console.error("[Signup API] Firestore write error:", err.message);
+    return res.status(500).json({ success: false, message: "회원가입 처리 중 오류가 발생했습니다." });
   }
-
-  // 3. 닉네임 중복 검증
-  const nicknameExists = users.some(u => u.nickname.toLowerCase() === nickname.toLowerCase());
-  if (nicknameExists) {
-    return res.status(400).json({ success: false, message: "이미 사용 중인 닉네임입니다." });
-  }
-
-  // 비밀번호 Bcrypt 해싱 처리
-  const hashedPassword = bcrypt.hashSync(password, 10);
-
-  // 4. 새 회원 등록
-  const sessionToken = "local_token_" + Math.random().toString(36).substring(2) + "_" + Date.now();
-  const newUser = {
-    uid: uid || "",
-    username: username,
-    password: hashedPassword, // 해싱된 패스워드 저장
-    nickname: nickname,
-    device_id: deviceId || "",
-    session_token: sessionToken,
-    profile_image: "",
-    email: email || "",
-    registered_at: new Date().toISOString(),
-    last_login_at: new Date().toISOString(),
-    role: "user"
-  };
-
-  users.push(newUser);
-  writeUsers(users);
-
-  req.session.key = sessionToken;
-  req.session.user = {
-    uid: uid || "",
-    username: username,
-    nickname: nickname,
-    profile_image: "",
-    email: email || "",
-    role: "user"
-  };
-
-  return res.json({ success: true, token: sessionToken, user: { username, nickname } });
 });
 
 // Firebase ID Token 검증 헬퍼 함수
