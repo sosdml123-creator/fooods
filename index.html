@@ -2281,8 +2281,9 @@
           const user = userCredential.user;
           const token = await user.getIdToken();
           
-          if (token && window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-            await window.flutter_inappwebview.callHandler('saveToken', { token });
+          if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+            const credential = { type: "local", username: id, password: pw };
+            await window.flutter_inappwebview.callHandler('saveToken', { token: JSON.stringify(credential) });
           }
           
           await fetch(`/profile?token=${encodeURIComponent(token)}`);
@@ -2302,8 +2303,9 @@
                   registeredAt: new Date().toISOString()
                 });
                 const token = await user.getIdToken();
-                if (token && window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-                  await window.flutter_inappwebview.callHandler('saveToken', { token });
+                if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+                  const credential = { type: "local", username: id, password: pw };
+                  await window.flutter_inappwebview.callHandler('saveToken', { token: JSON.stringify(credential) });
                 }
                 await fetch(`/profile?token=${encodeURIComponent(token)}`);
                 onClose();
@@ -2370,8 +2372,9 @@
           });
 
           const token = await user.getIdToken();
-          if (token && window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-            await window.flutter_inappwebview.callHandler('saveToken', { token });
+          if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+            const credential = { type: "local", username: id, password: pw };
+            await window.flutter_inappwebview.callHandler('saveToken', { token: JSON.stringify(credential) });
           }
 
           await fetch(`/profile?token=${encodeURIComponent(token)}`);
