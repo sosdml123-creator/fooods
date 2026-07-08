@@ -2287,6 +2287,7 @@
           }
           
           await fetch(`/profile?token=${encodeURIComponent(token)}`);
+          onLogin("local");
           onClose();
         } catch (e) {
           console.error("Login error:", e);
@@ -2308,6 +2309,7 @@
                   await window.flutter_inappwebview.callHandler('saveToken', { token: JSON.stringify(credential) });
                 }
                 await fetch(`/profile?token=${encodeURIComponent(token)}`);
+                onLogin("local");
                 onClose();
                 return;
               } catch (se) {
@@ -2378,6 +2380,7 @@
           }
 
           await fetch(`/profile?token=${encodeURIComponent(token)}`);
+          onLogin("local");
           alert("회원가입이 완료되었습니다!");
           onClose();
         } catch (e) {
@@ -3160,9 +3163,9 @@
             console.log("[Firebase Auth] Auto-login successful. User email:", user.email);
             
             // Get details from Firestore users collection
-            let nickname = user.displayName || user.email.split("@")[0];
+            let nickname = user.displayName || (user.email ? user.email.split("@")[0] : "플레이터");
             let role = "user";
-            let bio = user.email;
+            let bio = user.email || "";
             let avatarImg = user.photoURL || "";
 
             try {
