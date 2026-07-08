@@ -1252,7 +1252,7 @@ app.post("/api/login", function (req, res) {
   const user = users.find(u => u.username === username && u.password === password);
   if (user) {
     // 차단 검사
-    const moderationRules = readModerationRules();
+    const moderationRules = readJsonFile(MODERATION_RULES_PATH, { deletedPosts: [], deletedComments: [], blockedUsers: [], hiddenPosts: [] });
     if (moderationRules.blockedUsers && moderationRules.blockedUsers.includes(user.nickname)) {
       return res.status(403).json({ success: false, message: "차단된 사용자입니다. 이용이 정지되었습니다." });
     }
