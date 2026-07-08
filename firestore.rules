@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. users 컬렉션 보안 규칙
+    // - 본인 문서만 읽고 쓸 수 있도록 제한 (타인 문서 읽기 불가)
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // 2. posts (레시피) 컬렉션 보안 규칙
+    match /posts/{postId} {
+      // - 읽기는 누구나 허용
+      allow read: if true;
+      
+      // - 생성(쓰기)은 로그인한 사용자만, 그리고 자신의 userId 필드 값으로만 등록 가능
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      
+      // - 수정 및 삭제는 작성한 본인(userId가 일치하는 유저)만 허용
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+
+    // 3. community_posts (익명 커뮤니티) 컬렉션 보안 규칙
+    match /community_posts/{postId} {
+      // - 읽기는 누구나 허용
+      allow read: if true;
+      
+      // - 생성(쓰기)은 로그인 여부 상관없이 누구나 허용 (익명 글쓰기 대응)
+      allow create: if true;
+      
+      // - 수정 및 삭제는 작성자 본인이거나 관리자(users 테이블의 role이 'admin'인 유저)만 허용
+      allow update, delete: if request.auth != null && (
+        resource.data.userId == request.auth.uid || 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+  }
+}
