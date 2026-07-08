@@ -3246,26 +3246,30 @@
             if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
               try {
                 await authReadyPromise;
-                console.log("[App Recovery] Reading native recovery credential...");
-                const nativeToken = await window.flutter_inappwebview.callHandler('readToken');
-                if (nativeToken) {
-                  console.log("[App Recovery] Native token read success:", nativeToken);
-                  try {
-                    const credential = JSON.parse(nativeToken);
-                    if (credential && credential.type === "local") {
-                      console.log("[App Recovery] Performing automatic local login for:", credential.username);
-                      await auth.signInWithEmailAndPassword(credential.username + "@myplating.kr", credential.password);
-                      setIsLoggedIn(true);
-                      setDBData("foodhouse_logged_in", "true").catch(e => console.error(e));
-                    } else if (credential && credential.type === "kakao") {
-                      console.log("[App Recovery] Performing automatic Kakao login for ID:", credential.kakaoId);
-                      await auth.signInWithEmailAndPassword(`kakao_${credential.kakaoId}@myplating.kr`, `kakao_${credential.kakaoId}_plating`);
-                      setIsLoggedIn(true);
-                      setDBData("foodhouse_logged_in", "true").catch(e => console.error(e));
+                if (auth.currentUser) {
+                  console.log("[App Recovery] Firebase session already restored. Skipping native token re-login.");
+                } else {
+                  console.log("[App Recovery] Reading native recovery credential...");
+                  const nativeToken = await window.flutter_inappwebview.callHandler('readToken');
+                  if (nativeToken) {
+                    console.log("[App Recovery] Native token read success:", nativeToken);
+                    try {
+                      const credential = JSON.parse(nativeToken);
+                      if (credential && credential.type === "local") {
+                        console.log("[App Recovery] Performing automatic local login for:", credential.username);
+                        await auth.signInWithEmailAndPassword(credential.username + "@myplating.kr", credential.password);
+                        setIsLoggedIn(true);
+                        setDBData("foodhouse_logged_in", "true").catch(e => console.error(e));
+                      } else if (credential && credential.type === "kakao") {
+                        console.log("[App Recovery] Performing automatic Kakao login for ID:", credential.kakaoId);
+                        await auth.signInWithEmailAndPassword(`kakao_${credential.kakaoId}@myplating.kr`, `kakao_${credential.kakaoId}_plating`);
+                        setIsLoggedIn(true);
+                        setDBData("foodhouse_logged_in", "true").catch(e => console.error(e));
+                      }
+                    } catch (jsonErr) {
+                      console.warn("[App Recovery] Token is not JSON format. Clearing invalid native token.", jsonErr);
+                      await window.flutter_inappwebview.callHandler('saveToken', { token: "" });
                     }
-                  } catch (jsonErr) {
-                    console.warn("[App Recovery] Token is not JSON format. Clearing invalid native token.", jsonErr);
-                    await window.flutter_inappwebview.callHandler('saveToken', { token: "" });
                   }
                 }
               } catch (e) {
