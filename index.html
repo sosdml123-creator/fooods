@@ -89,9 +89,14 @@
     const auth = firebase.auth();
 
     // Firebase Auth Persistence LOCAL
-    const authPersistenceReady = auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+    auth.setPersistence('local')
       .then(() => console.log("[Firebase Auth] Persistence set to LOCAL"))
       .catch(err => console.error("[Firebase Auth] Persistence error:", err));
+
+    let resolveAuthReady;
+    const authReadyPromise = new Promise((resolve) => {
+      resolveAuthReady = resolve;
+    });
 
     // --- 1. IndexedDB Helper 및 LocalStorage Fallback 구현 ---
     const DB_NAME = "FoodHouseDatabase";
@@ -2281,7 +2286,7 @@
 
 
         try {
-          await authPersistenceReady;
+          await authReadyPromise;
           const userCredential = await auth.signInWithEmailAndPassword(targetEmail, targetPw);
           const user = userCredential.user;
           const token = await user.getIdToken();
@@ -2367,7 +2372,7 @@
         }
 
         try {
-          await authPersistenceReady;
+          await authReadyPromise;
           const checkRes = await fetch("/api/signup/check", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -3203,10 +3208,7 @@
           .catch(e => console.error("Error loading community posts:", e));
       }
 
-      useEffect(() => {
-        loadBackendPosts();
-        loadBackendCommunityPosts();
-      }, [isLoggedIn, profile.name]);
+
 
       // 뒤로가기 브라우저 역사 연동 (HTML5 History API)
       const isInitialMount = useRef(true);
@@ -3281,6 +3283,9 @@
         console.log("[Firebase Auth] Registering onAuthStateChanged listener...");
         const unsubscribe = auth.onAuthStateChanged(async (user) => {
           console.log("[Firebase Auth] onAuthStateChanged active. User object:", user);
+          if (resolveAuthReady) {
+            resolveAuthReady();
+          }
           if (user) {
             console.log("[Firebase Auth] Auto-login successful. User email:", user.email);
             
@@ -3374,7 +3379,7 @@
 
             // 네이티브에서 크레덴셜 자동 복구 시도 (브릿지가 늦게 준비되었을 때 대응)
             try {
-              await authPersistenceReady;
+              await authReadyPromise;
               const user = auth.currentUser;
               if (!user) {
                 const nativeToken = await window.flutter_inappwebview.callHandler('readToken');
@@ -3426,7 +3431,7 @@
             console.log("[Kakao Callback] Detected URL token. Initiating backend sync...");
             
             try {
-              await authPersistenceReady;
+              await authReadyPromise;
               // 1. 카카오 유저 정보 조회
               const response = await fetch(`/profile?token=${encodeURIComponent(urlToken)}`);
               const res = await response.json();
@@ -3491,7 +3496,7 @@
             // URL Token이 없고 카카오 연동 중이 아닐 때만, SharedPreferences 백업 크레덴셜 복구 시도
             if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
               try {
-                await authPersistenceReady;
+                await authReadyPromise;
                 console.log("[App Recovery] Reading native recovery credential...");
                 const nativeToken = await window.flutter_inappwebview.callHandler('readToken');
                 if (nativeToken) {
