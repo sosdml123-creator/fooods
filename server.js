@@ -9,6 +9,7 @@ const crypto = require("crypto");
 const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
 const multer = require("multer");
 const bcrypt = require("bcryptjs");
+const rateLimit = require("express-rate-limit");
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -1354,8 +1355,25 @@ app.post("/api/signup/check", async function (req, res) {
   }
 });
 
-// 2.8. 일반 회원가입 API (bcrypt 해싱 적용)
-app.post("/api/signup", async function (req, res) {
+// --- 스팸 방지용 Rate Limiter 정의 ---
+const communityWriteLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1분
+  max: 5, // 최대 5회
+  message: { success: false, message: "스팸 방지를 위해 1분에 최대 5개까지만 글을 쓸 수 있습니다. 잠시 후 다시 시도해주세요." },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const signupLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1분
+  max: 5, // 최대 5회
+  message: { success: false, message: "단시간 내 너무 많은 가입 시도가 감지되었습니다. 잠시 후 다시 시도해주세요." },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// 2.8. 일반 회원가입 API (bcrypt 해싱 및 1분 5회 제한 적용)
+app.post("/api/signup", signupLimiter, async function (req, res) {
   const { username, password, nickname, deviceId, uid, email } = req.body;
   if (!username || !password || !nickname || !uid) {
     return res.status(400).json({ success: false, message: "필수 입력 항목(아이디, 비번, 닉네임, UID)이 누락되었습니다." });
@@ -1409,6 +1427,134 @@ app.post("/api/signup", async function (req, res) {
   } catch (err) {
     console.error("[Signup API] Firestore write error:", err.message);
     return res.status(500).json({ success: false, message: "회원가입 처리 중 오류가 발생했습니다." });
+  }
+});
+
+// 2.9. 익명 커뮤니티 글쓰기 대리 API (1분 5회 Rate Limiting 적용)
+app.post("/api/community/posts", communityWriteLimiter, async function (req, res) {
+  const { title, body, category, author, avatarImg, userId } = req.body;
+  if (!title || !body || !category) {
+    return res.status(400).json({ success: false, message: "제목, 본문, 카테고리는 필수 입력 사항입니다." });
+  }
+
+  try {
+    const url = `${FIRESTORE_BASE_URL}/community_posts`;
+    const payload = {
+      fields: {
+        title: { stringValue: title },
+        body: { stringValue: body },
+        category: { stringValue: category },
+        author: { stringValue: author || "익명 플레이터" },
+        avatarImg: { stringValue: avatarImg || "" },
+        userId: { stringValue: userId || "anonymous" },
+        likeCount: { integerValue: 0 },
+        likedBy: { arrayValue: { values: [] } },
+        scrappedBy: { arrayValue: { values: [] } },
+        comments: { arrayValue: { values: [] } },
+        createdAt: { stringValue: "방금 전" },
+        timestamp: { stringValue: new Date().toISOString() }
+      }
+    };
+
+    const response = await axios.post(url, payload);
+    return res.json({ success: true, id: response.data.name.split("/").pop() });
+  } catch (err) {
+    console.error("[Community API] Firestore write error:", err.message);
+    return res.status(500).json({ success: false, message: "글 등록 중 오류가 발생했습니다." });
+  }
+});
+
+// 2.10. 신고 등록 및 자동 차단 API (누적 5회 시 숨김 처리)
+app.post("/api/report", async function (req, res) {
+  const { postId, commentId, reason, reporterId } = req.body;
+  if (!postId || !reason) {
+    return res.status(400).json({ success: false, message: "신고 대상 ID와 사유는 필수입니다." });
+  }
+
+  const finalReporterId = reporterId || req.ip;
+
+  try {
+    // 1. 중복 신고 검증
+    const reportQueryUrl = `${FIRESTORE_BASE_URL}:runQuery`;
+    const checkPayload = {
+      structuredQuery: {
+        from: [{ collectionId: "reports" }],
+        where: {
+          compositeFilter: {
+            op: "AND",
+            filters: [
+              { fieldFilter: { field: { fieldPath: "postId" }, op: "EQUAL", value: { stringValue: postId } } },
+              { fieldFilter: { field: { fieldPath: "reporterId" }, op: "EQUAL", value: { stringValue: finalReporterId } } },
+              { fieldFilter: { field: { fieldPath: "commentId" }, op: "EQUAL", value: { stringValue: commentId || "" } } }
+            ]
+          }
+        },
+        limit: 1
+      }
+    };
+
+    const duplicateCheck = await axios.post(reportQueryUrl, checkPayload);
+    if (duplicateCheck.data && Array.isArray(duplicateCheck.data) && duplicateCheck.data.length > 0 && duplicateCheck.data[0].document) {
+      return res.status(400).json({ success: false, message: "이미 신고하신 내용입니다." });
+    }
+
+    // 2. 새 신고 저장
+    const writeReportUrl = `${FIRESTORE_BASE_URL}/reports`;
+    const reportFields = {
+      fields: {
+        postId: { stringValue: postId },
+        commentId: { stringValue: commentId || "" },
+        reason: { stringValue: reason },
+        reporterId: { stringValue: finalReporterId },
+        timestamp: { stringValue: new Date().toISOString() }
+      }
+    };
+    await axios.post(writeReportUrl, reportFields);
+
+    // 3. 누적 신고 건수 집계
+    const countPayload = {
+      structuredQuery: {
+        from: [{ collectionId: "reports" }],
+        where: {
+          compositeFilter: {
+            op: "AND",
+            filters: [
+              { fieldFilter: { field: { fieldPath: "postId" }, op: "EQUAL", value: { stringValue: postId } } },
+              { fieldFilter: { field: { fieldPath: "commentId" }, op: "EQUAL", value: { stringValue: commentId || "" } } }
+            ]
+          }
+        }
+      }
+    };
+    const countRes = await axios.post(reportQueryUrl, countPayload);
+    const totalReportsCount = (Array.isArray(countRes.data) && countRes.data[0].document) ? countRes.data.filter(d => d.document).length : 0;
+
+    console.log(`[Auto-Mod] Target: ${postId}, Comment: ${commentId || "None"}, Count: ${totalReportsCount}`);
+
+    // 4. 누적 5회 이상 자동 차단 처리
+    if (totalReportsCount >= 5) {
+      console.log(`[Auto-Mod Action] Hiding post/comment due to accumulated reports: ${postId}`);
+      const patchFields = {
+        fields: {
+          hidden: { booleanValue: true }
+        }
+      };
+      
+      // posts 컬렉션 hidden 업데이트 시도
+      try {
+        await axios.patch(`${FIRESTORE_BASE_URL}/posts/${postId}?updateMask.fieldPaths=hidden`, patchFields);
+      } catch(e) {}
+      
+      // community_posts 컬렉션 hidden 업데이트 시도
+      try {
+        await axios.patch(`${FIRESTORE_BASE_URL}/community_posts/${postId}?updateMask.fieldPaths=hidden`, patchFields);
+      } catch(e) {}
+    }
+
+    return res.json({ success: true, message: "신고가 정상 접수되었습니다." });
+  } catch (err) {
+    console.error("[Report API] Error handling report:", err.message);
+    return res.status(500).json({ success: false, message: "신고 처리 중 내부 오류가 발생했습니다." });
   }
 });
 
