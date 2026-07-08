@@ -3254,6 +3254,7 @@
             
             // 1. 로그인 완료 판정을 즉시 수행하여 글쓰기 권한이 딜레이 없이 활성화되도록 보장
             setIsLoggedIn(true);
+            setDBData("foodhouse_logged_in", "true").catch(e => console.error(e));
             
             // 2. 기본 임시 프로필 즉시 반영
             let nickname = user.displayName || (user.email ? user.email.split("@")[0] : "플레이터");
@@ -3269,6 +3270,7 @@
               role
             };
             setProfile(initialProfile);
+            setDBData("foodhouse_profile", initialProfile).catch(e => console.error(e));
 
             // 3. 비동기 Firestore 정보 및 백엔드 세션 동기화는 백그라운드 처리하여 UI 블로킹 방지
             (async () => {
@@ -3285,6 +3287,7 @@
                     role: userData.role || role
                   };
                   setProfile(updatedProfile);
+                  setDBData("foodhouse_profile", updatedProfile).catch(e => console.error(e));
                 }
               } catch (err) {
                 console.error("[Firebase Auth] Firestore user doc read error:", err);
@@ -3304,13 +3307,16 @@
           } else {
             console.log("[Firebase Auth] No active session found or logged out.");
             setIsLoggedIn(false);
-            setProfile({
+            setDBData("foodhouse_logged_in", "false").catch(e => console.error(e));
+            const guestProfile = {
               name: "나의 플레이팅",
               bio: "내가 올린 레시피와 구매 링크를 관리합니다.",
               avatar: "나",
               avatarImg: "",
               role: "user"
-            });
+            };
+            setProfile(guestProfile);
+            setDBData("foodhouse_profile", guestProfile).catch(e => console.error(e));
             
             // Clear express session
             fetch("/profile/logout", { method: "POST" }).catch(e => console.error(e));
@@ -3363,13 +3369,11 @@
         let isPerformingKakaoSync = false;
 
         async function initSession() {
-          // IndexedDB 로컬 기본 설정 로딩
+          // IndexedDB 로컬 기본 설정 로딩 (로컬 캐시 꼬임 방지를 위해 posts 목록 캐싱은 제거)
           const loadPromises = [
-            getDBData("foodhouse_posts").then(saved => { if (saved) setPosts(saved); }),
             getDBData("foodhouse_profile").then(saved => { if (saved) setProfile(saved); }),
             getDBData("foodhouse_following").then(saved => { if (saved) setFollowingList(saved); }),
             getDBData("foodhouse_creators_data").then(saved => { if (saved) setCreatorsData(saved); }),
-            getDBData("foodhouse_com_posts").then(saved => { if (saved) setCommunityPosts(saved); }),
             getDBData("foodhouse_logged_in").then(saved => { if (saved === "true") setIsLoggedIn(true); })
           ];
 
@@ -3458,9 +3462,13 @@
                     if (credential && credential.type === "local") {
                       console.log("[App Recovery] Performing automatic local login for:", credential.username);
                       await auth.signInWithEmailAndPassword(credential.username + "@myplating.kr", credential.password);
+                      setIsLoggedIn(true);
+                      setDBData("foodhouse_logged_in", "true").catch(e => console.error(e));
                     } else if (credential && credential.type === "kakao") {
                       console.log("[App Recovery] Performing automatic Kakao login for ID:", credential.kakaoId);
                       await auth.signInWithEmailAndPassword(`kakao_${credential.kakaoId}@myplating.kr`, `kakao_${credential.kakaoId}_plating`);
+                      setIsLoggedIn(true);
+                      setDBData("foodhouse_logged_in", "true").catch(e => console.error(e));
                     }
                   } catch (jsonErr) {
                     console.warn("[App Recovery] Token is not JSON format. Clearing invalid native token.", jsonErr);
@@ -3515,11 +3523,12 @@
             const list = [];
             snapshot.forEach(doc => {
               const data = doc.data();
+              const currentUser = auth.currentUser;
               list.push({
                 id: doc.id,
                 ...data,
-                liked: data.likedBy?.includes(profile.name) || false,
-                scrapped: data.scrappedBy?.includes(profile.name) || false
+                liked: (currentUser && (data.likedBy?.includes(currentUser.uid) || data.likedBy?.includes(profile.name))) || false,
+                scrapped: (currentUser && (data.scrappedBy?.includes(currentUser.uid) || data.scrappedBy?.includes(profile.name))) || false
               });
             });
             console.log("[Firestore Sync] posts updated:", list.length);
@@ -3534,11 +3543,12 @@
             const list = [];
             snapshot.forEach(doc => {
               const data = doc.data();
+              const currentUser = auth.currentUser;
               list.push({
                 id: doc.id,
                 ...data,
-                liked: data.likedBy?.includes(profile.name) || false,
-                scrapped: data.scrappedBy?.includes(profile.name) || false
+                liked: (currentUser && (data.likedBy?.includes(currentUser.uid) || data.likedBy?.includes(profile.name))) || false,
+                scrapped: (currentUser && (data.scrappedBy?.includes(currentUser.uid) || data.scrappedBy?.includes(profile.name))) || false
               });
             });
             console.log("[Firestore Sync] communityPosts updated:", list.length);
@@ -3670,6 +3680,9 @@
           setLoginOpen(true);
           return;
         }
+        const user = auth.currentUser;
+        if (!user) return;
+
         const postRef = db.collection("posts").doc(id);
         db.runTransaction(async (transaction) => {
           const doc = await transaction.get(postRef);
@@ -3677,11 +3690,16 @@
           const data = doc.data();
           const likedBy = data.likedBy || [];
           let likeCount = data.likeCount || 0;
-          if (likedBy.includes(profile.name)) {
-            likedBy.splice(likedBy.indexOf(profile.name), 1);
+          
+          const hasLikedUid = likedBy.includes(user.uid);
+          const hasLikedName = likedBy.includes(profile.name);
+
+          if (hasLikedUid || hasLikedName) {
+            if (hasLikedUid) likedBy.splice(likedBy.indexOf(user.uid), 1);
+            if (hasLikedName) likedBy.splice(likedBy.indexOf(profile.name), 1);
             likeCount = Math.max(0, likeCount - 1);
           } else {
-            likedBy.push(profile.name);
+            likedBy.push(user.uid);
             likeCount += 1;
           }
           transaction.update(postRef, { likedBy, likeCount });
@@ -3693,16 +3711,24 @@
           setLoginOpen(true);
           return;
         }
+        const user = auth.currentUser;
+        if (!user) return;
+
         const postRef = db.collection("posts").doc(id);
         db.runTransaction(async (transaction) => {
           const doc = await transaction.get(postRef);
           if (!doc.exists) return;
           const data = doc.data();
           const scrappedBy = data.scrappedBy || [];
-          if (scrappedBy.includes(profile.name)) {
-            scrappedBy.splice(scrappedBy.indexOf(profile.name), 1);
+          
+          const hasScrappedUid = scrappedBy.includes(user.uid);
+          const hasScrappedName = scrappedBy.includes(profile.name);
+
+          if (hasScrappedUid || hasScrappedName) {
+            if (hasScrappedUid) scrappedBy.splice(scrappedBy.indexOf(user.uid), 1);
+            if (hasScrappedName) scrappedBy.splice(scrappedBy.indexOf(profile.name), 1);
           } else {
-            scrappedBy.push(profile.name);
+            scrappedBy.push(user.uid);
           }
           transaction.update(postRef, { scrappedBy });
         }).catch(err => console.error("[Firestore Transaction] Scrap error:", err));
@@ -3900,6 +3926,9 @@
           setLoginOpen(true);
           return;
         }
+        const user = auth.currentUser;
+        if (!user) return;
+
         const postRef = db.collection("community_posts").doc(postId);
         db.runTransaction(async (transaction) => {
           const doc = await transaction.get(postRef);
@@ -3907,11 +3936,16 @@
           const data = doc.data();
           const likedBy = data.likedBy || [];
           let likeCount = data.likeCount || 0;
-          if (likedBy.includes(profile.name)) {
-            likedBy.splice(likedBy.indexOf(profile.name), 1);
+          
+          const hasLikedUid = likedBy.includes(user.uid);
+          const hasLikedName = likedBy.includes(profile.name);
+
+          if (hasLikedUid || hasLikedName) {
+            if (hasLikedUid) likedBy.splice(likedBy.indexOf(user.uid), 1);
+            if (hasLikedName) likedBy.splice(likedBy.indexOf(profile.name), 1);
             likeCount = Math.max(0, likeCount - 1);
           } else {
-            likedBy.push(profile.name);
+            likedBy.push(user.uid);
             likeCount += 1;
           }
           transaction.update(postRef, { likedBy, likeCount });
@@ -3985,16 +4019,24 @@
           setLoginOpen(true);
           return;
         }
+        const user = auth.currentUser;
+        if (!user) return;
+
         const postRef = db.collection("community_posts").doc(postId);
         db.runTransaction(async (transaction) => {
           const doc = await transaction.get(postRef);
           if (!doc.exists) return;
           const data = doc.data();
           const scrappedBy = data.scrappedBy || [];
-          if (scrappedBy.includes(profile.name)) {
-            scrappedBy.splice(scrappedBy.indexOf(profile.name), 1);
+          
+          const hasScrappedUid = scrappedBy.includes(user.uid);
+          const hasScrappedName = scrappedBy.includes(profile.name);
+
+          if (hasScrappedUid || hasScrappedName) {
+            if (hasScrappedUid) scrappedBy.splice(scrappedBy.indexOf(user.uid), 1);
+            if (hasScrappedName) scrappedBy.splice(scrappedBy.indexOf(profile.name), 1);
           } else {
-            scrappedBy.push(profile.name);
+            scrappedBy.push(user.uid);
           }
           transaction.update(postRef, { scrappedBy });
         }).catch(err => console.error("[Firestore Transaction] Scrap community post error:", err));
