@@ -63,6 +63,15 @@ const r2PublicPrefix = process.env.R2_PUBLIC_URL_PREFIX && process.env.R2_PUBLIC
   ? process.env.R2_PUBLIC_URL_PREFIX
   : "https://pub-0452a32d8622413c88efc3f7d673805d.r2.dev";
 
+// 로컬 DB 파일 경로 정의
+const USERS_DB_PATH = path.join(__dirname, "users.json");
+const REPORTS_DB_PATH = path.join(__dirname, "reports.json");
+const MODERATION_RULES_PATH = path.join(__dirname, "moderation_rules.json");
+const ADMIN_LOGS_PATH = path.join(__dirname, "admin_logs.json");
+const ADMIN_CONFIG_PATH = path.join(__dirname, "admin_config.json");
+const RECIPE_POSTS_DB_PATH = path.join(__dirname, "recipe_posts.json");
+const COMMUNITY_POSTS_DB_PATH = path.join(__dirname, "community_posts.json");
+
 const hasR2Config = r2AccessKey && r2SecretKey && r2Endpoint && r2Bucket;
 
 let s3;
@@ -822,14 +831,6 @@ const message_template = {
   },
 };
 
-// 로컬 DB 파일 경로 정의
-const USERS_DB_PATH = path.join(__dirname, "users.json");
-const REPORTS_DB_PATH = path.join(__dirname, "reports.json");
-const MODERATION_RULES_PATH = path.join(__dirname, "moderation_rules.json");
-const ADMIN_LOGS_PATH = path.join(__dirname, "admin_logs.json");
-const ADMIN_CONFIG_PATH = path.join(__dirname, "admin_config.json");
-const RECIPE_POSTS_DB_PATH = path.join(__dirname, "recipe_posts.json");
-const COMMUNITY_POSTS_DB_PATH = path.join(__dirname, "community_posts.json");
 
 const DEFAULT_RECIPE_POSTS = [
   {
