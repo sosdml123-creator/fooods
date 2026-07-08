@@ -8,6 +8,7 @@ const path = require("path");
 const crypto = require("crypto");
 const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
 const multer = require("multer");
+const bcrypt = require("bcryptjs");
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -1201,7 +1202,7 @@ app.get("/terms", function (req, res) {
   res.sendFile(path.join(__dirname, "www", "terms.html"));
 });
 
-// 2.7. 일반 로그인 API (데모 로그인 통합 지원)
+// 2.7. 일반 로그인 API (데모 로그인 통합 지원 및 bcrypt 해싱 적용)
 app.post("/api/login", function (req, res) {
   const { username, password } = req.body;
   if (!username || !password) {
@@ -1210,38 +1211,61 @@ app.post("/api/login", function (req, res) {
 
   const users = readUsers();
   
+  // 1. 유저 아이디 검색
+  const userIndex = users.findIndex(u => u.username === username);
+  if (userIndex !== -1) {
+    const user = users[userIndex];
+    let isPasswordValid = false;
+    let needsMigration = false;
 
+    // 패스워드가 bcrypt 해시된 형태인지 체크
+    const isHashed = typeof user.password === "string" && (user.password.startsWith("$2a$") || user.password.startsWith("$2b$"));
 
-  // 2. 일반 계정 검증
-  const user = users.find(u => u.username === username && u.password === password);
-  if (user) {
-    // 차단 검사
-    const moderationRules = readJsonFile(MODERATION_RULES_PATH, { deletedPosts: [], deletedComments: [], blockedUsers: [], hiddenPosts: [] });
-    if (moderationRules.blockedUsers && moderationRules.blockedUsers.includes(user.nickname)) {
-      return res.status(403).json({ success: false, message: "차단된 사용자입니다. 이용이 정지되었습니다." });
+    if (isHashed) {
+      isPasswordValid = bcrypt.compareSync(password, user.password);
+    } else {
+      // 평문 비밀번호 시절 가입 유저 대조
+      if (user.password === password) {
+        isPasswordValid = true;
+        needsMigration = true; // 해싱 마이그레이션 필요 대상 표시
+      }
     }
 
-    let sessionToken = user.session_token;
-    if (!sessionToken) {
-      sessionToken = "local_token_" + Math.random().toString(36).substring(2) + "_" + Date.now();
-      user.session_token = sessionToken;
+    if (isPasswordValid) {
+      // 차단 검사
+      const moderationRules = readJsonFile(MODERATION_RULES_PATH, { deletedPosts: [], deletedComments: [], blockedUsers: [], hiddenPosts: [] });
+      if (moderationRules.blockedUsers && moderationRules.blockedUsers.includes(user.nickname)) {
+        return res.status(403).json({ success: false, message: "차단된 사용자입니다. 이용이 정지되었습니다." });
+      }
+
+      // 평문 비밀번호인 경우 해싱 값으로 마이그레이션 적용 및 users.json 영구 보존
+      if (needsMigration) {
+        console.log(`[Bcrypt Migration] Migrating plain password to hash for user: ${username}`);
+        user.password = bcrypt.hashSync(password, 10);
+      }
+
+      let sessionToken = user.session_token;
+      if (!sessionToken) {
+        sessionToken = "local_token_" + Math.random().toString(36).substring(2) + "_" + Date.now();
+        user.session_token = sessionToken;
+      }
+      user.last_login_at = new Date().toISOString();
+      writeUsers(users);
+
+      req.session.key = sessionToken;
+      req.session.user = {
+        username: user.username,
+        nickname: user.nickname,
+        profile_image: user.profile_image || "",
+        email: user.email || "",
+        role: user.role || "user"
+      };
+
+      return res.json({ success: true, token: sessionToken, nickname: user.nickname, role: user.role || "user" });
     }
-    user.last_login_at = new Date().toISOString();
-    writeUsers(users);
-
-    req.session.key = sessionToken;
-    req.session.user = {
-      username: user.username,
-      nickname: user.nickname,
-      profile_image: user.profile_image || "",
-      email: user.email || "",
-      role: user.role || "user"
-    };
-
-    return res.json({ success: true, token: sessionToken, nickname: user.nickname, role: user.role || "user" });
-  } else {
-    return res.status(401).json({ success: false, message: "아이디 또는 비밀번호가 올바르지 않습니다." });
   }
+
+  return res.status(401).json({ success: false, message: "아이디 또는 비밀번호가 올바르지 않습니다." });
 });
 
 // 2.8. 일반 회원가입 중복 및 제약 조건 선행 검증 API
@@ -1268,7 +1292,7 @@ app.post("/api/signup/check", function (req, res) {
   return res.json({ success: true });
 });
 
-// 2.8. 일반 회원가입 API (1기기 1계정 제약 조건 추가)
+// 2.8. 일반 회원가입 API (bcrypt 해싱 적용)
 app.post("/api/signup", function (req, res) {
   const { username, password, nickname, deviceId, uid, email } = req.body;
   if (!username || !password || !nickname) {
@@ -1289,12 +1313,15 @@ app.post("/api/signup", function (req, res) {
     return res.status(400).json({ success: false, message: "이미 사용 중인 닉네임입니다." });
   }
 
+  // 비밀번호 Bcrypt 해싱 처리
+  const hashedPassword = bcrypt.hashSync(password, 10);
+
   // 4. 새 회원 등록
   const sessionToken = "local_token_" + Math.random().toString(36).substring(2) + "_" + Date.now();
   const newUser = {
     uid: uid || "",
     username: username,
-    password: password,
+    password: hashedPassword, // 해싱된 패스워드 저장
     nickname: nickname,
     device_id: deviceId || "",
     session_token: sessionToken,
