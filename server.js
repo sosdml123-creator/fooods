@@ -20,15 +20,17 @@ app.use(express.static(path.join(__dirname, "www")));
 app.use(express.json()); // JSON 파싱을 위해 추가
 app.use("/uploads", express.static(path.join(__dirname, "uploads"))); // 로컬 업로드 서빙
 
+const isProd = process.env.NODE_ENV === "production" || process.env.PORT !== undefined;
+
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "your session secret",
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
     cookie: {
-      secure: true,       // HTTPS 환경에서만 쿠키 전송
-      sameSite: "lax",    // CSRF 보호
-      httpOnly: true,     // JS에서 쿠키 접근 차단
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
+      httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000 // 24시간
     },
   })
