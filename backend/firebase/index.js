@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const axios = require("axios");
 
 // 파일 데이터베이스 경로 정의
@@ -106,6 +107,21 @@ async function downloadFromR2(fileName, localPath) {
       console.error(`[R2 복원 에러] ${fileName}:`, err.message);
     }
   }
+}
+
+async function getR2PresignedUrl(key, contentType) {
+  if (!hasR2Config || !s3) {
+    throw new Error("R2 config is missing or invalid");
+  }
+  const command = new PutObjectCommand({
+    Bucket: r2Bucket,
+    Key: key,
+    ContentType: contentType,
+    CacheControl: "public, max-age=31536000",
+  });
+  // 5분 유효시간 (300초)
+  const url = await getSignedUrl(s3, command, { expiresIn: 300 });
+  return url;
 }
 
 async function syncDbsFromR2() {
@@ -223,6 +239,7 @@ module.exports = {
   uploadToR2,
   downloadFromR2,
   syncDbsFromR2,
+  getR2PresignedUrl,
   findFirestoreUserByField,
   writeFirestoreUser,
   readUsers,

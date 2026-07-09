@@ -73,11 +73,47 @@ const signupLimiter = rateLimit({
   legacyHeaders: false
 });
 
+const loginLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { success: false, message: "단시간 내 로그인 시도가 너무 많습니다. 1분 후 다시 시도해주세요." },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const commentLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 15,
+  message: { success: false, message: "댓글은 1분에 최대 15개까지만 작성할 수 있습니다." },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const likeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 15,
+  message: { success: false, message: "짧은 시간 내 너무 많은 좋아요를 눌렀습니다. 잠시 후 시도해주세요." },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const reportLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: { success: false, message: "신고 제출 횟수 제한(1분 5회)을 초과했습니다. 잠시 후 다시 시도해주세요." },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 module.exports = {
   corsOptions,
   requireAdmin,
   requireLogin,
   communityWriteLimiter,
   signupLimiter,
+  loginLimiter,
+  commentLimiter,
+  likeLimiter,
+  reportLimiter,
   getAdminIds
 };

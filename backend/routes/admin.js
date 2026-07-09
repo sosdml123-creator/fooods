@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const crypto = require("crypto");
 const axios = require("axios");
-const { requireAdmin, requireLogin } = require("../middlewares");
+const { requireAdmin, requireLogin, reportLimiter } = require("../middlewares");
 const {
   readJsonFile,
   writeJsonFile,
@@ -263,82 +263,11 @@ router.get("/moderation-rules", (req, res) => {
 });
 
 // 8. 관리자 로그 조회 API (관리자 전용)
-router.get("/admin/logs", requireAdmin, (req, res) => {
+router.get("/logs", requireAdmin, (req, res) => {
   const logs = readJsonFile(ADMIN_LOGS_PATH, []);
   res.json({ success: true, logs });
 });
 
-// 9. 관리자 Firestore 초기화 API (관리자 전용)
-router.post("/admin/setup-firestore", requireAdmin, async (req, res) => {
-  const { firebaseIdToken, adminUid } = req.body;
-  if (!firebaseIdToken || !adminUid) {
-    return res.status(400).json({ success: false, message: "firebaseIdToken 및 adminUid 가 필요합니다." });
-  }
-
-  const PROJECT_ID = "plating-app-db29f";
-  const BASE_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
-
-  const headers = {
-    "Content-Type": "application/json",
-    "Authorization": `Bearer ${firebaseIdToken}`
-  };
-
-  const results = { setAdmin: false, deletedPosts: 0, deletedCommunityPosts: 0, deletedUsers: 0 };
-
-  try {
-    const adminDocUrl = `${BASE_URL}/users/${adminUid}?updateMask.fieldPaths=role&updateMask.fieldPaths=bio&updateMask.fieldPaths=updatedAt`;
-    await axios.patch(adminDocUrl, {
-      fields: {
-        role: { stringValue: "admin" },
-        bio: { stringValue: "" },
-        updatedAt: { stringValue: new Date().toISOString() }
-      }
-    }, { headers });
-    results.setAdmin = true;
-
-    try {
-      const postsRes = await axios.get(`${BASE_URL}/posts?pageSize=300`, { headers });
-      const postDocs = postsRes.data.documents || [];
-      for (const d of postDocs) {
-        const docPath = d.name.replace(`projects/${PROJECT_ID}/databases/(default)/documents`, "");
-        await axios.delete(`${BASE_URL}${docPath}`, { headers });
-        results.deletedPosts++;
-      }
-    } catch (e) {}
-
-    try {
-      const comRes = await axios.get(`${BASE_URL}/community_posts?pageSize=300`, { headers });
-      const comDocs = comRes.data.documents || [];
-      for (const d of comDocs) {
-        const docPath = d.name.replace(`projects/${PROJECT_ID}/databases/(default)/documents`, "");
-        await axios.delete(`${BASE_URL}${docPath}`, { headers });
-        results.deletedCommunityPosts++;
-      }
-    } catch (e) {}
-
-    try {
-      const usersRes = await axios.get(`${BASE_URL}/users?pageSize=300`, { headers });
-      const userDocs = usersRes.data.documents || [];
-      for (const d of userDocs) {
-        const docId = d.name.split("/").pop();
-        if (docId === adminUid) continue;
-        const docPath = d.name.replace(`projects/${PROJECT_ID}/databases/(default)/documents`, "");
-        await axios.delete(`${BASE_URL}${docPath}`, { headers });
-        results.deletedUsers++;
-      }
-    } catch (e) {}
-
-    // 로컬 users.json 정리
-    const adminKakaoId = req.session.user.kakao_id;
-    const usersLocal = readUsers().filter(u => u.kakao_id === adminKakaoId);
-    writeUsers(usersLocal);
-
-    res.json({ success: true, results });
-  } catch (err) {
-    console.error("[Admin Setup] 오류:", err.response ? JSON.stringify(err.response.data) : err.message);
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
 
 // 10. FCM 푸시 알림 발송 API
 router.post("/send-push", async function (req, res) {
@@ -419,7 +348,7 @@ router.post("/send-push", async function (req, res) {
 });
 
 // 11. 익명/일반 사용자용 신고 API (누적 5회 시 블라인드)
-router.post("/report", async function (req, res) {
+router.post("/report", reportLimiter, async function (req, res) {
   const { postId, commentId, reason, reporterId } = req.body;
   if (!postId || !reason) {
     return res.status(400).json({ success: false, message: "신고 대상 ID와 사유는 필수입니다." });

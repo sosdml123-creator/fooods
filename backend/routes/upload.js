@@ -10,11 +10,42 @@ const {
   hasR2Config, 
   s3, 
   r2Bucket, 
-  r2PublicPrefix 
+  r2PublicPrefix,
+  getR2PresignedUrl
 } = require("../firebase");
 
 const upload = multer({ storage: multer.memoryStorage() });
 const domain = process.env.BACKEND_URL || "http://localhost:4000";
+
+// Cloudflare R2 Presigned URL 발급 API
+router.post("/presigned", async (req, res) => {
+  try {
+    const { filename, contentType } = req.body;
+    if (!filename || !contentType) {
+      return res.status(400).json({ success: false, message: "filename 및 contentType이 필요합니다." });
+    }
+
+    const fileExtension = path.extname(filename) || ".jpg";
+    const uniqueKey = `uploads/${crypto.randomUUID()}${fileExtension}`;
+
+    if (!hasR2Config) {
+      return res.status(400).json({ success: false, message: "R2 스토리지가 설정되지 않았습니다." });
+    }
+
+    const uploadUrl = await getR2PresignedUrl(uniqueKey, contentType);
+    const downloadUrl = `${r2PublicPrefix}/${uniqueKey}`;
+
+    return res.json({
+      success: true,
+      uploadUrl,
+      downloadUrl,
+      key: uniqueKey
+    });
+  } catch (error) {
+    console.error("Presigned URL 생성 에러:", error);
+    return res.status(500).json({ success: false, message: "Presigned URL 발급 실패: " + error.message });
+  }
+});
 
 // 이미지 업로드 API
 router.post("/upload", upload.single("file"), async (req, res) => {

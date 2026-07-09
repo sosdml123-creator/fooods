@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const crypto = require("crypto");
 const axios = require("axios");
-const { communityWriteLimiter } = require("../middlewares");
+const { communityWriteLimiter, likeLimiter, commentLimiter } = require("../middlewares");
 const {
   readJsonFile,
   writeJsonFile,
@@ -76,7 +76,7 @@ router.post("/posts", async (req, res) => {
 });
 
 // 3. 레시피 포스트 좋아요 토글
-router.post("/posts/like", async (req, res) => {
+router.post("/posts/like", likeLimiter, async (req, res) => {
   try {
     if (!req.session.user) {
       return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
@@ -140,7 +140,7 @@ router.post("/posts/scrap", async (req, res) => {
 });
 
 // 5. 레시피 포스트 댓글 작성
-router.post("/posts/comment", async (req, res) => {
+router.post("/posts/comment", commentLimiter, async (req, res) => {
   try {
     if (!req.session.user) {
       return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
@@ -284,7 +284,7 @@ router.post("/posts/delete", async (req, res) => {
 });
 
 // 10. 커뮤니티 포스트 조회
-router.get("/community-posts", (req, res) => {
+router.get("/community", (req, res) => {
   const posts = readJsonFile(COMMUNITY_POSTS_DB_PATH, DEFAULT_COMMUNITY_POSTS);
   const rules = readJsonFile(MODERATION_RULES_PATH, { deletedPosts: [], deletedComments: [], blockedUsers: [], hiddenPosts: [] });
   
@@ -303,7 +303,7 @@ router.get("/community-posts", (req, res) => {
 });
 
 // 11. 커뮤니티 포스트 작성
-router.post("/community-posts", async (req, res) => {
+router.post("/community", async (req, res) => {
   try {
     if (!req.session.user) {
       return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
@@ -337,7 +337,7 @@ router.post("/community-posts", async (req, res) => {
 });
 
 // 12. 커뮤니티 포스트 좋아요 토글
-router.post("/community-posts/like", async (req, res) => {
+router.post("/community/like", likeLimiter, async (req, res) => {
   try {
     if (!req.session.user) {
       return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
@@ -370,7 +370,7 @@ router.post("/community-posts/like", async (req, res) => {
 });
 
 // 13. 커뮤니티 포스트 스크랩 토글
-router.post("/community-posts/scrap", async (req, res) => {
+router.post("/community/scrap", async (req, res) => {
   try {
     if (!req.session.user) {
       return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
@@ -401,7 +401,7 @@ router.post("/community-posts/scrap", async (req, res) => {
 });
 
 // 14. 커뮤니티 포스트 댓글 작성
-router.post("/community-posts/comment", async (req, res) => {
+router.post("/community/comment", commentLimiter, async (req, res) => {
   try {
     if (!req.session.user) {
       return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
@@ -430,7 +430,7 @@ router.post("/community-posts/comment", async (req, res) => {
 });
 
 // 15. 커뮤니티 포스트 댓글 수정
-router.post("/community-posts/comment/edit", async (req, res) => {
+router.post("/community/comment/edit", async (req, res) => {
   try {
     if (!req.session.user) {
       return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
@@ -461,7 +461,7 @@ router.post("/community-posts/comment/edit", async (req, res) => {
 });
 
 // 16. 커뮤니티 포스트 댓글 삭제
-router.post("/community-posts/comment/delete", async (req, res) => {
+router.post("/community/comment/delete", async (req, res) => {
   try {
     if (!req.session.user) {
       return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
@@ -492,7 +492,7 @@ router.post("/community-posts/comment/delete", async (req, res) => {
 });
 
 // 17. 커뮤니티 포스트 수정
-router.post("/community-posts/edit", async (req, res) => {
+router.post("/community/edit", async (req, res) => {
   try {
     if (!req.session.user) {
       return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
@@ -519,7 +519,7 @@ router.post("/community-posts/edit", async (req, res) => {
 });
 
 // 18. 커뮤니티 포스트 삭제
-router.post("/community-posts/delete", async (req, res) => {
+router.post("/community/delete", async (req, res) => {
   try {
     if (!req.session.user) {
       return res.status(401).json({ success: false, message: "로그인이 필요합니다." });

@@ -3,6 +3,7 @@ const express = require("express");
 const session = require("express-session");
 const helmet = require("helmet");
 const compression = require("compression");
+const morgan = require("morgan");
 const { corsOptions } = require("./middlewares");
 const { syncDbsFromR2, hasR2Config } = require("./firebase");
 
@@ -18,6 +19,9 @@ const port = process.env.PORT || 4000;
 
 // Render.com 등 리버스 프록시 환경에서 HTTPS 인식을 위한 설정
 app.set('trust proxy', 1);
+
+// HTTP 요청 로깅 (Morgan)
+app.use(morgan("combined"));
 
 // ETag 활성화
 app.set('etag', true);
@@ -57,17 +61,25 @@ if (hasR2Config) {
   syncDbsFromR2().catch(err => console.error("R2 복원 실행 실패:", err));
 }
 
-// 웜업 및 핑용 루트 라우트 (Render Cold Start 방지)
-app.get("/api", (req, res) => {
-  res.json({ success: true, message: "Welcome to Plating API Server!", timestamp: new Date() });
+// 헬스 체크 API (Render 상태 모니터링용)
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", version: "1.0.0" });
 });
 
-// API 라우터 등록
-app.use("/api", authRouter);
-app.use("/api", postsRouter);
-app.use("/api", profileRouter);
-app.use("/api", uploadRouter);
-app.use("/api", adminRouter);
+// 웜업 및 핑용 루트 라우트 (Render Cold Start 방지)
+app.get("/api", (req, res) => {
+  res.json({ success: true, message: "Welcome to Plating API Server!", version: "1.0.0" });
+});
+app.get("/api/v1", (req, res) => {
+  res.json({ success: true, message: "Plating REST API v1 is active!", timestamp: new Date() });
+});
+
+// API 라우터 등록 (REST v1 설계 규격 적용)
+app.use("/api/v1/auth", authRouter);
+app.use("/api/v1/users", profileRouter);
+app.use("/api/v1/upload", uploadRouter);
+app.use("/api/v1/admin", adminRouter);
+app.use("/api/v1", postsRouter); // postsRouter는 내부에 /posts 및 /community 자원을 직접 매핑하고 있음
 
 // 에러 처리 미들웨어
 app.use((err, req, res, next) => {

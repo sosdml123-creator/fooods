@@ -1,3 +1,11 @@
+import AdBanner from './components/AdBanner';
+import BottomNav from './components/BottomNav';
+import Header from './components/Header';
+import PostCard from './components/PostCard';
+import Home from './pages/Home';
+import MyPage from './pages/Mypage';
+import { CommunityView, CommunityDetailView } from './pages/Community';
+import AdminReportsView from './pages/Admin';
 import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import firebase from 'firebase/compat/app';
@@ -288,198 +296,16 @@ const API_URL = import.meta.env.VITE_API_URL || '';
         title: "유기농 압착 올리브유 500ml (엑스트라 버진)",
         image: "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&q=80&w=200",
         host: "coupang.com"
-      },
-      {
-        domain: "smartstore.naver.com",
-        title: "무쇠 미니 프라이팬 20cm (인덕션 겸용)",
-        image: "https://images.unsplash.com/photo-1584269600464-37b1b58a9fe7?auto=format&fit=crop&q=80&w=200",
-        host: "smartstore.naver.com"
-      },
-      {
-        domain: "kurly.com",
-        title: "무항생제 신선란 10구 (1등급)",
-        image: "https://images.unsplash.com/photo-1516448620398-c5f44bf9f441?auto=format&fit=crop&q=80&w=200",
-        host: "kurly.com"
       }
     ];
 
-    const initialCreatorsData = {
-      "푸드스타일리스트": {
-        bio: "무채색의 깔끔한 홈 인테리어와 자연주의 요리를 제안합니다.",
-        followersCount: 1420,
-        followingCount: 96,
-        avatarImg: ""
-      },
-      "카페투어러": {
-        bio: "전국에 숨겨진 감성 가득 모노톤 카페를 발굴합니다.",
-        followersCount: 890,
-        followingCount: 154,
-        avatarImg: ""
-      }
-    };
-
-    const defaultPosts = [
-      {
-        id: "1",
-        author: "푸드스타일리스트",
-        title: "미니멀 주방에서 만드는 감성 바질 파스타",
-        body: "오늘 아침에는 직접 기른 #바질 로 #페스토 를 만들고, 엑스트라 버진 #올리브유 를 듬뿍 둘러 파스타를 요리해봤습니다. 무채색으로 정돈된 주방에서 만드는 요리는 늘 마음을 차분하게 해주네요. 제가 쓴 올리브유와 팬 정보는 하단에 달아둘게요!",
-        category: "레시피",
-        mediaType: "image",
-        image: [
-          "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800",
-          "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&q=80&w=800"
-        ],
-        likeCount: 42,
-        liked: false,
-        scrapped: false,
-        comments: [
-          { id: "c1", author: "요린이", text: "식기류 너무 예쁘네요. 팬 정보 링크 타고 구매했어요!" },
-          { id: "c2", author: "홈카페", text: "바질 페스토 레시피도 알려주실 수 있나요?" }
-        ],
-        productLinks: [
-          {
-            id: "l1",
-            title: "유기농 압착 올리브유 500ml (엑스트라 버진)",
-            image: "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&q=80&w=200",
-            url: "https://www.coupang.com/vp/products/12345",
-            host: "coupang.com"
-          }
-        ]
-      },
-      {
-        id: "2",
-        author: "카페투어러",
-        title: "성수동 핫플 감성 에스프레소 바 방문 후기",
-        body: "성수동 골목길에 새로 오픈한 모노톤의 에스프레소 바입니다. 화이트와 블랙 마블 테이블이 인상적이고 #크로플 이 아주 쫀득합니다! 매장 장소 정보와 함께 할인 쿠폰 링크를 걸어둘게요. #성수카페 #에스프레소",
-        category: "맛집",
-        mediaType: "image",
-        image: [
-          "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&q=80&w=800",
-          "https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&q=80&w=800"
-        ],
-        likeCount: 88,
-        liked: false,
-        scrapped: false,
-        comments: [
-          { id: "c3", author: "빵돌이", text: "여기 크로플 진짜 맛나요. 쿠폰 바로 구매했습니다!" }
-        ],
-        productLinks: []
-      },
-      {
-        id: "3",
-        author: "푸드스타일리스트",
-        title: "모던 쿡웨어 세트로 에그 베네딕트 레시피 🍳",
-        body: "#에그베네딕트 브런치 홈카페용 레시피입니다. 사진을 보시면서 주방 연출 꿀팁도 얻어 가세요! 노른자를 톡 터뜨리는 게 포인트입니다. #브런치 #홈카페",
-        category: "레시피",
-        mediaType: "image",
-        image: [
-          "https://images.unsplash.com/photo-1484723091739-30a097e8f929?auto=format&fit=crop&q=80&w=800"
-        ],
-        likeCount: 125,
-        liked: false,
-        scrapped: false,
-        comments: [],
-        productLinks: [
-          {
-            id: "l4",
-            title: "무항생제 신선란 10구 (1등급)",
-            image: "https://images.unsplash.com/photo-1516448620398-c5f44bf9f441?auto=format&fit=crop&q=80&w=200",
-            url: "https://kurly.com/goods/5678",
-            host: "kurly.com"
-          }
-        ]
-      }
-    ];
-
-    const initialCommunityPosts = [
-      {
-        id: "cp1",
-        title: "집에서 스테이크 맛있게 굽는 팁 알려드려요!",
-        body: "고기 온도, 팬 온도, 굽는 순서만 지켜도 맛이 달라져요. 굽기 1시간 전에 고기를 실온에 꺼내두는 것이 핵심입니다. 팬에 연기가 살짝 날 정도로 강하게 달군 뒤...",
-        category: "자유",
-        author: "요리하는곰",
-        createdAt: "3시간 전",
-        likeCount: 112,
-        liked: false,
-        viewCount: 3245,
-        scrapped: false,
-        comments: [
-          { id: "cc1", author: "스테이크러버", text: "꿀팁 감사합니다! 오늘 저녁에 바로 해볼게요." },
-          { id: "cc2", author: "고기대장", text: "로즈마리랑 마늘도 같이 넣어서 시어링해주면 향이 더 대박입니다." }
-        ],
-        image: [
-          "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=400"
-        ]
-      },
-      {
-        id: "cp2",
-        title: "에어프라이어로 군고구마 만들기",
-        body: "진짜 달달하고 맛있어요! 시간도 별로 안걸려요 🥲 에어프라이어 200도에서 30분 정도 돌려주면 촉촉하고 달콤한 군고구마 완성!",
-        category: "자유",
-        author: "푸드로버",
-        createdAt: "5시간 전",
-        likeCount: 98,
-        liked: false,
-        viewCount: 2107,
-        scrapped: false,
-        comments: [
-          { id: "cc3", author: "고구마귀신", text: "와 온도 진짜 딱 맞네요! 감사합니다." }
-        ],
-        image: [
-          "https://images.unsplash.com/photo-1596797038530-2c107229654b?auto=format&fit=crop&q=80&w=400"
-        ]
-      },
-      {
-        id: "cp3",
-        title: "파스타 면 삶을 때 소금은 얼마나 넣어야 하나요?",
-        body: "항상 싱거워져서 고민이에요... 😭 물 1L 기준으로 소금 몇 그램 정도 넣는 게 가장 적절한가요? 파스타면 100g 1인분 삶을 때 팁 부탁드려요.",
-        category: "질문",
-        author: "요리초보",
-        createdAt: "7시간 전",
-        likeCount: 23,
-        liked: false,
-        viewCount: 1872,
-        scrapped: false,
-        comments: [
-          { id: "cc4", author: "파스타마스터", text: "물 1L에 소금 10g(대략 밥숟가락 깎아서 1스푼)이 국룰입니다. 면수 간이 짭짤해야 면에 간이 뱁니다!" }
-        ],
-        image: []
-      },
-      {
-        id: "cp4",
-        title: "강남역 근처 점심 맛집 추천해주세요!",
-        body: "1만원 이하 가성비 좋은 곳이면 더 좋을 것 같아요! 직장인들 매일 먹기 좋은 백반집이나 순대국밥 맛집 알고 계시면 정보 공유 부탁드려요.",
-        category: "맛집추천",
-        author: "맛집탐방러",
-        createdAt: "9시간 전",
-        likeCount: 31,
-        liked: false,
-        viewCount: 2356,
-        scrapped: false,
-        comments: [],
-        image: []
-      },
-      {
-        id: "cp5",
-        title: "[공동구매] 제주 감귤 10kg 오픈!",
-        body: "이번 제주 감귤 정말 맛있어요 🍊 마감 임박! 서귀포 산지 직송이라 싱싱하고 당도가 13브릭스 이상 나옵니다. 조기 품절될 수 있으니 서두르세요!",
-        category: "공동구매",
-        author: "공동구매알리미",
-        createdAt: "1일 전",
-        likeCount: 76,
-        liked: false,
-        viewCount: 1043,
-        scrapped: false,
-        comments: [],
-        image: [],
-        isAnnouncement: true
-      }
-    ];
+    const initialCreatorsData = {};
+    const defaultPosts = [];
+    const initialCommunityPosts = [];
 
     // --- 3. 하위 컴포넌트 선언 ---
 
-    function AdBanner() {
+    function LegacyAdBanner() {
       return (
         <div className="ad-banner cursor-pointer" onClick={() => alert("구글 애드센스 광고가 송출되는 구역입니다.")}>
           <div className="text-xs font-semibold text-zinc-950">🍳 요리할 때 필수! 감성 타이머 특가 할인 중</div>
@@ -582,69 +408,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
       );
     }
 
-    function FeedCard({ post, onLike, onCardClick, onAuthorClick }) {
-      const hasMultipleImages = Array.isArray(post.image);
-      const thumbnail = hasMultipleImages ? post.image[0] : post.image;
-
-      // 확장성용 가상 뱃지 계산
-      let badgeText = "";
-      let badgeType = "";
-
-      if (post.category === "레시피") {
-        badgeText = "레시피";
-        badgeType = "recipe";
-      } else if (post.category === "맛집") {
-        badgeText = "맛집리뷰";
-        badgeType = "shop";
-      } else if (post.productLinks && post.productLinks.length > 0) {
-        badgeText = "최저가 링크";
-        badgeType = "shop";
-      }
-
-      return (
-        <article className="feed-card" onClick={onCardClick}>
-          <div className="feed-card-image-wrapper">
-            {badgeText && (
-              <span className={`feed-badge ${badgeType}`}>{badgeText}</span>
-            )}
-            <img 
-              className="feed-card-image" 
-              src={thumbnail} 
-              alt={post.title} 
-              loading="lazy" 
-            />
-          </div>
-
-          <div className="feed-card-content">
-            <h3 className="feed-card-title">{post.title}</h3>
-            
-            <div className="feed-card-meta" onClick={(e) => e.stopPropagation()}>
-              <div className="feed-card-author cursor-pointer" onClick={onAuthorClick}>
-                <span className="feed-card-avatar overflow-hidden">
-                  {post.avatarImg ? (
-                    <img src={post.avatarImg} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    post.author.slice(0, 1)
-                  )}
-                </span>
-                <span className="feed-card-author-name">{post.author}</span>
-              </div>
-
-              <div className="feed-card-stats">
-                <span className={post.liked ? "text-zinc-950 font-bold" : ""} onClick={onLike} style={{ cursor: "pointer" }}>
-                  <i className={post.liked ? "fa-solid fa-heart" : "fa-regular fa-heart"}></i>
-                  {post.likeCount}
-                </span>
-                <span>
-                  <i className="fa-regular fa-comment"></i>
-                  {post.comments.length}
-                </span>
-              </div>
-            </div>
-          </div>
-        </article>
-      );
-    }
+    
 
     // 내가 쓴 글 수정/삭제 옵션 및 이미지 카레셀 상세 렌더링을 내장한 디테일 시트 모달 (댓글 수정/삭제 지원)
     function DetailModal({ postId, posts, onClose, onLike, onScrap, onComment, onEditComment, onDeleteComment, onTagClick, onAuthorClick, onDeletePost, onEditPost, currentUserName, currentUserRole }) {
@@ -998,7 +762,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
 
 
     // 에타 스타일 커뮤니티 컴포넌트 (익명 제거, 오른쪽 아래 연필 모양 플로팅 글쓰기 버튼 탑재, 상세 페이지 이동 방식)
-    function CommunityView({ communityPosts, onPostClick, onOpenCommunityWrite, onLikePost, onScrapPost, onAuthorClick }) {
+    function LegacyCommunityView({ communityPosts, onPostClick, onOpenCommunityWrite, onLikePost, onScrapPost, onAuthorClick }) {
       const [comCategory, setComCategory] = useState("🔥 인기");
       const [showSearch, setShowSearch] = useState(false);
       const [comSearchQuery, setComSearchQuery] = useState("");
@@ -1190,7 +954,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
     }
 
     // 에타 스타일 커뮤니티 상세 페이지 (댓글 수정/삭제 CRUD, 공감 토글)
-    function CommunityDetailView({ activeComPostId, communityPosts, onBack, onLikePost, onDeletePost, onEditPost, onAddComment, onEditComment, onDeleteComment, onScrapPost, currentUserName, currentUserRole, onAuthorClick }) {
+    function LegacyCommunityDetailView({ activeComPostId, communityPosts, onBack, onLikePost, onDeletePost, onEditPost, onAddComment, onEditComment, onDeleteComment, onScrapPost, currentUserName, currentUserRole, onAuthorClick }) {
       const post = communityPosts.find(p => p.id === activeComPostId);
       if (!post) return (
         <div className="p-4 text-center">
@@ -1528,7 +1292,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
       );
     }
 
-    function MyPage({ posts, profile, setProfile, categories, onCardClick, followingList = [], creatorsData = {}, onFollowToggle, onAuthorClick, onAdminCenterClick, onSettingsClick, communityPosts = [], onCommunityCardClick, onLikeCommunityPost, onScrapCommunityPost }) {
+    function LegacyMyPage({ posts, profile, setProfile, categories, onCardClick, followingList = [], creatorsData = {}, onFollowToggle, onAuthorClick, onAdminCenterClick, onSettingsClick, communityPosts = [], onCommunityCardClick, onLikeCommunityPost, onScrapCommunityPost }) {
       const [isEditing, setIsEditing] = useState(false);
       const [editName, setEditName] = useState(profile.name);
       const [editBio, setEditBio] = useState(profile.bio);
@@ -1579,7 +1343,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
         }
 
         // 2. 백엔드와 연동하여 세션/DB 중복체크 진행 후 최종 저장
-        fetch(API_URL + "/api/profile/update", {
+        fetch(API_URL + "/api/v1/users/profile/update", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -2406,7 +2170,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
     }
 
     // --- 3.2. 관리자 신고 관리 센터 화면 ---
-    function AdminReportsView({ onBack }) {
+    function LegacyAdminReportsView({ onBack }) {
       const [adminTab, setAdminTab] = useState("dashboard"); // dashboard, reports, users, posts, comments, stats
       const [reports, setReports] = useState([]);
       const [users, setUsers] = useState([]);
@@ -2528,7 +2292,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
           if (!user) { alert("Firebase 로그인이 필요합니다."); return; }
           
           const idToken = await user.getIdToken(true);
-          const res = await fetch(API_URL + "/api/admin/setup-firestore", {
+          const res = await fetch(API_URL + "/api/v1/admin/setup-firestore", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
@@ -3462,6 +3226,29 @@ const API_URL = import.meta.env.VITE_API_URL || '';
         resolve: null
       });
 
+      // 운영 전환을 위한 1회성 로컬 캐시(IndexedDB 및 localStorage) 강제 클렌징
+      useEffect(() => {
+        const hasCleaned = localStorage.getItem("prod_cleansing_done_v2");
+        if (!hasCleaned) {
+          console.log("[Cleansing] Invalidation of IndexedDB and localStorage caching...");
+          try {
+            const DB_NAME = "foodhouse_db";
+            const req = window.indexedDB.deleteDatabase(DB_NAME);
+            req.onsuccess = () => {
+              console.log("[Cleansing] Local IndexedDB successfully deleted.");
+            };
+          } catch (e) {
+            console.error("[Cleansing] Error deleting IndexedDB:", e);
+          }
+          localStorage.removeItem("foodhouse_posts");
+          localStorage.removeItem("foodhouse_community_posts");
+          localStorage.setItem("prod_cleansing_done_v2", "true");
+          
+          // 강제 클렌징 후 리부트하여 동기화
+          window.location.reload();
+        }
+      }, []);
+
       // 실시간 키워드 검색 API 연동 훅
       useEffect(() => {
         const query = searchQuery.trim();
@@ -3541,7 +3328,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
       const [dbLoaded, setDbLoaded] = useState(false); // IndexedDB 로드 완료 플래그
 
       function loadBackendPosts() {
-        fetch(API_URL + "/api/posts")
+        fetch(API_URL + "/api/v1/posts")
           .then(r => r.json())
           .then(data => {
             if (data.success && data.posts) {
@@ -3557,7 +3344,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
       }
 
       function loadBackendCommunityPosts() {
-        fetch(API_URL + "/api/community-posts")
+        fetch(API_URL + "/api/v1/community")
           .then(r => r.json())
           .then(data => {
             if (data.success && data.communityPosts) {
@@ -4102,43 +3889,6 @@ const API_URL = import.meta.env.VITE_API_URL || '';
         };
       }, [dbLoaded]);
 
-      // --- 4.3. Firestore 시드 — sessionSyncReadyPromise 대기 후 실행 ---
-      // 인증 미완료 상태에서 컬렉션이 비어있다고 오인해 기존 글을 덮어쓰는 버그 방지
-      useEffect(() => {
-        if (!dbLoaded) return;
-        sessionSyncReadyPromise.then(() => {
-          const user = auth.currentUser;
-          if (!user) {
-            console.log("[Firestore Seed] 비로그인 상태 — 기존 데이터 보호를 위해 시드 건너뜀.");
-            return;
-          }
-          db.collection("posts").limit(1).get().then(snapshot => {
-            if (snapshot.empty) {
-              console.log("[Firestore Seed] Seeding default recipe posts...");
-              defaultPosts.forEach((post, index) => {
-                const seedPost = { ...post };
-                delete seedPost.id;
-                seedPost.timestamp = new Date(Date.now() - (index * 60000)).toISOString();
-                seedPost.userId = user.uid;
-                db.collection("posts").doc(post.id).set(seedPost)
-                  .catch(e => console.warn("[Firestore Seed] posts seed failed:", e.message));
-              });
-            }
-          });
-          db.collection("community_posts").limit(1).get().then(snapshot => {
-            if (snapshot.empty) {
-              console.log("[Firestore Seed] Seeding default community posts...");
-              initialCommunityPosts.forEach((post, index) => {
-                const seedPost = { ...post };
-                delete seedPost.id;
-                seedPost.timestamp = new Date(Date.now() - (index * 60000)).toISOString();
-                db.collection("community_posts").doc(post.id).set(seedPost)
-                  .catch(e => console.warn("[Firestore Seed] community seed failed:", e.message));
-              });
-            }
-          });
-        });
-      }, [dbLoaded]);
 
       // 4. 이벤트 핸들러
       async function handleWriteClick() {
@@ -4172,7 +3922,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
         if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
           window.flutter_inappwebview.callHandler('saveToken', { token: "" }).catch(e => console.error(e));
         }
-        fetch(API_URL + "/api/logout").catch(e => console.error("Logout request error:", e));
+        fetch(API_URL + "/api/v1/auth/logout").catch(e => console.error("Logout request error:", e));
         alert("로그아웃되었습니다.");
         setActiveTab("home");
       }
@@ -4552,7 +4302,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
           ? profile.name 
           : "익명 플레이터";
 
-        fetch(API_URL + "/api/community/posts", {
+        fetch(API_URL + "/api/v1/posts/community", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -5142,3 +4892,4 @@ const API_URL = import.meta.env.VITE_API_URL || '';
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<App />);
   
+export default App;

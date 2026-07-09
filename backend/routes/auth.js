@@ -3,7 +3,7 @@ const router = express.Router();
 const bcrypt = require("bcryptjs");
 const axios = require("axios");
 const qs = require("qs");
-const { signupLimiter } = require("../middlewares");
+const { signupLimiter, loginLimiter } = require("../middlewares");
 const { 
   findFirestoreUserByField, 
   writeFirestoreUser, 
@@ -17,7 +17,7 @@ const client_id = process.env.KAKAO_CLIENT_ID || "3c6b9b1d740c3c2cb76369773ea574
 const client_secret = process.env.KAKAO_CLIENT_SECRET || "";
 const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
 const backendUrl = process.env.BACKEND_URL || "http://localhost:4000";
-const redirect_uri = `${backendUrl}/api/redirect`; // 콜백을 Express API 서버가 받도록 설정
+const redirect_uri = `${backendUrl}/api/v1/auth/redirect`; // 콜백을 Express API 서버가 받도록 설정
 
 const kauth_host = "https://kauth.kakao.com";
 const kapi_host = "https://kapi.kakao.com";
@@ -147,7 +147,7 @@ router.get("/redirect", async function (req, res) {
 });
 
 // 3. 일반 로그인 API
-router.post("/login", async function (req, res) {
+router.post("/login", loginLimiter, async function (req, res) {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ success: false, message: "아이디와 비밀번호를 입력해주세요." });
