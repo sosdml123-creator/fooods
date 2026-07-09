@@ -18,3 +18,5 @@ uploads/
 /mobile_app/local.properties
 /mobile_app/flutter_sdk/
 *.log
+reports.json
+

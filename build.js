@@ -32,6 +32,14 @@ if (fs.existsSync(path.join(__dirname, 'app.js'))) {
   );
 }
 
+// Copy Firebase Messaging Service Worker
+if (fs.existsSync(path.join(__dirname, 'firebase-messaging-sw.js'))) {
+  fs.copyFileSync(
+    path.join(__dirname, 'firebase-messaging-sw.js'),
+    path.join(distDir, 'firebase-messaging-sw.js')
+  );
+}
+
 // Copy privacy.html if exists
 if (fs.existsSync(path.join(__dirname, 'privacy.html'))) {
   fs.copyFileSync(

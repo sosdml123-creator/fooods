@@ -2,54 +2,51 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // 1. users 컬렉션 보안 규칙
-    // - 본인 문서만 읽고 쓸 수 있도록 제한 (타인 문서 읽기 불가)
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    // 1. 관리자 권한 확인 헬퍼 함수
+    function isAdmin() {
+      return request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // 2. posts (레시피) 컬렉션 보안 규칙
+    // 2. users 컬렉션 보안 규칙
+    match /users/{userId} {
+      // 본인 또는 관리자만 읽기/쓰기 가능
+      allow read, write: if request.auth != null && (request.auth.uid == userId || isAdmin());
+    }
+
+    // 3. posts (레시피) 컬렉션 보안 규칙
     match /posts/{postId} {
-      // - 읽기는 누구나 허용
       allow read: if true;
-      
-      // - 생성(쓰기)은 로그인한 사용자만, 그리고 자신의 userId 필드 값으로만 등록 가능
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      
-      // - 삭제는 작성한 본인(userId가 일치하는 유저)만 허용
-      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
-      
-      // - 수정은 본인 외에도 공감/스크랩/댓글 등이나 조회수(누구나 가능)를 분기하여 허용
+      allow create: if request.auth != null && (request.resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
       allow update: if (request.auth != null && (
         resource.data.userId == request.auth.uid ||
+        isAdmin() ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy', 'likeCount', 'scrappedBy', 'comments'])
       )) || (
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount'])
       );
     }
 
-    // 3. community_posts (익명 커뮤니티) 컬렉션 보안 규칙
+    // 4. community_posts (커뮤니티) 컬렉션 보안 규칙
     match /community_posts/{postId} {
-      // - 읽기는 누구나 허용
       allow read: if true;
-      
-      // - 생성(쓰기)은 로그인 여부 상관없이 누구나 허용 (익명 글쓰기 대응)
-      allow create: if true;
-      
-      // - 삭제는 작성자 본인이거나 관리자만 허용
-      allow delete: if request.auth != null && (
-        resource.data.userId == request.auth.uid || 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
-      );
-      
-      // - 수정은 본인/관리자 외에도 타인의 공감/스크랩/댓글 등이나 조회수(누구나 가능)를 분기하여 허용
+      allow create: if request.auth != null || isAdmin();
+      allow delete: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
       allow update: if (request.auth != null && (
         resource.data.userId == request.auth.uid || 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        isAdmin() ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy', 'likeCount', 'scrappedBy', 'comments'])
       )) || (
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount'])
       );
+    }
+
+    // 5. reports (신고 내역) 컬렉션 보안 규칙
+    match /reports/{reportId} {
+      allow create: if request.auth != null;
+      allow read, write: if isAdmin();
     }
   }
 }

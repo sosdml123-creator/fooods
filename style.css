@@ -1,26 +1,39 @@
-/* 
-  플레이팅 프리미엄 무채색(Monochrome) 디자인 시스템
-*/
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css");
 
 :root {
   --bg-primary: #ffffff;
-  --bg-secondary: #f4f4f5; /* zinc-100 */
-  --bg-tertiary: #e4e4e7; /* zinc-200 */
+  --bg-secondary: #FAFAFA;
+  --bg-tertiary: #ECECEC;
   
-  --text-primary: #09090b; /* zinc-950 */
-  --text-secondary: #71717a; /* zinc-500 */
-  --text-tertiary: #a1a1aa; /* zinc-400 */
+  --text-primary: #111111;
+  --text-secondary: #666666;
+  --text-tertiary: #a1a1aa;
   
-  --border-color: #e4e4e7; /* zinc-200 */
-  --border-focus: #09090b; /* zinc-950 */
+  --border-color: #ECECEC;
+  --border-focus: #111111;
+  
+  --color-success: #22C55E;
+  --color-warning: #FF7A00;
+}
+
+* {
+  transition: background .2s, color .2s, box-shadow .25s, transform .25s;
+}
+
+body, input, textarea, button, select {
+  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
 }
 
 body {
-  background-color: #fafafa;
+  background-color: var(--bg-secondary);
   color: var(--text-primary);
   margin: 0;
   padding: 0;
   letter-spacing: -0.025em;
+}
+
+button:active {
+  transform: scale(.96);
 }
 
 /* 모바일 퍼스트 래퍼 */
@@ -680,103 +693,107 @@ button:disabled {
 
 /* 트렌디한 모바일 앱 커뮤니티 전용 레이아웃 */
 .everytime-post {
-  border-bottom: 1px solid #f4f4f5; /* zinc-100 */
-  padding: 16px 4px;
-  background-color: var(--bg-primary);
-  transition: background-color 0.2s ease;
+  background: #ffffff;
+  border: 1px solid #ECECEC;
+  border-radius: 20px;
+  padding: 20px;
+  margin-bottom: 14px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.015);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .everytime-post:hover {
-  background-color: #fafafa;
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+  border-color: #d8d8d8;
 }
 .everytime-post:last-child {
-  border-bottom: none;
+  margin-bottom: 0;
 }
 .everytime-user-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 .everytime-user-info {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
 }
 .everytime-avatar {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  background-color: var(--bg-secondary);
+  background-color: #F4F4F5;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+  color: #111111;
+  border: 1.5px solid #ECECEC;
   overflow: hidden;
   flex-shrink: 0;
 }
 .everytime-author {
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: #111111;
 }
 .everytime-time {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  margin-left: 2px;
+  display: none;
 }
 .everytime-badge {
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 4px;
+  font-size: 9.5px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 8px;
   letter-spacing: -0.01em;
 }
 .everytime-badge.popular {
-  background-color: #fef2f2; /* red-50 */
-  color: #ef4444; /* red-500 */
-  border: 1px solid #fee2e2; /* red-100 */
+  background-color: #FFF5F5;
+  color: #ef4444;
+  border: 1px solid #FFE3E3;
 }
 .everytime-badge.notice {
-  background-color: #f0fdf4; /* green-50 */
-  color: #15803d; /* green-700 */
-  border: 1px solid #dcfce7; /* green-100 */
+  background-color: #F0FDF4;
+  color: #16a34a;
+  border: 1px solid #DCFCE7;
 }
 
 /* 글과 섬네일 레이아웃 */
 .everytime-body-wrapper {
   display: flex;
   gap: 16px;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 .everytime-text-area {
   flex: 1;
   min-width: 0;
 }
 .everytime-post h3 {
-  font-size: 14px;
-  font-weight: 700;
-  margin-bottom: 4px;
-  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 800;
+  margin-bottom: 6px;
+  color: #111111;
   line-height: 1.4;
   word-break: break-all;
   white-space: normal;
 }
 .everytime-post p {
-  font-size: 12.5px;
-  color: var(--text-secondary);
-  line-height: 1.5;
+  font-size: 13px;
+  color: #666666;
+  line-height: 1.55;
   margin: 0;
   word-break: break-all;
   white-space: normal;
 }
 .everytime-thumbnail {
-  width: 64px;
-  height: 64px;
+  width: 68px;
+  height: 68px;
   object-fit: cover;
-  border-radius: 8px;
-  background-color: var(--bg-secondary);
+  border-radius: 12px;
+  border: 1px solid #ECECEC;
   flex-shrink: 0;
 }
 
@@ -785,26 +802,29 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 11px;
-  color: var(--text-tertiary);
+  font-size: 11.5px;
+  border-top: 1px solid #F4F4F5;
+  padding-top: 12px;
+  color: #666666;
 }
 .everytime-actions {
   display: flex;
-  gap: 12px;
+  gap: 16px;
 }
 .everytime-actions span {
   display: flex;
   align-items: center;
-  gap: 4px;
-  color: var(--text-secondary);
+  gap: 5px;
+  color: #666666;
   transition: color 0.2s ease;
+  font-weight: 600;
 }
 .everytime-actions span:hover {
-  color: var(--text-primary);
+  color: #111111;
 }
 .everytime-actions span.active {
-  color: var(--text-primary);
-  font-weight: 700;
+  color: #111111;
+  font-weight: 750;
 }
 
 /* 카테고리 탭 바 (Underline 스타일) */
@@ -1052,18 +1072,18 @@ button:disabled {
 .feed-card {
   break-inside: avoid;
   background-color: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  margin-bottom: 12px;
+  border: none;
+  border-radius: 16px;
+  margin-bottom: 16px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  transition: transform 0.2s ease;
+  box-shadow: 0 6px 25px rgba(0,0,0,.06);
   cursor: pointer;
 }
 .feed-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0,0,0,.15);
 }
 .feed-card:active {
   transform: scale(0.98);
@@ -1081,20 +1101,60 @@ button:disabled {
   object-fit: cover;
 }
 .feed-card-content {
-  padding: 10px;
+  padding: 16px;
   text-align: left;
 }
 .feed-card-title {
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1.4;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-all;
+}
+.feed-card-body-snippet {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 12px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-all;
+}
+.feed-card-author-row {
+  margin-bottom: 12px;
+}
+.feed-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--border-color);
+  padding-top: 12px;
+  margin-top: 4px;
+}
+.feed-card-action-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.feed-card-action-btn.active {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+.feed-card-action-btn.active i {
+  color: var(--color-warning);
 }
 .feed-card-meta {
   display: flex;
@@ -1163,4 +1223,124 @@ button:disabled {
 .feed-badge.point {
   background-color: rgba(22, 163, 74, 0.85); /* green-600 */
 }
+
+/* --- 관리자 센터 iOS 글래스모피즘 스타일 --- */
+.admin-container {
+  padding: 16px;
+  background: #FAFAFA;
+  min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.admin-glass-card {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 20px;
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.04);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.admin-glass-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.08);
+}
+.admin-tab-nav {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+.admin-tab-btn {
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 12px;
+  padding: 8px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #666;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+.admin-tab-btn.active {
+  background: #111;
+  color: #fff;
+  border-color: #111;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+.admin-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.admin-stat-card {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 18px;
+  padding: 16px;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.02);
+}
+.admin-stat-value {
+  font-size: 24px;
+  font-weight: 850;
+  color: #111;
+  margin-top: 4px;
+}
+.admin-stat-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #888;
+  letter-spacing: -0.01em;
+}
+.report-badge {
+  font-size: 10px;
+  font-weight: 800;
+  color: #ef4444;
+  background: #fef2f2;
+  border: 1px solid #fee2e2;
+  padding: 2px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.admin-btn {
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 8px 12px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border: none;
+}
+.admin-btn.primary {
+  background: #111;
+  color: #fff;
+}
+.admin-btn.danger {
+  background: #ef4444;
+  color: #fff;
+}
+.admin-btn.secondary {
+  background: #F4F4F5;
+  color: #3f3f46;
+}
+.admin-btn:active {
+  transform: scale(0.97);
+}
+
 

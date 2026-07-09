@@ -1249,6 +1249,11 @@ app.get("/redirect", async function (req, res) {
   }
 });
 
+// 2.4.5. 관리자 페이지 라우팅 fallback
+app.get("/admin", function (req, res) {
+  res.sendFile(path.join(__dirname, "www", "index.html"));
+});
+
 // 2.5. 개인정보처리방침 서빙 API (구글 플레이 및 카카오 연동 대응)
 app.get("/privacy", function (req, res) {
   res.sendFile(path.join(__dirname, "www", "privacy.html"));
@@ -1466,6 +1471,96 @@ app.post("/api/community/posts", communityWriteLimiter, async function (req, res
   } catch (err) {
     console.error("[Community API] Firestore write error:", err.message);
     return res.status(500).json({ success: false, message: "글 등록 중 오류가 발생했습니다." });
+  }
+});
+
+// 2.9b. FCM 푸시 알림 발송 API
+app.post("/api/send-push", async function (req, res) {
+  const { targetUid, title, body, type, postId } = req.body;
+  if (!targetUid || !title || !body) {
+    return res.status(400).json({ success: false, message: "대상 UID, 제목, 본문은 필수 입력 사항입니다." });
+  }
+
+  try {
+    // 1. Firestore에서 대상 유저의 FCM 토큰 및 알림 수신 설정 조회
+    const docUrl = `https://firestore.googleapis.com/v1/projects/plating-app-db29f/databases/(default)/documents/users/${targetUid}`;
+    let userDoc;
+    try {
+      userDoc = await axios.get(docUrl);
+    } catch (docErr) {
+      if (docErr.response && docErr.response.status === 404) {
+        console.log(`[FCM Push] User document not found for UID: ${targetUid}`);
+        return res.json({ success: false, message: "User document not found" });
+      }
+      throw docErr;
+    }
+
+    const fields = userDoc.data.fields || {};
+    const fcmToken = fields.fcmToken?.stringValue;
+    if (!fcmToken) {
+      console.log(`[FCM Push] User ${targetUid} has no FCM token saved.`);
+      return res.json({ success: false, message: "No FCM token for user" });
+    }
+
+    // 2. 알림 설정(필터링) 확인
+    let notificationSettings = {};
+    if (fields.notificationSettings && fields.notificationSettings.mapValue) {
+      const mapFields = fields.notificationSettings.mapValue.fields || {};
+      for (const [key, val] of Object.entries(mapFields)) {
+        notificationSettings[key] = val.booleanValue;
+      }
+    }
+
+    // 알림 종류 필터링 (좋아요, 댓글, 새게시물 등)
+    // 기본값은 true로 설정
+    const isLikeEnabled = notificationSettings.like !== false;
+    const isCommentEnabled = notificationSettings.comment !== false;
+    const isNewPostEnabled = notificationSettings.newPost !== false;
+
+    if (type === "like" && !isLikeEnabled) {
+      console.log("[FCM Push] Likes notification disabled for user");
+      return res.json({ success: true, message: "Likes notification disabled" });
+    }
+    if (type === "comment" && !isCommentEnabled) {
+      console.log("[FCM Push] Comments notification disabled for user");
+      return res.json({ success: true, message: "Comments notification disabled" });
+    }
+    if (type === "newPost" && !isNewPostEnabled) {
+      console.log("[FCM Push] New post notification disabled for user");
+      return res.json({ success: true, message: "New post notification disabled" });
+    }
+
+    // 3. FCM Legacy API로 알림 발송 (가장 안전하고 단순한 FCM Server Key 활용 방식)
+    const serverKey = process.env.FCM_SERVER_KEY || process.env.FIREBASE_API_KEY || "AIzaSyBKat-tCeDuoRr-uzdOeoQXT6PpXHBWJno";
+    const fcmUrl = "https://fcm.googleapis.com/fcm/send";
+    const payload = {
+      to: fcmToken,
+      notification: {
+        title: title,
+        body: body,
+        sound: "default",
+        click_action: "FLUTTER_NOTIFICATION_CLICK"
+      },
+      data: {
+        type: type || "",
+        postId: postId || "",
+        click_action: "FLUTTER_NOTIFICATION_CLICK"
+      }
+    };
+
+    console.log(`[FCM Push] Sending push to ${targetUid}:`, payload);
+    const fcmRes = await axios.post(fcmUrl, payload, {
+      headers: {
+        "Authorization": `key=${serverKey}`,
+        "Content-Type": "application/json"
+      }
+    });
+
+    console.log("[FCM Push] Response:", fcmRes.data);
+    return res.json({ success: true, result: fcmRes.data });
+  } catch (err) {
+    console.error("[FCM Push Error] Failed to send push:", err.response ? err.response.data : err.message);
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -1690,6 +1785,39 @@ app.get("/api/search/users", async function (req, res) {
     return res.status(500).json({ success: false, message: "사용자 검색 중 오류가 발생했습니다." });
   }
 });
+
+// 2.13. FCM HTTP v1 메시지 발송 뼈대 (모바일 푸시 동기화 대비)
+async function sendFCMMessage(token, title, body, data = {}) {
+  if (!token) return;
+  try {
+    const projectId = "plating-app-db29f";
+    const url = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
+    const payload = {
+      message: {
+        token: token,
+        notification: {
+          title: title,
+          body: body
+        },
+        data: data
+      }
+    };
+    
+    if (process.env.FCM_ACCESS_TOKEN) {
+      await axios.post(url, payload, {
+        headers: {
+          "Authorization": `Bearer ${process.env.FCM_ACCESS_TOKEN}`,
+          "Content-Type": "application/json"
+        }
+      });
+      console.log(`[FCM] Notification sent successfully to token: ${token}`);
+    } else {
+      console.log(`[FCM Dummy] Access Token not configured. Simulated push to token: ${token}`);
+    }
+  } catch (err) {
+    console.error("[FCM] Message dispatch failed:", err.message);
+  }
+}
 
 // Firebase ID Token 검증 헬퍼 함수
 async function verifyFirebaseIdToken(token) {
@@ -2340,6 +2468,87 @@ function requireAdmin(req, res, next) {
   }
   next();
 }
+
+// 3.2.5 관리자 Firestore 초기화 API (카카오 관리자 세션 + Firebase ID 토큰으로 Firestore 설정)
+app.post("/api/admin/setup-firestore", requireAdmin, async (req, res) => {
+  const { firebaseIdToken, adminUid } = req.body;
+  if (!firebaseIdToken || !adminUid) {
+    return res.status(400).json({ success: false, message: "firebaseIdToken 및 adminUid 가 필요합니다." });
+  }
+
+  const PROJECT_ID = "plating-app-db29f";
+  const BASE_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
+
+  const headers = {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${firebaseIdToken}`
+  };
+
+  const results = { setAdmin: false, deletedPosts: 0, deletedCommunityPosts: 0, deletedUsers: 0 };
+
+  try {
+    // 1. 관리자 role 설정
+    const adminDocUrl = `${BASE_URL}/users/${adminUid}?updateMask.fieldPaths=role&updateMask.fieldPaths=bio&updateMask.fieldPaths=updatedAt`;
+    await axios.patch(adminDocUrl, {
+      fields: {
+        role: { stringValue: "admin" },
+        bio: { stringValue: "" },
+        updatedAt: { stringValue: new Date().toISOString() }
+      }
+    }, { headers });
+    results.setAdmin = true;
+    console.log(`[Admin Setup] UID ${adminUid} → role: "admin" 설정 완료`);
+
+    // 2. posts 컬렉션 전체 삭제
+    try {
+      const postsRes = await axios.get(`${BASE_URL}/posts?pageSize=300`, { headers });
+      const postDocs = postsRes.data.documents || [];
+      for (const d of postDocs) {
+        const docPath = d.name.replace(`projects/${PROJECT_ID}/databases/(default)/documents`, "");
+        await axios.delete(`${BASE_URL}${docPath}`, { headers });
+        results.deletedPosts++;
+      }
+      console.log(`[Admin Setup] posts ${results.deletedPosts}개 삭제`);
+    } catch (e) { console.warn("[Admin Setup] posts 삭제 중 오류:", e.message); }
+
+    // 3. community_posts 컬렉션 전체 삭제
+    try {
+      const comRes = await axios.get(`${BASE_URL}/community_posts?pageSize=300`, { headers });
+      const comDocs = comRes.data.documents || [];
+      for (const d of comDocs) {
+        const docPath = d.name.replace(`projects/${PROJECT_ID}/databases/(default)/documents`, "");
+        await axios.delete(`${BASE_URL}${docPath}`, { headers });
+        results.deletedCommunityPosts++;
+      }
+      console.log(`[Admin Setup] community_posts ${results.deletedCommunityPosts}개 삭제`);
+    } catch (e) { console.warn("[Admin Setup] community_posts 삭제 중 오류:", e.message); }
+
+    // 4. Firestore users 컬렉션 정리 (관리자 UID 외 삭제)
+    try {
+      const usersRes = await axios.get(`${BASE_URL}/users?pageSize=300`, { headers });
+      const userDocs = usersRes.data.documents || [];
+      for (const d of userDocs) {
+        const docId = d.name.split("/").pop();
+        if (docId === adminUid) continue;
+        const docPath = d.name.replace(`projects/${PROJECT_ID}/databases/(default)/documents`, "");
+        await axios.delete(`${BASE_URL}${docPath}`, { headers });
+        results.deletedUsers++;
+        console.log(`[Admin Setup] 삭제된 유저: ${docId}`);
+      }
+      console.log(`[Admin Setup] users ${results.deletedUsers}개 삭제`);
+    } catch (e) { console.warn("[Admin Setup] users 삭제 중 오류:", e.message); }
+
+    // 5. 로컬 users.json 정리
+    const adminKakaoId = req.session.user.kakao_id;
+    const usersLocal = readUsers().filter(u => u.kakao_id === adminKakaoId);
+    writeUsers(usersLocal);
+
+    res.json({ success: true, results });
+  } catch (err) {
+    console.error("[Admin Setup] 오류:", err.response ? JSON.stringify(err.response.data) : err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 // 3.3. 신고 목록 조회 API (관리자 전용)
 app.get("/api/reports", requireAdmin, (req, res) => {

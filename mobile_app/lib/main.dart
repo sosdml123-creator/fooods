@@ -142,6 +142,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   allowFileAccessFromFileURLs: true,
                   allowUniversalAccessFromFileURLs: true,
                   useOnDownloadStart: true,
+                  cacheMode: CacheMode.LOAD_NO_CACHE,
                 ),
             onWebViewCreated: (controller) {
               _webViewController = controller;
@@ -172,6 +173,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                       );
                     }
                   }
+                  return urls;
                 },
               );
 
@@ -226,6 +228,20 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   } catch (e) {
                     debugPrint("getDeviceId error: $e");
                     return "unknown-device";
+                  }
+                },
+              );
+
+              // FCM 토큰 조회 JS 핸들러 등록
+              controller.addJavaScriptHandler(
+                handlerName: 'getFCMToken',
+                callback: (args) async {
+                  try {
+                    String? token = await FirebaseMessaging.instance.getToken();
+                    return token;
+                  } catch (e) {
+                    debugPrint("getFCMToken error: $e");
+                    return null;
                   }
                 },
               );
