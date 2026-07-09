@@ -1,0 +1,16 @@
+# Local Environment Variables
+.env
+
+# Dependencies
+node_modules/
+
+# Local JSON Databases (Cloudflare R2에서 동기화됨)
+users.json
+reports.json
+moderation_rules.json
+admin_logs.json
+admin_config.json
+recipe_posts.json
+community_posts.json
+uploads/
+*.log
