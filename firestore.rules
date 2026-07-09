@@ -18,7 +18,7 @@ service cloud.firestore {
     // 3. posts (레시피) 컬렉션 보안 규칙
     match /posts/{postId} {
       allow read: if true;
-      allow create: if request.auth != null && (request.resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if request.auth != null && !(postId in ['1', '2', '3']) && (request.resource.data.userId == request.auth.uid || isAdmin());
       allow delete: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
       allow update: if (request.auth != null && (
         resource.data.userId == request.auth.uid ||
@@ -32,7 +32,7 @@ service cloud.firestore {
     // 4. community_posts (커뮤니티) 컬렉션 보안 규칙
     match /community_posts/{postId} {
       allow read: if true;
-      allow create: if request.auth != null || isAdmin();
+      allow create: if (request.auth != null && !(postId in ['cp1', 'cp2', 'cp3', 'cp4', 'cp5'])) || isAdmin();
       allow delete: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
       allow update: if (request.auth != null && (
         resource.data.userId == request.auth.uid || 
