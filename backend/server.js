@@ -91,7 +91,7 @@ app.use("/api/v1/admin", adminRouter);
 app.use("/api/v1", postsRouter); // postsRouter는 내부에 /posts 및 /community 자원을 직접 매핑하고 있음
 
 // SPA Fallback: API/헬스체크 이외의 모든 GET 요청은 index.html을 반환하여 React가 라우팅을 처리하게 함
-app.get("*", (req, res, next) => {
+app.get("*all", (req, res, next) => {
   if (req.path.startsWith("/api") || req.path.startsWith("/health")) {
     return next();
   }
