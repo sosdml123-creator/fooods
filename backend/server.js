@@ -63,7 +63,7 @@ if (hasR2Config) {
 const path = require("path");
 
 // 서버 기동 시 정적 자산 경로 확인용 로그
-const wwwPath = path.resolve(__dirname, "..", "www");
+const wwwPath = path.join(__dirname, "www");
 console.log(`[Plating Boot] Static assets path resolved to: ${wwwPath}`);
 console.log(`[Plating Boot] index.html exists: ${require("fs").existsSync(path.join(wwwPath, "index.html"))}`);
 

@@ -11,8 +11,8 @@ try {
   console.log('🚀 Running Vite production build inside /frontend...');
   execSync('npm run build', { cwd: frontendDir, stdio: 'inherit' });
 
-  // www/index.html 존재 여부 확인
-  const indexPath = path.join(__dirname, 'www', 'index.html');
+  // backend/www/index.html 존재 여부 확인
+  const indexPath = path.join(__dirname, 'backend', 'www', 'index.html');
   const exists = fs.existsSync(indexPath);
 
   console.log('✨ Build completed.');
