@@ -1,27 +1,4 @@
 {
-  "cleanUrls": true,
-  "rewrites": [
-    {
-      "source": "/privacy",
-      "destination": "/privacy.html"
-    },
-    {
-      "source": "/terms",
-      "destination": "/terms.html"
-    },
-    {
-      "source": "/delete-account",
-      "destination": "/delete-account.html"
-    },
-    {
-      "source": "/landing",
-      "destination": "/landing.html"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ],
   "headers": [
     {
       "source": "/assets/(css|js)/(.*)",
