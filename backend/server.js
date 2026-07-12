@@ -62,8 +62,13 @@ if (hasR2Config) {
 }
 const path = require("path");
 
+// 서버 기동 시 정적 자산 경로 확인용 로그
+const wwwPath = path.resolve(__dirname, "..", "www");
+console.log(`[Plating Boot] Static assets path resolved to: ${wwwPath}`);
+console.log(`[Plating Boot] index.html exists: ${require("fs").existsSync(path.join(wwwPath, "index.html"))}`);
+
 // 프론트엔드 정적 파일 서빙 (Vite 빌드 결과물인 www 폴더)
-app.use(express.static(path.join(__dirname, "../www")));
+app.use(express.static(wwwPath));
 
 // 헬스 체크 API (Render 상태 모니터링용)
 app.get("/health", (req, res) => {
@@ -90,7 +95,14 @@ app.get("*", (req, res, next) => {
   if (req.path.startsWith("/api") || req.path.startsWith("/health")) {
     return next();
   }
-  res.sendFile(path.join(__dirname, "../www/index.html"));
+  
+  const indexPath = path.join(wwwPath, "index.html");
+  res.sendFile(indexPath, (err) => {
+    if (err) {
+      console.error(`[Plating SPA Error] Failed to send index.html: ${err.message}`);
+      res.status(404).send("Plating Frontend Asset Not Found. Please check build logs.");
+    }
+  });
 });
 
 // 에러 처리 미들웨어
