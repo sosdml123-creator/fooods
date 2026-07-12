@@ -3204,9 +3204,17 @@ const API_URL = import.meta.env.VITE_API_URL || '';
       const [isFetchingMore, setIsFetchingMore] = useState(false);
       
       const [reportModalOpen, setReportModalOpen] = useState(false);
-      const [reportTarget, setReportTarget] = useState({ postId: "", commentId: "" });
+      // URL 경로에 따른 초기 activeTab 설정
+      const getInitialTab = () => {
+        const path = window.location.pathname;
+        if (path.includes("privacy")) return "privacy";
+        if (path.includes("terms")) return "terms";
+        if (path.includes("delete-account")) return "delete-account";
+        if (path.includes("landing")) return "landing";
+        return "home";
+      };
 
-      const [activeTab, setActiveTab] = useState("home");
+      const [activeTab, setActiveTab] = useState(getInitialTab());
       const [selectedCategory, setSelectedCategory] = useState("전체");
       const [searchQuery, setSearchQuery] = useState("");
       const [searchPostsResult, setSearchPostsResult] = useState([]);
@@ -4498,6 +4506,24 @@ const API_URL = import.meta.env.VITE_API_URL || '';
           post.author.toLowerCase().includes(query)
         );
       });
+
+      if (activeTab === "privacy" || activeTab === "terms" || activeTab === "delete-account" || activeTab === "landing") {
+        const fileMap = {
+          privacy: "/privacy.html",
+          terms: "/terms.html",
+          "delete-account": "/delete-account.html",
+          landing: "/landing.html"
+        };
+        return (
+          <div style={{ width: "100%", height: "100vh", overflow: "hidden", margin: 0, padding: 0 }}>
+            <iframe 
+              src={fileMap[activeTab]} 
+              style={{ width: "100%", height: "100%", border: "none", margin: 0, padding: 0 }} 
+              title={activeTab}
+            />
+          </div>
+        );
+      }
 
       return (
         <div className="app-container">
