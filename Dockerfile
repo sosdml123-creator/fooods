@@ -1,5 +1,5 @@
-# 1. Base Image 설정 (Node.js LTS - Light weight Alpine)
-FROM node:20-alpine AS builder
+# 1. Base Image 설정 (Node.js LTS - Slim Debian)
+FROM node:20-slim AS builder
 
 # 작업 디렉토리 지정
 WORKDIR /app
@@ -19,7 +19,7 @@ COPY . .
 RUN npm run build
 
 # 2. Production 전용 가벼운 실행 이미지로 분리
-FROM node:20-alpine
+FROM node:20-slim
 
 WORKDIR /app
 
