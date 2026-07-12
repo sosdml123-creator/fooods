@@ -3206,7 +3206,22 @@ const API_URL = import.meta.env.VITE_API_URL || '';
       const [reportModalOpen, setReportModalOpen] = useState(false);
       const [reportTarget, setReportTarget] = useState({ postId: "", commentId: "" });
 
-      const [activeTab, setActiveTab] = useState("home");
+      const getInitialTab = () => {
+        const path = window.location.pathname;
+        if (path.includes("privacy")) return "privacy";
+        if (path.includes("terms")) return "terms";
+        if (path.includes("delete-account")) return "delete-account";
+        if (path.includes("landing")) return "landing";
+        return "home";
+      };
+      const [activeTab, setActiveTab] = useState(getInitialTab);
+
+      useEffect(() => {
+        const handleLocationChange = () => setActiveTab(getInitialTab());
+        window.addEventListener("popstate", handleLocationChange);
+        return () => window.removeEventListener("popstate", handleLocationChange);
+      }, []);
+
       const [selectedCategory, setSelectedCategory] = useState("전체");
       const [searchQuery, setSearchQuery] = useState("");
       const [searchPostsResult, setSearchPostsResult] = useState([]);
@@ -4498,6 +4513,176 @@ const API_URL = import.meta.env.VITE_API_URL || '';
           post.author.toLowerCase().includes(query)
         );
       });
+
+      if (["privacy", "terms", "delete-account", "landing"].includes(activeTab)) {
+        const renderStaticContent = () => {
+          switch (activeTab) {
+            case "privacy":
+              return (
+                <div style={{ padding: "20px 0" }}>
+                  <h1 style={{ fontSize: "28px", fontWeight: "800", color: "#0f172a", borderBottom: "2px solid #e2e8f0", paddingBottom: "16px", marginBottom: "24px" }}>개인정보처리방침</h1>
+                  <p style={{ fontSize: "14px", color: "#475569", marginBottom: "16px" }}>
+                    플레이팅(이하 "서비스")은 이용자의 개인정보를 소중하게 보호하며, "개인정보 보호법", "정보통신망 이용촉진 및 정보보호 등에 관한 법률" 등 대한민국의 관련 법령과 구글 플레이 개발자 정책, 카카오 개발자 정책을 준수합니다.
+                  </p>
+                  <p style={{ fontSize: "14px", color: "#475569", marginBottom: "24px" }}>
+                    본 개인정보처리방침은 이용자의 개인정보가 어떠한 용도와 방식으로 수집, 이용, 보호되는지 상세히 알려드리기 위해 작성되었습니다.
+                  </p>
+                  
+                  <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", borderLeft: "4px solid #0f172a", paddingLeft: "10px", marginTop: "32px", marginBottom: "12px" }}>1. 개인정보의 수집 항목 및 방법</h2>
+                  <p style={{ fontSize: "14px", color: "#475569" }}>회사는 이용자가 서비스에 가입하고 이용하는 과정에서 아래와 같은 최소한의 개인정보를 수집합니다.</p>
+                  <ul style={{ paddingLeft: "20px", fontSize: "14px", color: "#475569", lineHeight: "1.8", marginBottom: "20px" }}>
+                    <li><strong>소셜 로그인 연동 시 (카카오 로그인):</strong> 카카오 회원 고유번호(ID), 프로필 닉네임, 프로필 이미지 URL, 이메일 주소(선택 수집)</li>
+                    <li><strong>회원 프로필 설정 시:</strong> 사용자가 업로드한 프로필 사진, 한 줄 소개글, 사용자가 설정한 닉네임</li>
+                    <li><strong>서비스 이용 및 커뮤니티 글쓰기 시:</strong> 작성한 게시물 본문 내용, 첨부한 사진 파일(스토리지 저장), 네이버 지도 및 쇼핑몰 관련 링크 정보, 댓글 내용</li>
+                    <li><strong>자동 수집 정보:</strong> 단말기 정보(기기 유형, OS 버전), 서비스 이용 기록, 접속 로그, 로컬 세션 유지용 토큰 정보</li>
+                  </ul>
+
+                  <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", borderLeft: "4px solid #0f172a", paddingLeft: "10px", marginTop: "32px", marginBottom: "12px" }}>2. 개인정보의 수집 및 이용 목적</h2>
+                  <ul style={{ paddingLeft: "20px", fontSize: "14px", color: "#475569", lineHeight: "1.8", marginBottom: "20px" }}>
+                    <li><strong>서비스 제공 및 계약 이행:</strong> 콘텐츠 제공, 특정 맞춤 서비스 제공, 회원 간 소통 지원</li>
+                    <li><strong>회원 관리:</strong> 가입 의사 확인, 본인 식별, 불량 회원의 부정 이용 방지, 고지사항 전달, 민원 및 불만 처리</li>
+                    <li><strong>서비스 개발 및 통계:</strong> 신규 서비스 개발 및 통계학적 특성에 따른 맞춤형 서비스 제공</li>
+                  </ul>
+
+                  <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", borderLeft: "4px solid #0f172a", paddingLeft: "10px", marginTop: "32px", marginBottom: "12px" }}>3. 개인정보의 보유 및 이용 기간</h2>
+                  <p style={{ fontSize: "14px", color: "#475569" }}>
+                    이용자의 개인정보는 원칙적으로 회원 탈퇴 시 혹은 개인정보 수집 및 이용목적이 달성되면 지체 없이 파기합니다. 다만, 부정 가입 방지를 위한 내부 방침(탈퇴 후 3개월 보존) 및 관련 법령(소비자 불만 처리 기록 3년, 웹사이트 방문 기록 3개월)에 따라 보존 사유가 있는 경우 명시된 기간 동안 안전하게 보존합니다.
+                  </p>
+
+                  <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", borderLeft: "4px solid #0f172a", paddingLeft: "10px", marginTop: "32px", marginBottom: "12px" }}>4. 이용자의 권리 및 의무 (회원 탈퇴 및 데이터 삭제)</h2>
+                  <p style={{ fontSize: "14px", color: "#475569" }}>
+                    이용자는 언제든지 등록되어 있는 자신의 개인정보를 조회하거나 수정할 수 있으며, 서비스 탈퇴(계정 삭제)를 요청할 수 있습니다. 앱 내 설정의 <strong>'회원 탈퇴'</strong> 메뉴를 이용하면 즉시 본인 데이터가 영구 파기되며, 직접 탈퇴가 불가능한 경우 고객지원 이메일(<a href="mailto:contact@myplating.kr" style={{ color: "#e11d48", fontWeight: "600", textDecoration: "none" }}>contact@myplating.kr</a>)로 삭제를 요청하실 수 있습니다.
+                  </p>
+                  
+                  <div style={{ marginTop: "40px", borderTop: "1px solid #e2e8f0", paddingTop: "20px", fontSize: "12px", color: "#94a3b8", textAlign: "center" }}>
+                    시행일자: 2026년 7월 12일<br/>
+                    © 2026 PLAYTING. All rights reserved.
+                  </div>
+                </div>
+              );
+            case "terms":
+              return (
+                <div style={{ padding: "20px 0" }}>
+                  <h1 style={{ fontSize: "28px", fontWeight: "800", color: "#0f172a", borderBottom: "2px solid #e2e8f0", paddingBottom: "16px", marginBottom: "24px" }}>서비스 이용약관</h1>
+                  <p style={{ fontSize: "14px", color: "#475569", marginBottom: "16px" }}>
+                    본 약관은 플레이팅(이하 "서비스")이 제공하는 모바일 애플리케이션 및 관련 서비스의 이용과 관련하여, 회사와 이용자 간의 권리, 의무, 책임사항 및 기타 필요한 사항을 규정함을 목적으로 합니다.
+                  </p>
+                  
+                  <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", borderLeft: "4px solid #0f172a", paddingLeft: "10px", marginTop: "32px", marginBottom: "12px" }}>제 1 조 (약관의 명시와 개정)</h2>
+                  <p style={{ fontSize: "14px", color: "#475569" }}>
+                    본 서비스는 본 약관의 내용을 이용자가 쉽게 알 수 있도록 서비스 화면 내에 게시합니다. 관련 법령을 위배하지 않는 범위 내에서 본 약관을 개정할 수 있으며, 약관 개정 시 적용일자 및 개정 사유를 사전에 공지합니다.
+                  </p>
+
+                  <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", borderLeft: "4px solid #0f172a", paddingLeft: "10px", marginTop: "32px", marginBottom: "12px" }}>제 2 조 (용어의 정의)</h2>
+                  <ul style={{ paddingLeft: "20px", fontSize: "14px", color: "#475569", lineHeight: "1.8", marginBottom: "20px" }}>
+                    <li><strong>회원:</strong> 서비스에 접속하여 본 약관에 동의하고 소셜 로그인을 통해 계정을 생성한 자를 뜻합니다.</li>
+                    <li><strong>콘텐츠:</strong> 회원이 서비스 내에 게시한 사진, 게시글, 댓글, 지도 정보 등 모든 데이터를 뜻합니다.</li>
+                  </ul>
+
+                  <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", borderLeft: "4px solid #0f172a", paddingLeft: "10px", marginTop: "32px", marginBottom: "12px" }}>제 3 조 (회원의 게시글 및 책임)</h2>
+                  <p style={{ fontSize: "14px", color: "#475569" }}>
+                    회원은 서비스의 정상적인 운영을 방해하거나 타인의 권리를 침해하는 유해 게시글을 업로드해서는 안 됩니다. 음란성 또는 비방 목적의 게시물은 경고 없이 삭제 조치되며 회원 제한을 받을 수 있습니다.
+                  </p>
+                  
+                  <div style={{ marginTop: "40px", borderTop: "1px solid #e2e8f0", paddingTop: "20px", fontSize: "12px", color: "#94a3b8", textAlign: "center" }}>
+                    시행일자: 2026년 7월 12일<br/>
+                    © 2026 PLAYTING. All rights reserved.
+                  </div>
+                </div>
+              );
+            case "delete-account":
+              return (
+                <div style={{ padding: "20px 0" }}>
+                  <h1 style={{ fontSize: "28px", fontWeight: "800", color: "#0f172a", borderBottom: "2px solid #e2e8f0", paddingBottom: "16px", marginBottom: "24px" }}>계정 및 데이터 삭제 신청</h1>
+                  <p style={{ fontSize: "14px", color: "#475569", marginBottom: "16px" }}>
+                    플레이팅(PLAYTING) 서비스를 이용해 주셔서 감사합니다. 더 이상 서비스를 이용하지 않으시고 탈퇴 및 개인정보 파기를 원하실 경우, 아래의 절차를 통해 손쉽게 삭제를 처리하실 수 있습니다.
+                  </p>
+
+                  <div style={{ backgroundColor: "#fff1f2", borderLeft: "4px solid #f43f5e", padding: "16px", borderRadius: "4px", margin: "20px 0", fontSize: "14px", color: "#e11d48" }}>
+                    <strong>⚠️ 데이터 삭제 시 유의사항:</strong><br/>
+                    계정 삭제 신청 즉시 이용자님의 가입 정보(이메일, 소셜 연동 토큰, 닉네임, 프로필 사진)와 업로드한 모든 게시글, 댓글, 좋아요 내역이 데이터베이스에서 즉각적이고 영구적으로 파기됩니다. 복구는 불가합니다.
+                  </div>
+
+                  <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", borderLeft: "4px solid #0f172a", paddingLeft: "10px", marginTop: "32px", marginBottom: "12px" }}>방법 1. 앱 내부에서 즉시 삭제하기 (가장 빠른 방법)</h2>
+                  <ol style={{ paddingLeft: "20px", fontSize: "14px", color: "#475569", lineHeight: "1.8", marginBottom: "20px" }}>
+                    <li>플레이팅 앱을 실행합니다.</li>
+                    <li>우측 하단의 <strong>마이페이지(사람 모양 아이콘)</strong> 탭을 선택합니다.</li>
+                    <li>우측 상단의 <strong>설정(톱니바퀴 모양 아이콘)</strong> 버튼을 탭합니다.</li>
+                    <li>화면 가장 하단에 있는 <strong>회원 탈퇴</strong> 메뉴를 탭합니다.</li>
+                    <li>안내를 읽어보신 후 최종 확인을 누르시면, 즉시 모든 회원 데이터가 영구 파기되고 자동 로그아웃됩니다.</li>
+                  </ol>
+
+                  <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", borderLeft: "4px solid #0f172a", paddingLeft: "10px", marginTop: "32px", marginBottom: "12px" }}>방법 2. 웹에서 삭제 신청하기 (앱 삭제 또는 미로그인 시)</h2>
+                  <p style={{ fontSize: "14px", color: "#475569" }}>
+                    앱을 이미 기기에서 지우셨거나 로그인이 불가능한 상태라면, 아래의 지원 접수 이메일로 요청을 접수해 주시면 담당자가 확인 후 48시간 이내에 개인정보 및 계정 데이터를 완전히 삭제해 드립니다.
+                  </p>
+                  
+                  <div style={{ backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", padding: "20px", borderRadius: "8px", margin: "20px 0", fontSize: "14px", color: "#475569" }}>
+                    <p style={{ margin: "0 0 10px 0" }}><strong>📨 온라인 삭제 신청 접수 이메일:</strong> <a href="mailto:contact@myplating.kr" style={{ color: "#e11d48", fontWeight: "600", textDecoration: "none" }}>contact@myplating.kr</a></p>
+                    <p style={{ margin: 0 }}><strong>📋 메일 작성 정보:</strong></p>
+                    <ul style={{ margin: "10px 0 0 0", paddingLeft: "20px" }}>
+                      <li>신청자 가입 이메일 주소 (또는 카카오 로그인 계정 정보)</li>
+                      <li>서비스 내 가입 닉네임</li>
+                      <li>제목: [플레이팅 데이터 삭제 요청]</li>
+                    </ul>
+                  </div>
+                  
+                  <div style={{ marginTop: "40px", borderTop: "1px solid #e2e8f0", paddingTop: "20px", fontSize: "12px", color: "#94a3b8", textAlign: "center" }}>
+                    © 2026 PLAYTING. All rights reserved.
+                  </div>
+                </div>
+              );
+            case "landing":
+              return (
+                <div style={{ padding: "20px 0", textAlign: "center" }}>
+                  <h1 style={{ fontSize: "36px", fontWeight: "900", color: "#0f172a", marginBottom: "16px" }}>🍽️ PLAYTING</h1>
+                  <p style={{ fontSize: "18px", color: "#64748b", marginBottom: "40px" }}>나만의 요리와 맛집을 자랑하고 소통하는 SNS, 플레이팅</p>
+                  
+                  <div style={{ display: "flex", gap: "24px", justifyContent: "center", flexWrap: "wrap", margin: "40px 0" }}>
+                    <div style={{ width: "240px", padding: "24px", border: "1px solid #e2e8f0", borderRadius: "12px", background: "#ffffff", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.05)" }}>
+                      <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", margin: "0 0 10px 0" }}>📸 요리 자랑 피드</h3>
+                      <p style={{ fontSize: "13px", color: "#64748b", margin: 0 }}>나만의 정성스러운 식판과 홈쿡 요리를 이웃들에게 뽐내보세요.</p>
+                    </div>
+                    <div style={{ width: "240px", padding: "24px", border: "1px solid #e2e8f0", borderRadius: "12px", background: "#ffffff", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.05)" }}>
+                      <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", margin: "0 0 10px 0" }}>📍 네이버 지도 연동</h3>
+                      <p style={{ fontSize: "13px", color: "#64748b", margin: 0 }}>지도를 연결하여 내가 방문했던 찐맛집 정보를 공유할 수 있습니다.</p>
+                    </div>
+                    <div style={{ width: "240px", padding: "24px", border: "1px solid #e2e8f0", borderRadius: "12px", background: "#ffffff", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.05)" }}>
+                      <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", margin: "0 0 10px 0" }}>💬 푸드 커뮤니티</h3>
+                      <p style={{ fontSize: "13px", color: "#64748b", margin: 0 }}>자유로운 게시판에서 음식 꿀팁과 고민을 부담 없이 나눕니다.</p>
+                    </div>
+                  </div>
+                  
+                  <div style={{ marginTop: "60px", borderTop: "1px solid #e2e8f0", paddingTop: "20px", fontSize: "12px", color: "#94a3b8" }}>
+                    © 2026 PLAYTING. All rights reserved.
+                  </div>
+                </div>
+              );
+            default:
+              return null;
+          }
+        };
+
+        return (
+          <div style={{ width: "100%", minHeight: "100vh", backgroundColor: "#ffffff", color: "#333333", padding: "30px 24px", boxSizing: "border-box", overflowY: "auto" }}>
+            <div style={{ maxWidth: "800px", margin: "0 auto", lineHeight: "1.6" }}>
+              <button 
+                onClick={() => {
+                  if (window.history.length > 1) {
+                    window.history.back();
+                  } else {
+                    window.location.href = "/";
+                  }
+                }} 
+                style={{ padding: "8px 16px", backgroundColor: "#0f172a", color: "#ffffff", border: "none", borderRadius: "6px", fontSize: "13px", fontWeight: "600", cursor: "pointer", marginBottom: "20px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+              >
+                ← 메인 화면으로 돌아가기
+              </button>
+              {renderStaticContent()}
+            </div>
+          </div>
+        );
+      }
 
       return (
         <div className="app-container">
