@@ -27,19 +27,33 @@ try {
   // [1/6] Installing frontend packages...
   // ==========================================
   console.log('\n[1/6] 📦 Installing frontend packages...');
+  const buildEnv = { ...process.env, NODE_ENV: 'development' };
+  
   try {
     console.log('🤖 Trying fast clean install (npm ci)...');
-    execSync('npm ci --no-audit --no-fund', { cwd: frontendDir, stdio: 'inherit' });
+    execSync('npm ci --include=dev --no-audit --no-fund', { 
+      cwd: frontendDir, 
+      stdio: 'inherit',
+      env: buildEnv
+    });
   } catch (ciError) {
     console.warn('⚠️ npm ci failed. Falling back to standard npm install...');
-    execSync('npm install --legacy-peer-deps --no-audit --no-fund', { cwd: frontendDir, stdio: 'inherit' });
+    execSync('npm install --include=dev --legacy-peer-deps --no-audit --no-fund', { 
+      cwd: frontendDir, 
+      stdio: 'inherit',
+      env: buildEnv
+    });
   }
 
   // ==========================================
   // [2/6] Building frontend...
   // ==========================================
   console.log('\n[2/6] 🚀 Building frontend (Vite Compile)...');
-  execSync('npm run build', { cwd: frontendDir, stdio: 'inherit' });
+  execSync('npm run build', { 
+    cwd: frontendDir, 
+    stdio: 'inherit',
+    env: buildEnv
+  });
 
   // ==========================================
   // [3/6] Copying build...
