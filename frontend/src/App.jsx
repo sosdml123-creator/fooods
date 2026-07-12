@@ -3214,7 +3214,19 @@ const API_URL = import.meta.env.VITE_API_URL || '';
         return "home";
       };
 
-      const [activeTab, setActiveTab] = useState(getInitialTab());
+      const [activeTab, setActiveTab] = useState(getInitialTab);
+
+      // URL 경로 변화를 감지하기 위한 이펙트 추가 (안전장치)
+      useEffect(() => {
+        const handleLocationChange = () => {
+          setActiveTab(getInitialTab());
+        };
+
+        // 사용자가 뒤로가기/앞으로가기 할 때 감지
+        window.addEventListener("popstate", handleLocationChange);
+        return () => window.removeEventListener("popstate", handleLocationChange);
+      }, []);
+
       const [selectedCategory, setSelectedCategory] = useState("전체");
       const [searchQuery, setSearchQuery] = useState("");
       const [searchPostsResult, setSearchPostsResult] = useState([]);
