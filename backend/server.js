@@ -194,26 +194,32 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, message: "서버 내부 오류가 발생했습니다: " + err.message });
 });
 
-const server = app.listen(port, () => {
-  console.log(`🚀 [Plating Boot] Plating API Server is running at http://localhost:${port}`);
-});
+// Express 인스턴스 익스포트 (Vercel 및 테스트 런타임 용)
+module.exports = app;
 
-// Graceful Shutdown (우아한 종료 프로세스)
-const gracefulShutdown = (signal) => {
-  console.log(`⚠️ [Plating Shutdown] Received ${signal}. Starting graceful shutdown...`);
-  
-  server.close(() => {
-    console.log('✨ [Plating Shutdown] Express server closed.');
-    console.log('👋 [Plating Shutdown] Process terminated successfully.');
-    process.exit(0);
+// Vercel 서버리스 환경이 아닐 때만 직접 포트 기동 및 Graceful Shutdown 활성화
+if (!process.env.VERCEL) {
+  const server = app.listen(port, () => {
+    console.log(`🚀 [Plating Boot] Plating API Server is running at http://localhost:${port}`);
   });
 
-  // 10초 타임아웃 강제 종료 안전장치
-  setTimeout(() => {
-    console.error('🚨 [Plating Shutdown] Force terminating process due to timeout.');
-    process.exit(1);
-  }, 10000);
-};
+  // Graceful Shutdown (우아한 종료 프로세스)
+  const gracefulShutdown = (signal) => {
+    console.log(`⚠️ [Plating Shutdown] Received ${signal}. Starting graceful shutdown...`);
+    
+    server.close(() => {
+      console.log('✨ [Plating Shutdown] Express server closed.');
+      console.log('👋 [Plating Shutdown] Process terminated successfully.');
+      process.exit(0);
+    });
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+    // 10초 타임아웃 강제 종료 안전장치
+    setTimeout(() => {
+      console.error('🚨 [Plating Shutdown] Force terminating process due to timeout.');
+      process.exit(1);
+    }, 10000);
+  };
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+}

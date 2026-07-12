@@ -1,5 +1,33 @@
 {
+  "version": 2,
   "rewrites": [
-    { "source": "/((?!.*\\.).*)", "destination": "/index.html" }
+    {
+      "source": "/api/v1/:path*",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/health",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/assets/:path*",
+      "destination": "/backend/www/assets/:path*"
+    },
+    {
+      "source": "/firebase-messaging-sw.js",
+      "destination": "/backend/www/firebase-messaging-sw.js"
+    },
+    {
+      "source": "/favicon.ico",
+      "destination": "/backend/www/favicon.ico"
+    },
+    {
+      "source": "/((?!api|health).*)",
+      "destination": "/backend/www/index.html"
+    }
   ]
 }
