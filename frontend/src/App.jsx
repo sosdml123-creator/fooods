@@ -4551,7 +4551,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
 
                   <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", borderLeft: "4px solid #0f172a", paddingLeft: "10px", marginTop: "32px", marginBottom: "12px" }}>4. 이용자의 권리 및 의무 (회원 탈퇴 및 데이터 삭제)</h2>
                   <p style={{ fontSize: "14px", color: "#475569" }}>
-                    이용자는 언제든지 등록되어 있는 자신의 개인정보를 조회하거나 수정할 수 있으며, 서비스 탈퇴(계정 삭제)를 요청할 수 있습니다. 앱 내 설정의 <strong>'회원 탈퇴'</strong> 메뉴를 이용하면 즉시 본인 데이터가 영구 파기되며, 직접 탈퇴가 불가능한 경우 고객지원 이메일(<a href="mailto:contact@myplating.kr" style={{ color: "#e11d48", fontWeight: "600", textDecoration: "none" }}>contact@myplating.kr</a>)로 삭제를 요청하실 수 있습니다.
+                    이용자는 언제든지 등록되어 있는 자신의 개인정보를 조회하거나 수정할 수 있으며, 서비스 탈퇴(계정 삭제)를 요청할 수 있습니다. 앱 내 설정의 <strong>'회원 탈퇴'</strong> 메뉴를 이용하면 즉시 본인 데이터가 영구 파기되며, 직접 탈퇴가 불가능한 경우 고객지원 이메일(<a href="mailto:sosdml123@naver.com" style={{ color: "#e11d48", fontWeight: "600", textDecoration: "none" }}>sosdml123@naver.com</a>)로 삭제를 요청하실 수 있습니다.
                   </p>
                   
                   <div style={{ marginTop: "40px", borderTop: "1px solid #e2e8f0", paddingTop: "20px", fontSize: "12px", color: "#94a3b8", textAlign: "center" }}>
@@ -4618,7 +4618,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
                   </p>
                   
                   <div style={{ backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", padding: "20px", borderRadius: "8px", margin: "20px 0", fontSize: "14px", color: "#475569" }}>
-                    <p style={{ margin: "0 0 10px 0" }}><strong>📨 온라인 삭제 신청 접수 이메일:</strong> <a href="mailto:contact@myplating.kr" style={{ color: "#e11d48", fontWeight: "600", textDecoration: "none" }}>contact@myplating.kr</a></p>
+                    <p style={{ margin: "0 0 10px 0" }}><strong>📨 온라인 삭제 신청 접수 이메일:</strong> <a href="mailto:sosdml123@naver.com" style={{ color: "#e11d48", fontWeight: "600", textDecoration: "none" }}>sosdml123@naver.com</a></p>
                     <p style={{ margin: 0 }}><strong>📋 메일 작성 정보:</strong></p>
                     <ul style={{ margin: "10px 0 0 0", paddingLeft: "20px" }}>
                       <li>신청자 가입 이메일 주소 (또는 카카오 로그인 계정 정보)</li>
