@@ -1,66 +1,26 @@
+const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const distDir = path.join(__dirname, 'www');
-if (!fs.existsSync(distDir)) {
-  fs.mkdirSync(distDir);
+try {
+  console.log('📦 Installing frontend dependencies...');
+  execSync('npm --prefix frontend install', { stdio: 'inherit' });
+
+  console.log('🚀 Running Vite production build...');
+  execSync('npm --prefix frontend run build', { stdio: 'inherit' });
+
+  // www/index.html 존재 여부 확인
+  const indexPath = path.join(__dirname, 'www', 'index.html');
+  const exists = fs.existsSync(indexPath);
+
+  console.log('✨ Build completed.');
+  console.log(`www/index.html exists: ${exists}`);
+
+  if (!exists) {
+    throw new Error('Vite build output (www/index.html) was not found!');
+  }
+
+} catch (error) {
+  console.error('❌ Build failed with error:', error.message);
+  process.exit(1);
 }
-
-// Copy HTML file
-fs.copyFileSync(
-  path.join(__dirname, 'index.html'),
-  path.join(distDir, 'index.html')
-);
-
-// Copy CSS file
-fs.copyFileSync(
-  path.join(__dirname, 'style.css'),
-  path.join(distDir, 'style.css')
-);
-
-// Copy Landing HTML file
-fs.copyFileSync(
-  path.join(__dirname, 'landing.html'),
-  path.join(distDir, 'landing.html')
-);
-
-// Copy app.js if exists
-if (fs.existsSync(path.join(__dirname, 'app.js'))) {
-  fs.copyFileSync(
-    path.join(__dirname, 'app.js'),
-    path.join(distDir, 'app.js')
-  );
-}
-
-// Copy Firebase Messaging Service Worker
-if (fs.existsSync(path.join(__dirname, 'firebase-messaging-sw.js'))) {
-  fs.copyFileSync(
-    path.join(__dirname, 'firebase-messaging-sw.js'),
-    path.join(distDir, 'firebase-messaging-sw.js')
-  );
-}
-
-// Copy privacy.html if exists
-if (fs.existsSync(path.join(__dirname, 'privacy.html'))) {
-  fs.copyFileSync(
-    path.join(__dirname, 'privacy.html'),
-    path.join(distDir, 'privacy.html')
-  );
-}
-
-// Copy terms.html if exists
-if (fs.existsSync(path.join(__dirname, 'terms.html'))) {
-  fs.copyFileSync(
-    path.join(__dirname, 'terms.html'),
-    path.join(distDir, 'terms.html')
-  );
-}
-
-// Copy assets folder if exists
-const assetsSrc = path.join(__dirname, 'assets');
-const assetsDest = path.join(distDir, 'assets');
-if (fs.existsSync(assetsSrc)) {
-  fs.cpSync(assetsSrc, assetsDest, { recursive: true });
-}
-
-console.log('✨ Web assets successfully copied to the /www folder!');
