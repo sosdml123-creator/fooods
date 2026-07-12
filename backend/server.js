@@ -194,6 +194,26 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, message: "서버 내부 오류가 발생했습니다: " + err.message });
 });
 
-app.listen(port, () => {
-  console.log(`🚀 Plating API Server is running at http://localhost:${port}`);
+const server = app.listen(port, () => {
+  console.log(`🚀 [Plating Boot] Plating API Server is running at http://localhost:${port}`);
 });
+
+// Graceful Shutdown (우아한 종료 프로세스)
+const gracefulShutdown = (signal) => {
+  console.log(`⚠️ [Plating Shutdown] Received ${signal}. Starting graceful shutdown...`);
+  
+  server.close(() => {
+    console.log('✨ [Plating Shutdown] Express server closed.');
+    console.log('👋 [Plating Shutdown] Process terminated successfully.');
+    process.exit(0);
+  });
+
+  // 10초 타임아웃 강제 종료 안전장치
+  setTimeout(() => {
+    console.error('🚨 [Plating Shutdown] Force terminating process due to timeout.');
+    process.exit(1);
+  }, 10000);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

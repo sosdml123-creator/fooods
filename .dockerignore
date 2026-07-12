@@ -1,0 +1,29 @@
+# Node.js 패키지 및 임시 파일 제외
+node_modules
+npm-debug.log
+yarn-error.log
+.pnpm-debug.log
+.env
+.env.*
+*.log
+
+# Git 및 에디터 설정 제외
+.git
+.gitignore
+.gitattributes
+.vscode
+.idea
+.agents
+.gemini
+
+# 빌드 산출물 및 커버리지 제외 (도커 빌더 스테이지 내에서 직접 빌드하므로 로컬 캐시 자산 업로드 제외)
+dist
+www
+coverage
+.nyc_output
+tmp
+
+# Capacitor 및 안드로이드/iOS 관련 불필요한 빌드 소스
+mobile_app/android/.gradle
+mobile_app/android/app/build
+mobile_app/ios/Pods
