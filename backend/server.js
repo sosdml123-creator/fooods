@@ -61,6 +61,19 @@ if (hasR2Config) {
   syncDbsFromR2().catch(err => console.error("R2 복원 실행 실패:", err));
 }
 
+const path = require("path");
+
+// 개인정보처리방침 / 이용약관 / 계정삭제 정적 페이지 라우팅
+app.get("/privacy", (req, res) => {
+  res.sendFile(path.join(__dirname, "privacy.html"));
+});
+app.get("/terms", (req, res) => {
+  res.sendFile(path.join(__dirname, "terms.html"));
+});
+app.get("/delete-account", (req, res) => {
+  res.sendFile(path.join(__dirname, "delete-account.html"));
+});
+
 // 헬스 체크 API (Render 상태 모니터링용)
 app.get("/health", (req, res) => {
   res.json({ status: "ok", version: "1.0.0" });
