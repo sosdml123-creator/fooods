@@ -3,11 +3,13 @@ const fs = require('fs');
 const path = require('path');
 
 try {
-  console.log('📦 Installing frontend dependencies...');
-  execSync('npm --prefix frontend install', { stdio: 'inherit' });
+  const frontendDir = path.join(__dirname, 'frontend');
 
-  console.log('🚀 Running Vite production build...');
-  execSync('npm --prefix frontend run build', { stdio: 'inherit' });
+  console.log('📦 Installing frontend dependencies inside /frontend...');
+  execSync('npm install --legacy-peer-deps', { cwd: frontendDir, stdio: 'inherit' });
+
+  console.log('🚀 Running Vite production build inside /frontend...');
+  execSync('npm run build', { cwd: frontendDir, stdio: 'inherit' });
 
   // www/index.html 존재 여부 확인
   const indexPath = path.join(__dirname, 'www', 'index.html');
