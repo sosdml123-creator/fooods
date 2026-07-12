@@ -14,7 +14,11 @@
       "destination": "/delete-account.html"
     },
     {
-      "source": "/((?!assets/|privacy|terms|delete-account|landing).*)",
+      "source": "/landing",
+      "destination": "/landing.html"
+    },
+    {
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ],
