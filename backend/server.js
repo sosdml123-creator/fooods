@@ -60,12 +60,14 @@ app.use(
           "'self'",
           "'unsafe-inline'",
           "fonts.googleapis.com",
-          "cdnjs.cloudflare.com"
+          "cdnjs.cloudflare.com",
+          "cdn.jsdelivr.net"
         ],
         fontSrc: [
           "'self'",
           "fonts.gstatic.com",
-          "cdnjs.cloudflare.com"
+          "cdnjs.cloudflare.com",
+          "cdn.jsdelivr.net"
         ],
         imgSrc: [
           "'self'",
