@@ -60,19 +60,10 @@ app.use(
 if (hasR2Config) {
   syncDbsFromR2().catch(err => console.error("R2 복원 실행 실패:", err));
 }
-
 const path = require("path");
 
-// 개인정보처리방침 / 이용약관 / 계정삭제 정적 페이지 라우팅
-app.get("/privacy", (req, res) => {
-  res.sendFile(path.join(__dirname, "privacy.html"));
-});
-app.get("/terms", (req, res) => {
-  res.sendFile(path.join(__dirname, "terms.html"));
-});
-app.get("/delete-account", (req, res) => {
-  res.sendFile(path.join(__dirname, "delete-account.html"));
-});
+// 프론트엔드 정적 파일 서빙 (Vite 빌드 결과물인 www 폴더)
+app.use(express.static(path.join(__dirname, "../www")));
 
 // 헬스 체크 API (Render 상태 모니터링용)
 app.get("/health", (req, res) => {
@@ -93,6 +84,14 @@ app.use("/api/v1/users", profileRouter);
 app.use("/api/v1/upload", uploadRouter);
 app.use("/api/v1/admin", adminRouter);
 app.use("/api/v1", postsRouter); // postsRouter는 내부에 /posts 및 /community 자원을 직접 매핑하고 있음
+
+// SPA Fallback: API/헬스체크 이외의 모든 GET 요청은 index.html을 반환하여 React가 라우팅을 처리하게 함
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith("/api") || req.path.startsWith("/health")) {
+    return next();
+  }
+  res.sendFile(path.join(__dirname, "../www/index.html"));
+});
 
 // 에러 처리 미들웨어
 app.use((err, req, res, next) => {
