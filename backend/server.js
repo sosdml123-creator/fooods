@@ -26,8 +26,65 @@ app.use(morgan("combined"));
 // ETag 활성화
 app.set('etag', true);
 
-// 보안 헤더 설정 (Helmet)
-app.use(helmet());
+// 보안 헤더 설정 (Helmet - Firebase, Kakao OAuth, AdMob 허용하는 CSP 정책 적용)
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        connectSrc: [
+          "'self'",
+          "*.googleapis.com",
+          "firestore.googleapis.com",
+          "identitytoolkit.googleapis.com",
+          "wss://*.firebaseio.com",
+          "kauth.kakao.com",
+          "kapi.kakao.com",
+          "*.doubleclick.net",
+          "*.googleadservices.com",
+          "*.googlesyndication.com"
+        ],
+        scriptSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          "'unsafe-eval'",
+          "apis.google.com",
+          "www.gstatic.com",
+          "pagead2.googlesyndication.com",
+          "*.googlesyndication.com",
+          "*.googleadservices.com",
+          "cdn.jsdelivr.net",
+          "cdn.tailwindcss.com"
+        ],
+        styleSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          "fonts.googleapis.com",
+          "cdnjs.cloudflare.com"
+        ],
+        fontSrc: [
+          "'self'",
+          "fonts.gstatic.com",
+          "cdnjs.cloudflare.com"
+        ],
+        imgSrc: [
+          "'self'",
+          "data:",
+          "https:"
+        ],
+        frameSrc: [
+          "'self'",
+          "accounts.kakao.com",
+          "*.firebaseapp.com",
+          "*.doubleclick.net",
+          "googleads.g.doubleclick.net"
+        ]
+      }
+    },
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+    crossOriginEmbedderPolicy: false
+  })
+);
 
 // Gzip 압축 설정 (Compression)
 app.use(compression());
@@ -75,12 +132,36 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", version: "1.0.0" });
 });
 
-// 웜업 및 핑용 루트 라우트 (Render Cold Start 방지)
-app.get("/api", (req, res) => {
-  res.json({ success: true, message: "Welcome to Plating API Server!", version: "1.0.0" });
+// 로그아웃 요청 처리 (GET 및 POST 모두 지원하여 404 차단)
+app.all(["/api/profile/logout", "/api/v1/auth/logout"], (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      console.error("Session destroy error during logout:", err);
+      return res.status(500).json({ success: false, message: "로그아웃 실패" });
+    }
+    res.clearCookie("connect.sid");
+    return res.json({ success: true, message: "로그아웃 성공" });
+  });
 });
-app.get("/api/v1", (req, res) => {
-  res.json({ success: true, message: "Plating REST API v1 is active!", timestamp: new Date() });
+
+// 하위 호환성 (v1 API 호환)을 위한 URL Rewrite 미들웨어
+app.use((req, res, next) => {
+  const originalPath = req.url;
+  
+  if (req.path === "/api/profile") {
+    req.url = req.url.replace("/api/profile", "/api/v1/users/profile");
+  } else if (req.path === "/api/profile/logout") {
+    req.url = req.url.replace("/api/profile/logout", "/api/v1/auth/logout");
+  } else if (req.path === "/api/search/posts") {
+    req.url = req.url.replace("/api/search/posts", "/api/v1/search/posts");
+  } else if (req.path === "/api/search/users") {
+    req.url = req.url.replace("/api/search/users", "/api/v1/search/users");
+  }
+  
+  if (originalPath !== req.url) {
+    console.log(`[URL Rewrite] ${originalPath} -> ${req.url}`);
+  }
+  next();
 });
 
 // API 라우터 등록 (REST v1 설계 규격 적용)

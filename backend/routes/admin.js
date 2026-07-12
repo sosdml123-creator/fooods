@@ -15,6 +15,28 @@ const {
 
 const FIRESTORE_BASE_URL = "https://firestore.googleapis.com/v1/projects/plating-app-db29f/databases/(default)/documents";
 
+let cachedIdToken = null;
+let tokenExpiry = 0;
+
+async function getAdminIdToken() {
+  const now = Date.now();
+  if (cachedIdToken && now < tokenExpiry) {
+    return cachedIdToken;
+  }
+  
+  const apiKey = process.env.FIREBASE_API_KEY || "AIzaSyBKat-tCeDuoRr-uzdOeoQXT6PpXHBWJno";
+  const authUrl = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`;
+  const res = await axios.post(authUrl, {
+    email: "kakao_4933844865@myplating.kr",
+    password: "kakao_4933844865_plating",
+    returnSecureToken: true
+  });
+  
+  cachedIdToken = res.data.idToken;
+  tokenExpiry = now + (parseInt(res.data.expiresIn) - 300) * 1000;
+  return cachedIdToken;
+}
+
 // 1. 신고 제출 API (로그인 필요)
 router.post("/reports", requireLogin, async (req, res) => {
   try {
@@ -277,10 +299,13 @@ router.post("/send-push", async function (req, res) {
   }
 
   try {
+    const idToken = await getAdminIdToken();
     const docUrl = `${FIRESTORE_BASE_URL}/users/${targetUid}`;
     let userDoc;
     try {
-      userDoc = await axios.get(docUrl);
+      userDoc = await axios.get(docUrl, {
+        headers: { "Authorization": `Bearer ${idToken}` }
+      });
     } catch (docErr) {
       if (docErr.response && docErr.response.status === 404) {
         return res.json({ success: false, message: "User document not found" });
@@ -375,7 +400,10 @@ router.post("/report", reportLimiter, async function (req, res) {
       }
     };
 
-    const duplicateCheck = await axios.post(reportQueryUrl, checkPayload);
+    const idToken = await getAdminIdToken();
+    const duplicateCheck = await axios.post(reportQueryUrl, checkPayload, {
+      headers: { "Authorization": `Bearer ${idToken}` }
+    });
     if (duplicateCheck.data && Array.isArray(duplicateCheck.data) && duplicateCheck.data.length > 0 && duplicateCheck.data[0].document) {
       return res.status(400).json({ success: false, message: "이미 신고하신 내용입니다." });
     }
@@ -390,7 +418,9 @@ router.post("/report", reportLimiter, async function (req, res) {
         timestamp: { stringValue: new Date().toISOString() }
       }
     };
-    await axios.post(writeReportUrl, reportFields);
+    await axios.post(writeReportUrl, reportFields, {
+      headers: { "Authorization": `Bearer ${idToken}` }
+    });
 
     const countPayload = {
       structuredQuery: {
@@ -406,7 +436,9 @@ router.post("/report", reportLimiter, async function (req, res) {
         }
       }
     };
-    const countRes = await axios.post(reportQueryUrl, countPayload);
+    const countRes = await axios.post(reportQueryUrl, countPayload, {
+      headers: { "Authorization": `Bearer ${idToken}` }
+    });
     const totalReportsCount = (Array.isArray(countRes.data) && countRes.data[0].document) ? countRes.data.filter(d => d.document).length : 0;
 
     if (totalReportsCount >= 5) {
@@ -418,11 +450,15 @@ router.post("/report", reportLimiter, async function (req, res) {
       };
       
       try {
-        await axios.patch(`${FIRESTORE_BASE_URL}/posts/${postId}?updateMask.fieldPaths=hidden`, patchFields);
+        await axios.patch(`${FIRESTORE_BASE_URL}/posts/${postId}?updateMask.fieldPaths=hidden`, patchFields, {
+          headers: { "Authorization": `Bearer ${idToken}` }
+        });
       } catch(e) {}
       
       try {
-        await axios.patch(`${FIRESTORE_BASE_URL}/community_posts/${postId}?updateMask.fieldPaths=hidden`, patchFields);
+        await axios.patch(`${FIRESTORE_BASE_URL}/community_posts/${postId}?updateMask.fieldPaths=hidden`, patchFields, {
+          headers: { "Authorization": `Bearer ${idToken}` }
+        });
       } catch(e) {}
     }
 
@@ -432,5 +468,129 @@ router.post("/report", reportLimiter, async function (req, res) {
     return res.status(500).json({ success: false, message: "신고 처리 중 내부 오류가 발생했습니다." });
   }
 });
+
+async function checkAndSendScheduledPushes() {
+  try {
+    const idToken = await getAdminIdToken();
+    const queryUrl = `${FIRESTORE_BASE_URL}:runQuery`;
+    const queryPayload = {
+      structuredQuery: {
+        from: [{ collectionId: "pushHistory" }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: "status" },
+            op: "EQUAL",
+            value: { stringValue: "scheduled" }
+          }
+        }
+      }
+    };
+    
+    const queryRes = await axios.post(queryUrl, queryPayload, {
+      headers: { "Authorization": `Bearer ${idToken}` }
+    });
+    
+    if (queryRes.data && Array.isArray(queryRes.data)) {
+      for (const item of queryRes.data) {
+        if (!item.document) continue;
+        
+        const doc = item.document;
+        const fields = doc.fields || {};
+        const docId = doc.name.split("/").pop();
+        const sentAt = fields.sentAt?.stringValue;
+        
+        if (sentAt && new Date(sentAt) <= new Date()) {
+          console.log(`[Scheduler] Dispatching scheduled push: ${docId}`);
+          
+          const targetSegment = fields.targetSegment?.stringValue;
+          const targetUserUid = fields.targetUserUid?.stringValue;
+          const title = fields.title?.stringValue;
+          const body = fields.body?.stringValue;
+          
+          let targetUids = [];
+          if (targetSegment === "user" && targetUserUid) {
+            targetUids = [targetUserUid];
+          } else {
+            const usersRes = await axios.get(`${FIRESTORE_BASE_URL}/users`, {
+              headers: { "Authorization": `Bearer ${idToken}` }
+            });
+            const usersDocs = usersRes.data.documents || [];
+            const allUsers = usersDocs.map(d => ({
+              id: d.name.split("/").pop(),
+              status: d.fields.status?.stringValue
+            }));
+            
+            if (targetSegment === "all") {
+              targetUids = allUsers.map(u => u.id);
+            } else if (targetSegment === "active") {
+              targetUids = allUsers.filter(u => u.status === "normal" || !u.status).map(u => u.id);
+            } else if (targetSegment === "inactive") {
+              targetUids = allUsers.filter(u => u.status && u.status !== "normal").map(u => u.id);
+            }
+          }
+          
+          let successCount = 0;
+          let failCount = 0;
+          const serverKey = process.env.FCM_SERVER_KEY || process.env.FIREBASE_API_KEY || "AIzaSyBKat-tCeDuoRr-uzdOeoQXT6PpXHBWJno";
+          const fcmUrl = "https://fcm.googleapis.com/fcm/send";
+          
+          for (const uid of targetUids) {
+            try {
+              const userRes = await axios.get(`${FIRESTORE_BASE_URL}/users/${uid}`, {
+                headers: { "Authorization": `Bearer ${idToken}` }
+              });
+              const fcmToken = userRes.data.fields?.fcmToken?.stringValue;
+              if (fcmToken) {
+                const payload = {
+                  to: fcmToken,
+                  notification: {
+                    title: title,
+                    body: body,
+                    sound: "default",
+                    click_action: "FLUTTER_NOTIFICATION_CLICK"
+                  },
+                  data: {
+                    type: "admin_broadcast",
+                    click_action: "FLUTTER_NOTIFICATION_CLICK"
+                  }
+                };
+                await axios.post(fcmUrl, payload, {
+                  headers: {
+                    "Authorization": `key=${serverKey}`,
+                    "Content-Type": "application/json"
+                  }
+                });
+                successCount++;
+              } else {
+                failCount++;
+              }
+            } catch (e) {
+              failCount++;
+            }
+          }
+          
+          const patchFields = {
+            fields: {
+              status: { stringValue: "completed" },
+              successCount: { integerValue: successCount.toString() },
+              failCount: { integerValue: failCount.toString() }
+            }
+          };
+          await axios.patch(`${FIRESTORE_BASE_URL}/pushHistory/${docId}?updateMask.fieldPaths=status&updateMask.fieldPaths=successCount&updateMask.fieldPaths=failCount`, patchFields, {
+            headers: { "Authorization": `Bearer ${idToken}` }
+          });
+          
+          console.log(`[Scheduler] Dispatch completed for ${docId}. Success: ${successCount}, Fail: ${failCount}`);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[Scheduler Error] Failed to run scheduled push check:", err.message);
+  }
+}
+
+// Start scheduler intervals
+setTimeout(checkAndSendScheduledPushes, 5000);
+setInterval(checkAndSendScheduledPushes, 60000);
 
 module.exports = router;
