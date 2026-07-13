@@ -14,7 +14,7 @@ const {
 } = require("../firebase");
 
 const client_id = process.env.KAKAO_CLIENT_ID || "3c6b9b1d740c3c2cb76369773ea57471"; 
-const client_secret = process.env.KAKAO_CLIENT_SECRET || "";
+const client_secret = process.env.KAKAO_CLIENT_SECRET || "W4bIVwKsOMri6cIZJaBZuxVFwSR1hMHt";
 
 function getRedirectUri(req) {
   if (process.env.BACKEND_URL) {
@@ -81,10 +81,14 @@ router.get("/redirect", async function (req, res) {
     code: req.query.code,
   };
 
+  if (client_secret && client_secret.trim() !== "") {
+    tokenParams.client_secret = client_secret.trim();
+  }
+
   const param = qs.stringify(tokenParams);
   const header = { "Content-Type": "application/x-www-form-urlencoded;charset=utf-8" };
   
-  console.log("[토큰 요청] 전송 파라미터 (시크릿 미사용):", { ...tokenParams, client_id: "3c6b...7471" });
+  console.log("[토큰 요청] 전송 파라미터:", { ...tokenParams, client_id: "3c6b...7471", client_secret: tokenParams.client_secret ? "PRESENT" : "ABSENT" });
   var rtn = await call("POST", kauth_host + "/oauth/token", param, header);
 
   if (rtn && rtn.access_token) {
