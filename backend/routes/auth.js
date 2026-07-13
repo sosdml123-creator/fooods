@@ -15,9 +15,24 @@ const {
 
 const client_id = process.env.KAKAO_CLIENT_ID || "3c6b9b1d740c3c2cb76369773ea57471"; 
 const client_secret = process.env.KAKAO_CLIENT_SECRET || "";
-const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-const backendUrl = process.env.BACKEND_URL || "http://localhost:4000";
-const redirect_uri = `${backendUrl}/api/v1/auth/redirect`; // 콜백을 Express API 서버가 받도록 설정
+
+function getRedirectUri(req) {
+  if (process.env.BACKEND_URL) {
+    return `${process.env.BACKEND_URL}/api/v1/auth/redirect`;
+  }
+  const host = req.headers.host || "localhost:4000";
+  const protocol = req.headers["x-forwarded-proto"] || req.protocol || "http";
+  return `${protocol}://${host}/api/v1/auth/redirect`;
+}
+
+function getFrontendUrl(req) {
+  if (process.env.FRONTEND_URL) {
+    return process.env.FRONTEND_URL;
+  }
+  const host = req.headers.host || "localhost:3000";
+  const protocol = req.headers["x-forwarded-proto"] || req.protocol || "http";
+  return `${protocol}://${host}`;
+}
 
 const kauth_host = "https://kauth.kakao.com";
 const kapi_host = "https://kapi.kakao.com";
@@ -46,8 +61,9 @@ router.get("/authorize", function (req, res) {
   if (scope) {
     scopeParam = "&scope=" + scope;
   }
+  const active_redirect_uri = getRedirectUri(req);
   res.status(302).redirect(
-    `${kauth_host}/oauth/authorize?client_id=${client_id}&redirect_uri=${encodeURIComponent(redirect_uri)}&response_type=code${scopeParam}`
+    `${kauth_host}/oauth/authorize?client_id=${client_id}&redirect_uri=${encodeURIComponent(active_redirect_uri)}&response_type=code${scopeParam}`
   );
 });
 
@@ -57,10 +73,11 @@ router.get("/redirect", async function (req, res) {
     return res.status(400).send("인증 코드가 누락되었습니다.");
   }
 
+  const active_redirect_uri = getRedirectUri(req);
   const tokenParams = {
     grant_type: "authorization_code",
     client_id: client_id,
-    redirect_uri: redirect_uri,
+    redirect_uri: active_redirect_uri,
     code: req.query.code,
   };
 
@@ -137,7 +154,8 @@ router.get("/redirect", async function (req, res) {
       req.session.isNewUser = isNewUser;
  
       // Vercel 프론트엔드로 최종 302 리다이렉트
-      res.status(302).redirect(`${frontendUrl}/index.html?login=success&token=${rtn.access_token}`);
+      const active_frontend = getFrontendUrl(req);
+      res.status(302).redirect(`${active_frontend}/index.html?login=success&token=${rtn.access_token}`);
     } else {
       res.status(500).send("카카오 프로필 정보를 가져오지 못했습니다.");
     }
@@ -333,7 +351,8 @@ router.get("/unlink", async function (req, res) {
   await call("POST", uri, {}, header);
   
   req.session.destroy();
-  res.status(302).redirect(`${frontendUrl}/index.html`);
+  const active_frontend = getFrontendUrl(req);
+  res.status(302).redirect(`${active_frontend}/index.html`);
 });
 
 module.exports = router;
