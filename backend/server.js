@@ -38,6 +38,8 @@ app.use(
           "firestore.googleapis.com",
           "identitytoolkit.googleapis.com",
           "wss://*.firebaseio.com",
+          "*.firebaseio.com",
+          "*.firebaseapp.com",
           "kauth.kakao.com",
           "kapi.kakao.com",
           "*.doubleclick.net",
