@@ -74,44 +74,18 @@ router.get("/redirect", async function (req, res) {
   }
 
   const active_redirect_uri = getRedirectUri(req);
-  let rtn = null;
-  const header = { "Content-Type": "application/x-www-form-urlencoded;charset=utf-8" };
-
-  // 시도 1: 환경변수의 client_secret 사용 (혹은 비사용)
-  const attemptParams1 = {
+  const tokenParams = {
     grant_type: "authorization_code",
     client_id: client_id,
     redirect_uri: active_redirect_uri,
     code: req.query.code,
   };
-  if (client_secret && client_secret.trim() !== "") {
-    attemptParams1.client_secret = client_secret.trim();
-  }
 
-  console.log("[토큰 요청 시도 1] 파라미터:", { ...attemptParams1, client_secret: attemptParams1.client_secret ? "PRESENT" : "ABSENT" });
-  rtn = await call("POST", kauth_host + "/oauth/token", qs.stringify(attemptParams1), header);
-
-  // 시도 2: 만약 실패했고 시크릿을 사용했다면 -> 시크릿 없이 재시도 (카카오 콘솔에서 시크릿이 비활성화 상태인 경우 대비)
-  if ((!rtn || !rtn.access_token) && attemptParams1.client_secret) {
-    console.log("[토큰 요청 시도 2 - 시크릿 제거 후 재시도]");
-    const attemptParams2 = { ...attemptParams1 };
-    delete attemptParams2.client_secret;
-    rtn = await call("POST", kauth_host + "/oauth/token", qs.stringify(attemptParams2), header);
-  }
-
-  // 시도 3: 만약 실패했고 시크릿이 없거나 다른 값이라면 -> 하드코딩 시크릿으로 재시도 (카카오 콘솔에선 켰는데 Vercel 환경변수 등록이 안 된 경우 대비)
-  const hardcodedSecret = "9VYApC5nP7Rawn0PWik4VNkTZDICZGZG";
-  if ((!rtn || !rtn.access_token) && (!attemptParams1.client_secret || attemptParams1.client_secret !== hardcodedSecret)) {
-    console.log("[토큰 요청 시도 3 - 하드코딩 시크릿 적용 후 재시도]");
-    const attemptParams3 = {
-      grant_type: "authorization_code",
-      client_id: client_id,
-      redirect_uri: active_redirect_uri,
-      code: req.query.code,
-      client_secret: hardcodedSecret
-    };
-    rtn = await call("POST", kauth_host + "/oauth/token", qs.stringify(attemptParams3), header);
-  }
+  const param = qs.stringify(tokenParams);
+  const header = { "Content-Type": "application/x-www-form-urlencoded;charset=utf-8" };
+  
+  console.log("[토큰 요청] 전송 파라미터 (시크릿 미사용):", { ...tokenParams, client_id: "3c6b...7471" });
+  var rtn = await call("POST", kauth_host + "/oauth/token", param, header);
 
   if (rtn && rtn.access_token) {
     req.session.key = rtn.access_token;
