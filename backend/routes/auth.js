@@ -17,6 +17,9 @@ const client_id = process.env.KAKAO_CLIENT_ID || "3c6b9b1d740c3c2cb76369773ea574
 const client_secret = process.env.KAKAO_CLIENT_SECRET || "W4bIVwKsOMri6cIZJaBZuxVFwSR1hMHt";
 
 function getRedirectUri(req) {
+  if (process.env.NODE_ENV === "production") {
+    return "https://myplating.kr/api/v1/auth/redirect";
+  }
   if (process.env.BACKEND_URL) {
     return `${process.env.BACKEND_URL}/api/v1/auth/redirect`;
   }
@@ -26,6 +29,9 @@ function getRedirectUri(req) {
 }
 
 function getFrontendUrl(req) {
+  if (process.env.NODE_ENV === "production") {
+    return "https://myplating.kr";
+  }
   if (process.env.FRONTEND_URL) {
     return process.env.FRONTEND_URL;
   }
@@ -62,6 +68,7 @@ router.get("/authorize", function (req, res) {
     scopeParam = "&scope=" + scope;
   }
   const active_redirect_uri = getRedirectUri(req);
+  console.log("Redirect URI :", active_redirect_uri);
   res.status(302).redirect(
     `${kauth_host}/oauth/authorize?client_id=${client_id}&redirect_uri=${encodeURIComponent(active_redirect_uri)}&response_type=code${scopeParam}`
   );
@@ -74,6 +81,10 @@ router.get("/redirect", async function (req, res) {
   }
 
   const active_redirect_uri = getRedirectUri(req);
+  const active_frontend = getFrontendUrl(req);
+  console.log("Redirect URI :", active_redirect_uri);
+  console.log("Frontend URI :", active_frontend);
+
   const tokenParams = {
     grant_type: "authorization_code",
     client_id: client_id,
@@ -84,6 +95,8 @@ router.get("/redirect", async function (req, res) {
   if (client_secret && client_secret.trim() !== "") {
     tokenParams.client_secret = client_secret.trim();
   }
+
+  console.log("Token Params :", tokenParams);
 
   const param = qs.stringify(tokenParams);
   const header = { "Content-Type": "application/x-www-form-urlencoded;charset=utf-8" };
