@@ -20,6 +20,15 @@ const port = process.env.PORT || 4000;
 // Render.com 등 리버스 프록시 환경에서 HTTPS 인식을 위한 설정
 app.set('trust proxy', 1);
 
+// myplating.kr 접속 시 www.myplating.kr로 301 캐노니컬 리다이렉트 처리
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV === "production" && req.headers.host === "myplating.kr") {
+    console.log(`[Canonical Redirect] ${req.headers.host}${req.url} -> www.myplating.kr`);
+    return res.redirect(301, `https://www.myplating.kr${req.url}`);
+  }
+  next();
+});
+
 // HTTP 요청 로깅 (Morgan)
 app.use(morgan("combined"));
 

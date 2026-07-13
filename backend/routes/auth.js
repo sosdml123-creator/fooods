@@ -18,7 +18,7 @@ const client_secret = process.env.KAKAO_CLIENT_SECRET || "W4bIVwKsOMri6cIZJaBZux
 
 function getRedirectUri(req) {
   if (process.env.NODE_ENV === "production") {
-    return "https://myplating.kr/api/v1/auth/redirect";
+    return "https://www.myplating.kr/api/v1/auth/redirect";
   }
   if (process.env.BACKEND_URL) {
     return `${process.env.BACKEND_URL}/api/v1/auth/redirect`;
@@ -30,7 +30,7 @@ function getRedirectUri(req) {
 
 function getFrontendUrl(req) {
   if (process.env.NODE_ENV === "production") {
-    return "https://myplating.kr";
+    return "https://www.myplating.kr";
   }
   if (process.env.FRONTEND_URL) {
     return process.env.FRONTEND_URL;
