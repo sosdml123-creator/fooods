@@ -63,7 +63,7 @@ function MyPage({
     if (!targetName) return;
 
 
-    fetch(API_URL + "/api/v1/users/profile/update", {
+    fetch("/api/v1/users/profile/update", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

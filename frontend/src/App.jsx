@@ -225,7 +225,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         return null;
       }
       try {
-        const response = await fetch(API_URL + `/api/link-meta?url=${encodeURIComponent(url)}`);
+        const response = await fetch(`/api/link-meta?url=${encodeURIComponent(url)}`);
         if (response.ok) {
           const res = await response.json();
           if (res.success) {
@@ -1343,7 +1343,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         }
 
         // 2. 백엔드와 연동하여 세션/DB 중복체크 진행 후 최종 저장
-        fetch(API_URL + "/api/v1/users/profile/update", {
+        fetch("/api/v1/users/profile/update", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -2292,7 +2292,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           if (!user) { alert("Firebase 로그인이 필요합니다."); return; }
           
           const idToken = await user.getIdToken(true);
-          const res = await fetch(API_URL + "/api/v1/admin/setup-firestore", {
+          const res = await fetch("/api/v1/admin/setup-firestore", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
@@ -3275,7 +3275,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
         setIsSearching(true);
         // 1. 게시글 검색
-        fetch(API_URL + `/api/search/posts?q=${encodeURIComponent(query)}`)
+        fetch(`/api/search/posts?q=${encodeURIComponent(query)}`)
           .then(r => r.json())
           .then(data => {
             if (data.success) setSearchPostsResult(data.posts || []);
@@ -3283,7 +3283,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           .catch(e => console.error("Search posts error:", e));
 
         // 2. 사용자 검색
-        fetch(API_URL + `/api/search/users?q=${encodeURIComponent(query)}`)
+        fetch(`/api/search/users?q=${encodeURIComponent(query)}`)
           .then(r => r.json())
           .then(data => {
             if (data.success) setSearchUsersResult(data.users || []);
@@ -3343,7 +3343,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       const [dbLoaded, setDbLoaded] = useState(false); // IndexedDB 로드 완료 플래그
 
       function loadBackendPosts() {
-        fetch(API_URL + "/api/v1/posts")
+        fetch("/api/v1/posts")
           .then(r => r.json())
           .then(data => {
             if (data.success && data.posts) {
@@ -3359,7 +3359,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       }
 
       function loadBackendCommunityPosts() {
-        fetch(API_URL + "/api/v1/community")
+        fetch("/api/v1/community")
           .then(r => r.json())
           .then(data => {
             if (data.success && data.communityPosts) {
@@ -3564,7 +3564,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
               try {
                 const token = await user.getIdToken();
                 console.log("[Firebase Auth] Synchronizing profile with Express session via ID token...");
-                const r = await fetch(API_URL + `/api/profile?token=${encodeURIComponent(token)}`);
+                const r = await fetch(`/api/profile?token=${encodeURIComponent(token)}`);
                 const res = await r.json();
                 console.log("[Express Session Sync] Sync response:", res);
               } catch (syncErr) {
@@ -3591,7 +3591,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             setDBData("foodhouse_profile", guestProfile).catch(e => console.error(e));
             
             // Clear express session
-            fetch(API_URL + "/api/profile/logout", { method: "POST" }).catch(e => console.error(e));
+            fetch("/api/profile/logout", { method: "POST" }).catch(e => console.error(e));
 
             if (window.location.pathname === "/admin") {
               alert("로그인이 필요합니다.");
@@ -3670,7 +3670,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             try {
               await authReadyPromise;
               // 1. 카카오 유저 정보 조회
-              const response = await fetch(API_URL + `/api/profile?token=${encodeURIComponent(urlToken)}`);
+              const response = await fetch(`/api/profile?token=${encodeURIComponent(urlToken)}`);
               const res = await response.json();
               if (res.isLoggedIn && res.user) {
                 console.log("[Kakao Callback] Successfully fetched Kakao user info. Linking to Firebase Auth...");
@@ -3937,7 +3937,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
           window.flutter_inappwebview.callHandler('saveToken', { token: "" }).catch(e => console.error(e));
         }
-        fetch(API_URL + "/api/v1/auth/logout").catch(e => console.error("Logout request error:", e));
+        fetch("/api/v1/auth/logout").catch(e => console.error("Logout request error:", e));
         alert("로그아웃되었습니다.");
         setActiveTab("home");
       }
@@ -4317,7 +4317,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           ? profile.name 
           : "익명 플레이터";
 
-        fetch(API_URL + "/api/v1/posts/community", {
+        fetch("/api/v1/posts/community", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
