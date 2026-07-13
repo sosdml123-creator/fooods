@@ -48,7 +48,8 @@ router.post("/presigned", async (req, res) => {
 });
 
 // 이미지 업로드 API
-router.post("/upload", upload.single("file"), async (req, res) => {
+router.post("/", upload.single("file"), async (req, res) => {
+  console.log("[UPLOAD API]", req.method, req.originalUrl);
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: "업로드할 파일이 없습니다." });
