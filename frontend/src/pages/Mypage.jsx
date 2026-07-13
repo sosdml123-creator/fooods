@@ -58,15 +58,24 @@ function MyPage({
     setIsEditing(true);
   }
 
-  function handleSave() {
+  async function handleSave() {
     const targetName = editName.trim();
     if (!targetName) return;
 
+    let token = "";
+    if (auth && auth.currentUser) {
+      try {
+        token = await auth.currentUser.getIdToken();
+      } catch (tokenErr) {
+        console.error("Failed to retrieve Firebase ID Token:", tokenErr);
+      }
+    }
 
     fetch("/api/v1/users/profile/update", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        token,
         nickname: targetName,
         bio: editBio.trim(),
         avatarImg: editPhoto

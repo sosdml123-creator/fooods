@@ -149,16 +149,61 @@ router.get("/profile", async function (req, res) {
 
 // 2. 프로필 정보 수정 API
 router.post("/profile/update", async function (req, res) {
-  if (!req.session.user) {
+  const { token, nickname: targetNickname, bio, avatarImg } = req.body;
+
+  let currentUser = req.session.user;
+
+  if (token) {
+    const users = readUsers();
+    // Firebase ID Token 검증 (JWT 토큰)
+    if (token.startsWith("eyJ")) {
+      const fbUser = await verifyFirebaseIdToken(token);
+      if (fbUser) {
+        let user = users.find(u => u.uid === fbUser.localId || u.email === fbUser.email);
+        if (!user) {
+          user = {
+            uid: fbUser.localId,
+            nickname: fbUser.displayName || fbUser.email.split("@")[0],
+            email: fbUser.email,
+            profile_image: fbUser.photoUrl || "",
+            role: "user",
+            session_token: token
+          };
+          users.push(user);
+          writeUsers(users);
+        }
+        currentUser = {
+          uid: fbUser.localId,
+          nickname: user.nickname,
+          profile_image: user.profile_image || "",
+          email: user.email || "",
+          role: user.role || "user"
+        };
+      }
+    } else {
+      // 로컬 DB session_token 검색
+      const localUser = users.find(u => u.session_token === token);
+      if (localUser) {
+        currentUser = {
+          kakao_id: localUser.kakao_id || null,
+          username: localUser.username || null,
+          nickname: localUser.nickname,
+          profile_image: localUser.profile_image || "",
+          email: localUser.email || "",
+          role: localUser.role || "user"
+        };
+      }
+    }
+  }
+
+  if (!currentUser) {
     return res.status(401).json({ success: false, message: "로그인이 필요합니다." });
   }
 
-  const { nickname: targetNickname, bio, avatarImg } = req.body;
   if (!targetNickname || targetNickname.trim() === "") {
     return res.status(400).json({ success: false, message: "닉네임은 필수입니다." });
   }
 
-  const currentUser = req.session.user;
   const users = readUsers();
   
   // 닉네임 중복 체크 (본인 제외)
