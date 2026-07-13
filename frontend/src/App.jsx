@@ -14,7 +14,7 @@ import 'firebase/compat/firestore';
 import 'firebase/compat/storage';
 
 // API URL 설정 (개발/배포 환경변수 연동)
-const API_URL = import.meta.env.VITE_API_URL || '';
+const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "");
 
 
 
