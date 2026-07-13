@@ -2801,6 +2801,47 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         return val === null ? false : val === "true";
       });
 
+      // 시스템 진단 상태
+      const [diagnostics, setDiagnostics] = useState("진단 실행 중...");
+
+      useEffect(() => {
+        (async () => {
+          try {
+            let info = "";
+            const currUser = auth.currentUser;
+            if (currUser) {
+              info += `[Firebase Auth] 로그인됨\n- 이메일: ${currUser.email}\n- UID: ${currUser.uid}\n\n`;
+              
+              try {
+                const doc = await db.collection("users").doc(currUser.uid).get();
+                if (doc.exists) {
+                  const data = doc.data();
+                  info += `[Firestore] 문서 존재\n- 닉네임: ${data.nickname}\n- 역할(Role): ${data.role}\n\n`;
+                } else {
+                  info += `[Firestore] 문서 없음 (users/${currUser.uid})\n\n`;
+                }
+              } catch (fsErr) {
+                info += `[Firestore] 에러: ${fsErr.message}\n\n`;
+              }
+            } else {
+              info += `[Firebase Auth] 로그인 안 됨 (GUEST 상태)\n\n`;
+            }
+
+            try {
+              const r = await fetch("/api/profile");
+              const res = await r.json();
+              info += `[Express Session] 호출 성공\n- 로그인상태: ${res.isLoggedIn}\n- 세션유저: ${res.user ? JSON.stringify(res.user) : "없음"}\n`;
+            } catch (apiErr) {
+              info += `[Express Session] 에러: ${apiErr.message}\n`;
+            }
+
+            setDiagnostics(info);
+          } catch (e) {
+            setDiagnostics("진단 실패: " + e.message);
+          }
+        })();
+      }, []);
+
       function handlePushToggle(checked) {
         setPushEnabled(checked);
         localStorage.setItem("push_enabled", checked ? "true" : "false");
@@ -2875,6 +2916,13 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
               <span>앱 버전</span>
               <span className="text-zinc-400 font-mono">v1.2.0 (Premium)</span>
             </div>
+          </div>
+
+          <div className="bg-white border border-zinc-200 rounded-xl p-4 shadow-sm mb-4">
+            <h3 className="text-xs font-bold text-zinc-400 mb-3 uppercase tracking-wider">시스템 진단 도구</h3>
+            <pre className="text-[10px] text-zinc-650 bg-zinc-50 p-2.5 rounded-lg overflow-x-auto font-mono whitespace-pre-wrap leading-relaxed select-all border border-zinc-200">
+              {diagnostics}
+            </pre>
           </div>
 
           <div className="bg-white border border-zinc-200 rounded-xl p-4 shadow-sm mb-4">
