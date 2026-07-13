@@ -118,9 +118,27 @@ app.use(
 );
 
 // R2에서 파일 데이터베이스(users, posts, reports 등) 동기화 구동
+let dbSynced = false;
 if (hasR2Config) {
-  syncDbsFromR2().catch(err => console.error("R2 복원 실행 실패:", err));
+  syncDbsFromR2()
+    .then(() => { dbSynced = true; })
+    .catch(err => console.error("R2 복원 실행 실패:", err));
 }
+
+// Vercel 서버리스 콜드 스타트 시 데이터베이스 동기화 완료를 보장하는 미들웨어
+app.use(async (req, res, next) => {
+  if (!dbSynced && process.env.VERCEL && hasR2Config) {
+    console.log("🔄 [Vercel Cold Start] Waiting for lazy database sync from R2...");
+    try {
+      await syncDbsFromR2();
+      dbSynced = true;
+      console.log("✅ [Vercel Cold Start] Lazy database sync completed!");
+    } catch (err) {
+      console.error("🚨 [Vercel Cold Start] Lazy database sync failed:", err.message);
+    }
+  }
+  next();
+});
 const path = require("path");
 
 // 서버 기동 시 정적 자산 경로 확인용 로그

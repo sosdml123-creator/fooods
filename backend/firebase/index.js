@@ -6,13 +6,16 @@ const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const axios = require("axios");
 
 // 파일 데이터베이스 경로 정의
-const USERS_DB_PATH = path.join(__dirname, "../users.json");
-const REPORTS_DB_PATH = path.join(__dirname, "../reports.json");
-const MODERATION_RULES_PATH = path.join(__dirname, "../moderation_rules.json");
-const ADMIN_LOGS_PATH = path.join(__dirname, "../admin_logs.json");
-const ADMIN_CONFIG_PATH = path.join(__dirname, "../admin_config.json");
-const RECIPE_POSTS_DB_PATH = path.join(__dirname, "../recipe_posts.json");
-const COMMUNITY_POSTS_DB_PATH = path.join(__dirname, "../community_posts.json");
+const isVercel = !!(process.env.VERCEL || process.env.NOW_BUILDER);
+const dbDir = isVercel ? "/tmp" : path.join(__dirname, "..");
+
+const USERS_DB_PATH = path.join(dbDir, "users.json");
+const REPORTS_DB_PATH = path.join(dbDir, "reports.json");
+const MODERATION_RULES_PATH = path.join(dbDir, "moderation_rules.json");
+const ADMIN_LOGS_PATH = path.join(dbDir, "admin_logs.json");
+const ADMIN_CONFIG_PATH = path.join(dbDir, "admin_config.json");
+const RECIPE_POSTS_DB_PATH = path.join(dbDir, "recipe_posts.json");
+const COMMUNITY_POSTS_DB_PATH = path.join(dbDir, "community_posts.json");
 
 // R2 설정 로드
 const r2AccessKey = process.env.R2_ACCESS_KEY_ID !== "your_access_key_id" ? process.env.R2_ACCESS_KEY_ID : "c65e4f5b673b8c078bb45580a7048345";
