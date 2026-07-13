@@ -1932,7 +1932,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         }
       }, [initialImages]);
 
-      // Firebase Storage 직접 업로드 (압축 및 로딩 처리)
+      // Cloudflare R2 업로드 (압축 및 백엔드 프록시 처리)
       async function handlePhoto(e) {
         const files = Array.from(e.target.files).slice(0, 10);
         if (files.length === 0) return;
@@ -1952,16 +1952,21 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             const compressedBlob = await imageCompression(file, options);
             const compressedFile = new File([compressedBlob], file.name, { type: file.type });
             
-            const filename = `recipe_${Date.now()}_${Math.random().toString(36).substring(2)}_${file.name}`;
-            const storageRef = firebase.storage().ref().child(`images/${filename}`);
-            
-            console.log(`[Firebase Storage] Uploading ${filename}...`);
-            const uploadTask = storageRef.put(compressedFile);
-            
-            const snapshot = await uploadTask;
-            const downloadUrl = await snapshot.ref.getDownloadURL();
-            uploadedUrls.push(downloadUrl);
-            console.log(`[Firebase Storage] Upload success:`, downloadUrl);
+            console.log(`[Cloudflare R2 Proxy] Uploading ${file.name} via backend...`);
+            const formData = new FormData();
+            formData.append("file", compressedFile);
+
+            const response = await fetch("/api/upload", {
+              method: "POST",
+              body: formData
+            });
+            const res = await response.json();
+            if (res.success && res.url) {
+              uploadedUrls.push(res.url);
+              console.log(`[Cloudflare R2 Proxy] Upload success:`, res.url);
+            } else {
+              throw new Error(res.message || "업로드 실패");
+            }
           } catch (err) {
             console.error("Upload error:", err);
             alert(`사진 업로드 중 오류가 발생했습니다: ${err.message || err}`);
@@ -2932,7 +2937,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         }
       }, [initialImages]);
 
-      // Firebase Storage 직접 업로드 (압축 및 로딩 처리)
+      // Cloudflare R2 업로드 (압축 및 백엔드 프록시 처리)
       async function handlePhoto(e) {
         const files = Array.from(e.target.files).slice(0, 10);
         if (files.length === 0) return;
@@ -2952,16 +2957,21 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             const compressedBlob = await imageCompression(file, options);
             const compressedFile = new File([compressedBlob], file.name, { type: file.type });
             
-            const filename = `community_${Date.now()}_${Math.random().toString(36).substring(2)}_${file.name}`;
-            const storageRef = firebase.storage().ref().child(`images/${filename}`);
-            
-            console.log(`[Firebase Storage] Uploading ${filename}...`);
-            const uploadTask = storageRef.put(compressedFile);
-            
-            const snapshot = await uploadTask;
-            const downloadUrl = await snapshot.ref.getDownloadURL();
-            uploadedUrls.push(downloadUrl);
-            console.log(`[Firebase Storage] Upload success:`, downloadUrl);
+            console.log(`[Cloudflare R2 Proxy] Uploading ${file.name} via backend...`);
+            const formData = new FormData();
+            formData.append("file", compressedFile);
+
+            const response = await fetch("/api/upload", {
+              method: "POST",
+              body: formData
+            });
+            const res = await response.json();
+            if (res.success && res.url) {
+              uploadedUrls.push(res.url);
+              console.log(`[Cloudflare R2 Proxy] Upload success:`, res.url);
+            } else {
+              throw new Error(res.message || "업로드 실패");
+            }
           } catch (err) {
             console.error("Upload error:", err);
             alert(`사진 업로드 중 오류가 발생했습니다: ${err.message || err}`);
