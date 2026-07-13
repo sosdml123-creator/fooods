@@ -19,6 +19,10 @@
       "destination": "/admin/index.html"
     },
     {
+      "source": "/authorize",
+      "destination": "/api/index.js"
+    },
+    {
       "source": "/((?!api|health|admin).*)",
       "destination": "/index.html"
     }

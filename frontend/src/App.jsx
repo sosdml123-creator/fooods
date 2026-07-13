@@ -3921,7 +3921,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
 
       function handleLogin(type) {
         if (type === "kakao") {
-          window.location.href = "/authorize";
+          window.location.href = "/api/v1/auth/authorize";
         } else {
           setIsLoggedIn(true);
           setDBData("foodhouse_logged_in", "true").catch(e => console.error(e));

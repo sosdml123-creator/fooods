@@ -158,6 +158,8 @@ app.use((req, res, next) => {
     req.url = req.url.replace("/api/search/posts", "/api/v1/search/posts");
   } else if (req.path === "/api/search/users") {
     req.url = req.url.replace("/api/search/users", "/api/v1/search/users");
+  } else if (req.path === "/authorize") {
+    req.url = req.url.replace("/authorize", "/api/v1/auth/authorize");
   }
   
   if (originalPath !== req.url) {
