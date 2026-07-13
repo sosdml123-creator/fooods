@@ -3294,12 +3294,40 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
       useEffect(() => {
         window.openWriteSheetWithPhotos = (urls) => {
-          setWriteInitialImages(urls);
-          setWriteOpen(true);
+          console.log("[Native Callback] openWriteSheetWithPhotos received urls:", urls);
+          let parsed = urls;
+          if (typeof urls === "string") {
+            try {
+              parsed = JSON.parse(urls);
+            } catch (e) {
+              parsed = [urls];
+            }
+          }
+          const imagesArr = Array.isArray(parsed) ? parsed : [];
+          
+          // 네이티브 갤러리가 닫히며(Pop) WebView 역사 뒤로가기(popstate)를 자극하는 레이스 컨디션을 방지하기 위해 250ms 지연 후 오픈
+          setTimeout(() => {
+            setWriteInitialImages(imagesArr);
+            setWriteOpen(true);
+          }, 250);
         };
         window.openCommunityWriteWithPhotos = (urls) => {
-          setCommunityInitialImages(urls);
-          setActiveTab("community_write");
+          console.log("[Native Callback] openCommunityWriteWithPhotos received urls:", urls);
+          let parsed = urls;
+          if (typeof urls === "string") {
+            try {
+              parsed = JSON.parse(urls);
+            } catch (e) {
+              parsed = [urls];
+            }
+          }
+          const imagesArr = Array.isArray(parsed) ? parsed : [];
+
+          // 동일하게 갤러리 종료 네비게이션이 완료된 후 쓰기 화면 탭으로 활성화
+          setTimeout(() => {
+            setCommunityInitialImages(imagesArr);
+            setActiveTab("community_write");
+          }, 250);
         };
         window.showConfirm = (message, title = "확인") => {
           return new Promise((resolve) => {
