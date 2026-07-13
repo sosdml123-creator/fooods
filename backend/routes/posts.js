@@ -546,7 +546,7 @@ router.post("/community/delete", async (req, res) => {
 
 // 19. 익명 커뮤니티 글쓰기 대리 API (구버전 호환)
 router.post("/community/posts", communityWriteLimiter, async function (req, res) {
-  const { title, body, category, author, avatarImg, userId, image } = req.body;
+  const { token, title, body, category, author, avatarImg, userId, image } = req.body;
   if (!title || !body || !category) {
     return res.status(400).json({ success: false, message: "제목, 본문, 카테고리는 필수 입력 사항입니다." });
   }
@@ -575,10 +575,19 @@ router.post("/community/posts", communityWriteLimiter, async function (req, res)
       }
     };
 
-    const response = await axios.post(url, payload);
+    const headers = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const response = await axios.post(url, payload, { headers });
     return res.json({ success: true, id: response.data.name.split("/").pop() });
   } catch (err) {
-    console.error("[Community API] Firestore write error:", err.message);
+    if (err.response) {
+      console.error("[Community API] Firestore write error detail:", JSON.stringify(err.response.data));
+    } else {
+      console.error("[Community API] Firestore write error:", err.message);
+    }
     return res.status(500).json({ success: false, message: "글 등록 중 오류가 발생했습니다." });
   }
 });

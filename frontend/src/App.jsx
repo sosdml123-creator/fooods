@@ -4357,10 +4357,18 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           ? profile.name 
           : "익명 플레이터";
 
+        let token = "";
+        try {
+          token = await user.getIdToken();
+        } catch (tokenErr) {
+          console.error("Failed to retrieve Firebase ID Token for community post:", tokenErr);
+        }
+
         fetch("/api/v1/community/posts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            token,
             title: newComPost.title,
             body: newComPost.body,
             category: newComPost.category,
