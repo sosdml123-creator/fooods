@@ -4744,7 +4744,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
                   </div>
                 ) : filteredPosts.length > 0 ? (
                   filteredPosts.map(post => (
-                    <FeedCard 
+                    <PostCard 
                       key={post.id} 
                       post={post} 
                       onLike={() => handleLike(post.id)}
