@@ -20,40 +20,41 @@ function copyFolderSync(from, to) {
 
 try {
   const frontendDir = path.join(__dirname, 'frontend');
+  const adminDir = path.join(__dirname, 'admin');
   const backendWwwDir = path.join(__dirname, 'backend', 'www');
+  const adminWwwDir = path.join(__dirname, 'admin', 'dist');
   const rootDistDir = path.join(__dirname, 'dist');
 
   // ==========================================
-  // [1/6] Installing frontend packages...
+  // [1/6] Installing frontend & admin packages...
   // ==========================================
-  console.log('\n[1/6] 📦 Installing frontend packages...');
+  console.log('\n[1/6] 📦 Installing frontend & admin packages...');
   const buildEnv = { ...process.env, NODE_ENV: 'development' };
   
   try {
-    console.log('🤖 Trying fast clean install (npm ci)...');
-    execSync('npm ci --include=dev --no-audit --no-fund', { 
-      cwd: frontendDir, 
-      stdio: 'inherit',
-      env: buildEnv
-    });
+    console.log('🤖 Trying fast clean install for frontend (npm ci)...');
+    execSync('npm ci --include=dev --no-audit --no-fund', { cwd: frontendDir, stdio: 'inherit', env: buildEnv });
   } catch (ciError) {
-    console.warn('⚠️ npm ci failed. Falling back to standard npm install...');
-    execSync('npm install --include=dev --legacy-peer-deps --no-audit --no-fund', { 
-      cwd: frontendDir, 
-      stdio: 'inherit',
-      env: buildEnv
-    });
+    console.warn('⚠️ npm ci failed for frontend. Falling back to standard npm install...');
+    execSync('npm install --include=dev --legacy-peer-deps --no-audit --no-fund', { cwd: frontendDir, stdio: 'inherit', env: buildEnv });
+  }
+
+  try {
+    console.log('🤖 Trying fast clean install for admin (npm ci)...');
+    execSync('npm ci --include=dev --no-audit --no-fund', { cwd: adminDir, stdio: 'inherit', env: buildEnv });
+  } catch (ciError) {
+    console.warn('⚠️ npm ci failed for admin. Falling back to standard npm install...');
+    execSync('npm install --include=dev --legacy-peer-deps --no-audit --no-fund', { cwd: adminDir, stdio: 'inherit', env: buildEnv });
   }
 
   // ==========================================
-  // [2/6] Building frontend...
+  // [2/6] Building frontend & admin...
   // ==========================================
-  console.log('\n[2/6] 🚀 Building frontend (Vite Compile)...');
-  execSync('npm run build', { 
-    cwd: frontendDir, 
-    stdio: 'inherit',
-    env: buildEnv
-  });
+  console.log('\n[2/6] 🚀 Building frontend & admin (Vite Compile)...');
+  console.log('⚡ Building Main App...');
+  execSync('npm run build', { cwd: frontendDir, stdio: 'inherit', env: buildEnv });
+  console.log('⚡ Building Admin Panel...');
+  execSync('npm run build', { cwd: adminDir, stdio: 'inherit', env: buildEnv });
 
   // ==========================================
   // [3/6] Copying build...
@@ -62,13 +63,17 @@ try {
   if (!fs.existsSync(backendWwwDir)) {
     throw new Error(`Vite build directory not found at: ${backendWwwDir}`);
   }
+  if (!fs.existsSync(adminWwwDir)) {
+    throw new Error(`Admin build directory not found at: ${adminWwwDir}`);
+  }
   
   // 기존 루트 dist 폴더가 있다면 말끔히 삭제 후 갱신 복사
   if (fs.existsSync(rootDistDir)) {
     fs.rmSync(rootDistDir, { recursive: true, force: true });
   }
   copyFolderSync(backendWwwDir, rootDistDir);
-  console.log('✅ Sync completed: backend/www/ -> dist/');
+  copyFolderSync(adminWwwDir, path.join(rootDistDir, 'admin'));
+  console.log('✅ Sync completed: backend/www/ -> dist/ & admin/dist/ -> dist/admin/');
 
   // ==========================================
   // [4/6] Preparing backend...
