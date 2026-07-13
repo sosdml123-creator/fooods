@@ -4950,7 +4950,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
                 creatorsData={creatorsData}
                 onFollowToggle={handleFollowToggle}
                 onAuthorClick={handleAuthorClick}
-                onAdminCenterClick={() => setActiveTab("admin_reports")}
+                onAdminCenterClick={() => window.open("/admin", "_blank")}
                 onSettingsClick={() => setActiveTab("settings")}
                 communityPosts={communityPosts}
                 onCommunityCardClick={handleCommunityPostClick}
