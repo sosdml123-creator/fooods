@@ -1956,7 +1956,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             const formData = new FormData();
             formData.append("file", compressedFile);
 
-            const response = await fetch("/api/upload", {
+            const response = await fetch("/api/v1/upload", {
               method: "POST",
               body: formData
             });
@@ -2961,7 +2961,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             const formData = new FormData();
             formData.append("file", compressedFile);
 
-            const response = await fetch("/api/upload", {
+            const response = await fetch("/api/v1/upload", {
               method: "POST",
               body: formData
             });
