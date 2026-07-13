@@ -3572,7 +3572,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                 }
 
                 // 기존/신규 유저 데이터를 최종 React state에 반영하여 데이터 불일치 방지
-                const updatedNickname = userData.nickname;
+                const updatedNickname = userData.nickname || userData.name || userData.username || "플레이터";
                 const updatedProfile = {
                   name: updatedNickname,
                   bio: userData.bio || "",
@@ -3617,6 +3617,8 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                 console.log("[Express Session Sync] Sync response:", res);
               } catch (syncErr) {
                 console.error("[Express Session Sync] Sync error:", syncErr);
+              } finally {
+                if (resolveSessionSyncReady) resolveSessionSyncReady();
               }
             })();
 
