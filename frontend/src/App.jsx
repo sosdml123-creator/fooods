@@ -4357,7 +4357,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           ? profile.name 
           : "익명 플레이터";
 
-        fetch("/api/v1/posts/community", {
+        fetch("/api/v1/community/posts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
