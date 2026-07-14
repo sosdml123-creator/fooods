@@ -5,8 +5,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -16,6 +16,9 @@ final Map<String, Uint8List> _thumbnailCache = {};
 
 // 동시 썸네일 로딩 수를 제한하는 세마포어 (UI 쓰레드 과부하 방지)
 final _thumbnailSemaphore = _Semaphore(maxConcurrent: 4);
+
+// 동시 업로드 수를 제한하는 세마포어 (네이티브 메모리 폭증 방지 및 대기열 큐 처리)
+final _uploadSemaphore = _Semaphore(maxConcurrent: 2);
 
 /// 간단한 세마포어 구현: 동시 실행 가능한 비동기 작업 수를 제한
 class _Semaphore {
@@ -42,35 +45,6 @@ class _Semaphore {
     } else {
       _current--;
     }
-  }
-}
-
-// Isolate에서 실행될 이미지 압축 함수 (UI 쓰레드 차단 없이 백그라운드 처리)
-Future<File> _compressImageIsolate(String filePath) async {
-  try {
-    final file = File(filePath);
-    final bytes = await file.readAsBytes();
-    final image = img.decodeImage(bytes);
-    if (image == null) return file;
-
-    img.Image resized = image;
-    if (image.width > 1200 || image.height > 1200) {
-      if (image.width > image.height) {
-        resized = img.copyResize(image, width: 1200);
-      } else {
-        resized = img.copyResize(image, height: 1200);
-      }
-    }
-
-    final compressedBytes = img.encodeJpg(resized, quality: 82);
-    final tempDir = Directory.systemTemp;
-    final tempFile = File(
-        '${tempDir.path}/compressed_${DateTime.now().millisecondsSinceEpoch}.jpg');
-    await tempFile.writeAsBytes(compressedBytes);
-    return tempFile;
-  } catch (e) {
-    debugPrint('이미지 압축 실패: $e');
-    return File(filePath);
   }
 }
 
@@ -196,45 +170,101 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
     }
   }
 
-  /// compute()를 활용해 UI 쓰레드를 차단하지 않고 이미지 압축
-  Future<File> _compressImage(File file) async {
-    return await compute(_compressImageIsolate, file.path);
-  }
+
 
   String _getPhotoKey(SelectedPhoto photo) {
     if (photo.entity != null) return photo.entity!.id;
     return photo.file!.path;
   }
 
-  // 사진을 선택 또는 촬영하는 순간 즉시 R2 서버로 선업로드(Pre-uploading) 시작 (메모리 튕김 방지를 위해 앱단 압축 우회)
+  // 사진을 선택 또는 촬영하는 순간 즉시 R2 서버로 선업로드(Pre-uploading) 시작 (메모리 튕김 방지를 위해 앱단 압축 우회 및 동시 전송 개수 제한)
   Future<void> _compressAndUploadPhoto(SelectedPhoto photo) async {
     final key = _getPhotoKey(photo);
+    debugPrint('[UPLOAD STEP 1] Queueing photo for upload: $key');
+    
+    // 세마포어를 획득하여 최대 2개로 동시 업로드 제한 (메모리 폭증 및 과도한 커넥션 차단)
+    await _uploadSemaphore.acquire();
+    debugPrint('[UPLOAD STEP 1.1] Acquired upload semaphore lock for: $key');
+    
+    File? originalFile;
+    File? fileToUpload;
+    
     try {
-      File? originalFile = await photo.getFile;
-      if (originalFile == null) return;
+      debugPrint('[UPLOAD STEP 2] Resolving file for: $key');
+      originalFile = await photo.getFile.timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw TimeoutException('사진 파일을 불러오는 과정에서 시간 초과가 발생했습니다.'),
+      );
+      
+      if (originalFile == null) {
+        debugPrint('[UPLOAD ERROR] Resolved file is null for: $key');
+        return;
+      }
+      
+      debugPrint('[UPLOAD STEP 2.1] File resolved successfully: ${originalFile.path}');
       
       // 1. Isolate 이미지 압축 우회 (Pure Dart 디코딩에 의한 java.lang.OutOfMemoryError 완전 차단)
-      File fileToUpload = originalFile;
+      fileToUpload = originalFile;
+      debugPrint('[UPLOAD STEP 3] Skipping native image compression to prevent OOM. Using original file: ${fileToUpload.path}');
       
       // 2. R2로 업로드 (Vercel 프록시 API의 실제 엔드포인트 호출)
-      var request = http.MultipartRequest(
+      debugPrint('[UPLOAD STEP 4] Creating multipart request for: $key');
+      final request = http.MultipartRequest(
         'POST',
         Uri.parse('https://www.myplating.kr/api/v1/upload'),
       );
-      request.files.add(await http.MultipartFile.fromPath('file', fileToUpload.path));
+      
+      debugPrint('[UPLOAD STEP 5] Appending file to multipart files list: ${fileToUpload.path}');
+      request.files.add(await http.MultipartFile.fromPath('file', fileToUpload.path).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw TimeoutException('파일을 멀티파트 데이터로 변환하는 데 실패했습니다.'),
+      ));
 
-      var streamedResponse = await request.send();
-      var response = await http.Response.fromStream(streamedResponse);
+      debugPrint('[UPLOAD STEP 6] Sending HTTP POST request to https://www.myplating.kr/api/v1/upload');
+      final streamedResponse = await request.send().timeout(
+        const Duration(seconds: 45),
+        onTimeout: () => throw TimeoutException('서버 연결 및 데이터 전송 시간이 초과되었습니다.'),
+      );
+      
+      debugPrint('[UPLOAD STEP 6.1] Streamed response received. Parsing...');
+      final response = await http.Response.fromStream(streamedResponse);
 
+      debugPrint('[UPLOAD STEP 7] Response received. Status code: ${response.statusCode}');
       if (response.statusCode == 200) {
-        var data = jsonDecode(response.body);
-        if (data['success'] == true) {
+        final data = jsonDecode(response.body);
+        debugPrint('[UPLOAD STEP 7.1] Decoded JSON body: $data');
+        
+        if (data['success'] == true && data['url'] != null) {
           _uploadedUrls[key] = data['url'];
-          debugPrint('선업로드 성공: $key -> ${data['url']}');
+          debugPrint('[UPLOAD STEP 7.2] Upload success: $key -> ${data['url']}');
+        } else {
+          debugPrint('[UPLOAD ERROR] Server success flag is false or url is missing: ${response.body}');
         }
+      } else {
+        debugPrint('[UPLOAD ERROR] Server returned failure status code: ${response.statusCode}, Body: ${response.body}');
       }
-    } catch (e) {
-      debugPrint('선업로드 실패: $e');
+    } on SocketException catch (se) {
+      debugPrint('[UPLOAD ERROR] SocketException (Network error): ${se.message}');
+    } on TimeoutException catch (te) {
+      debugPrint('[UPLOAD ERROR] TimeoutException: ${te.message}');
+    } on FormatException catch (fe) {
+      debugPrint('[UPLOAD ERROR] FormatException (Invalid JSON): ${fe.message}');
+    } on HttpException catch (he) {
+      debugPrint('[UPLOAD ERROR] HttpException: ${he.message}');
+    } on PlatformException catch (pe) {
+      debugPrint('[UPLOAD ERROR] PlatformException (Device storage error): ${pe.message}');
+    } on Error catch (err) {
+      debugPrint('[UPLOAD FATAL ERROR] Runtime Error occurred: $err\nStacktrace: ${err.stackTrace}');
+    } on Exception catch (exc) {
+      debugPrint('[UPLOAD FATAL ERROR] General Exception occurred: $exc');
+    } finally {
+      // 업로드 종료 후 리소스 정리 및 세마포어 해제
+      _uploadSemaphore.release();
+      debugPrint('[UPLOAD STEP 7.3] Released upload semaphore lock for: $key');
+      
+      // 메모리 가비지 컬렉션(GC)을 돕기 위해 사용한 로컬 파일 오브젝트 참조 해제
+      originalFile = null;
+      fileToUpload = null;
     }
   }
 

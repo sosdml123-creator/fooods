@@ -161,16 +161,21 @@ class _WebViewScreenState extends State<WebViewScreen> {
                     ),
                   );
                   
-                  if (urls != null && urls.isNotEmpty) {
+                  if (urls != null && urls.isNotEmpty && mounted && _webViewController != null) {
                     final urlsJson = jsonEncode(urls);
-                    if (type == 'community') {
-                      controller.evaluateJavascript(
-                        source: 'window.openCommunityWriteWithPhotos($urlsJson);',
-                      );
-                    } else {
-                      controller.evaluateJavascript(
-                        source: 'window.openWriteSheetWithPhotos($urlsJson);',
-                      );
+                    try {
+                      if (type == 'community') {
+                        await _webViewController!.evaluateJavascript(
+                          source: 'window.openCommunityWriteWithPhotos($urlsJson);',
+                        );
+                      } else {
+                        await _webViewController!.evaluateJavascript(
+                          source: 'window.openWriteSheetWithPhotos($urlsJson);',
+                        );
+                      }
+                      debugPrint('[UPLOAD STEP 8] WebView JavaScript URL delivery completed successfully.');
+                    } catch (jsErr) {
+                      debugPrint('[UPLOAD ERROR] JavaScript evaluation failed: $jsErr');
                     }
                   }
                   return urls;
