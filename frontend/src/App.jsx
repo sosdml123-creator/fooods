@@ -3305,6 +3305,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       useEffect(() => {
         window.openWriteSheetWithPhotos = (urls) => {
           console.log("[Native Callback] openWriteSheetWithPhotos received urls:", urls);
+          isSelectingPhotos.current = false;
           let parsed = urls;
           if (typeof urls === "string") {
             try {
@@ -3315,14 +3316,14 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           }
           const imagesArr = Array.isArray(parsed) ? parsed : [];
           
-          // 네이티브 갤러리가 닫히며(Pop) WebView 역사 뒤로가기(popstate)를 자극하는 레이스 컨디션을 방지하기 위해 250ms 지연 후 오픈
           setTimeout(() => {
             setWriteInitialImages(imagesArr);
             setWriteOpen(true);
-          }, 250);
+          }, 100);
         };
         window.openCommunityWriteWithPhotos = (urls) => {
           console.log("[Native Callback] openCommunityWriteWithPhotos received urls:", urls);
+          isSelectingPhotos.current = false;
           let parsed = urls;
           if (typeof urls === "string") {
             try {
@@ -3333,11 +3334,10 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           }
           const imagesArr = Array.isArray(parsed) ? parsed : [];
 
-          // 동일하게 갤러리 종료 네비게이션이 완료된 후 쓰기 화면 탭으로 활성화
           setTimeout(() => {
             setCommunityInitialImages(imagesArr);
             setActiveTab("community_write");
-          }, 250);
+          }, 100);
         };
         window.showConfirm = (message, title = "확인") => {
           return new Promise((resolve) => {
@@ -3417,6 +3417,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       // 뒤로가기 브라우저 역사 연동 (HTML5 History API)
       const isInitialMount = useRef(true);
       const isPoppingState = useRef(false);
+      const isSelectingPhotos = useRef(false);
 
       useEffect(() => {
         window.openReportModal = (targetType, targetId, author, text, targetParentId = "") => {
@@ -3472,6 +3473,11 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
       useEffect(() => {
         const handlePopState = (event) => {
+          if (isSelectingPhotos.current) {
+            console.log("[Navigation] popstate ignored because app is currently returning from native gallery.");
+            isSelectingPhotos.current = false;
+            return;
+          }
           if (event.state) {
             isPoppingState.current = true;
             const state = event.state;
@@ -3953,6 +3959,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         if (!user) {
           setLoginOpen(true);
         } else if (window.flutter_inappwebview) {
+          isSelectingPhotos.current = true;
           window.flutter_inappwebview.callHandler('openCustomGallery', { type: 'recipe' });
         } else {
           setWriteOpen(true);
@@ -4942,6 +4949,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                     return;
                   }
                   if (window.flutter_inappwebview) {
+                    isSelectingPhotos.current = true;
                     window.flutter_inappwebview.callHandler('openCustomGallery', { type: 'community' });
                   } else {
                     setActiveTab("community_write");
