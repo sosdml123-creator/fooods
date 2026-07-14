@@ -206,22 +206,22 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
     return photo.file!.path;
   }
 
-  // 사진을 선택 또는 촬영하는 순간 즉시 압축 및 R2 서버로 선업로드(Pre-uploading) 시작
+  // 사진을 선택 또는 촬영하는 순간 즉시 R2 서버로 선업로드(Pre-uploading) 시작 (메모리 튕김 방지를 위해 앱단 압축 우회)
   Future<void> _compressAndUploadPhoto(SelectedPhoto photo) async {
     final key = _getPhotoKey(photo);
     try {
       File? originalFile = await photo.getFile;
       if (originalFile == null) return;
       
-      // 1. Isolate를 통한 비동기 이미지 압축 (UI 쓰레드 비차단)
-      File compressedFile = await _compressImage(originalFile);
+      // 1. Isolate 이미지 압축 우회 (Pure Dart 디코딩에 의한 java.lang.OutOfMemoryError 완전 차단)
+      File fileToUpload = originalFile;
       
-      // 2. R2로 업로드
+      // 2. R2로 업로드 (Vercel 프록시 API의 실제 엔드포인트 호출)
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('https://myplating.kr/upload'),
+        Uri.parse('https://www.myplating.kr/api/v1/upload'),
       );
-      request.files.add(await http.MultipartFile.fromPath('file', compressedFile.path));
+      request.files.add(await http.MultipartFile.fromPath('file', fileToUpload.path));
 
       var streamedResponse = await request.send();
       var response = await http.Response.fromStream(streamedResponse);
