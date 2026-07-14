@@ -105,9 +105,9 @@ app.use(compression());
 // CORS 허용 설정
 app.use(corsOptions);
 
-// JSON 및 URL-encoded 바디 파서
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// JSON 및 URL-encoded 바디 파서 (대용량 base64 프로필 이미지 업로드 허용)
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 const isProd = process.env.NODE_ENV === "production" || process.env.PORT !== undefined;
 
