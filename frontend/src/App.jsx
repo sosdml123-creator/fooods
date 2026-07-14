@@ -1925,56 +1925,83 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           }
         });
       }, [links]);
-
-      useEffect(() => {
-        if (fileInputRef.current && (!initialImages || initialImages.length === 0)) {
-          fileInputRef.current.click();
-        }
-      }, [initialImages]);
-
       // Cloudflare R2 업로드 (압축 및 백엔드 프록시 처리)
       async function handlePhoto(e) {
-        const files = Array.from(e.target.files).slice(0, 10);
-        if (files.length === 0) return;
+        console.log("[UPLOAD STEP 1] handlePhoto started. Target files:", e.target.files);
+        let files = [];
+        try {
+          files = Array.from(e.target.files).slice(0, 10);
+        } catch (filesErr) {
+          console.error("[UPLOAD STEP 1.1] Error parsing files array:", filesErr);
+          alert("파일 목록을 가져오는 중 오류가 발생했습니다.");
+          return;
+        }
+        
+        if (files.length === 0) {
+          console.log("[UPLOAD STEP 1.2] No files selected.");
+          return;
+        }
+        
         setLoading(true);
+        console.log("[UPLOAD STEP 2] Parsing complete. Files count:", files.length);
 
         const uploadedUrls = [];
         const options = {
           maxSizeMB: 1, // 최대 용량 제한 1MB
           maxWidthOrHeight: 1200, // 최대 해상도 1200px
-          useWebWorker: true,
+          useWebWorker: false, // Android WebView WebWorker crash 방지
           initialQuality: 0.8 // 품질 80%
         };
 
-        for (const file of files) {
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          console.log(`[UPLOAD STEP 3] Processing file [${i + 1}/${files.length}]: ${file.name}, Size: ${file.size} bytes`);
+          
+          let fileToUpload = file;
           try {
-            console.log(`[Image Compression] Compressing file: ${file.name}`);
+            console.log(`[UPLOAD STEP 4] Compressing file: ${file.name}`);
             const compressedBlob = await imageCompression(file, options);
-            const compressedFile = new File([compressedBlob], file.name, { type: file.type });
-            
-            console.log(`[Cloudflare R2 Proxy] Uploading ${file.name} via backend...`);
-            const formData = new FormData();
-            formData.append("file", compressedFile);
+            fileToUpload = compressedBlob;
+            console.log(`[UPLOAD STEP 4.1] Compression successful. New size: ${compressedBlob.size} bytes`);
+          } catch (compressErr) {
+            console.error(`[UPLOAD STEP 4.2] Compression failed for ${file.name}. Uploading original file. Error:`, compressErr);
+            fileToUpload = file; // 압축 실패 시 원본 파일 그대로 업로드하여 앱 크래시 방지
+          }
 
+          try {
+            console.log(`[UPLOAD STEP 5] Creating FormData for ${file.name}`);
+            const formData = new FormData();
+            // new File() 생성자를 사용하지 않고, blob 객체 그대로 append하며 파일명을 세 번째 인자로 추가하여 Android 호환성 극대화
+            formData.append("file", fileToUpload, file.name);
+
+            console.log(`[UPLOAD STEP 6] Sending POST request to /api/v1/upload for ${file.name}`);
             const response = await fetch("/api/v1/upload", {
               method: "POST",
               body: formData
             });
+
+            console.log(`[UPLOAD STEP 7] Received response for ${file.name}. Status: ${response.status}`);
             const res = await response.json();
+            console.log(`[UPLOAD STEP 8] Parsed JSON response for ${file.name}:`, res);
+            
             if (res.success && res.url) {
               uploadedUrls.push(res.url);
-              console.log(`[Cloudflare R2 Proxy] Upload success:`, res.url);
+              console.log(`[UPLOAD STEP 9] Upload success:`, res.url);
             } else {
-              throw new Error(res.message || "업로드 실패");
+              throw new Error(res.message || "서버 응답 실패");
             }
-          } catch (err) {
-            console.error("Upload error:", err);
-            alert(`사진 업로드 중 오류가 발생했습니다: ${err.message || err}`);
+          } catch (uploadErr) {
+            console.error(`[UPLOAD STEP 10] Upload API request failed for ${file.name}:`, uploadErr);
+            alert(`사진 업로드 중 오류가 발생했습니다: ${uploadErr.message || uploadErr}`);
           }
         }
 
-        setImages(prev => [...prev, ...uploadedUrls]);
+        console.log("[UPLOAD STEP 11] All files processed. Uploaded URLs:", uploadedUrls);
+        if (uploadedUrls.length > 0) {
+          setImages(prev => [...prev, ...uploadedUrls]);
+        }
         setLoading(false);
+        console.log("[UPLOAD STEP 12] handlePhoto finished.");
       }
 
       function extractHashtags(text) {
@@ -2042,23 +2069,35 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
               <button type="button" onClick={onClose} aria-label="닫기">×</button>
             </header>
             <form onSubmit={submit}>
-              {images.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto mb-4 py-1.5 border-b border-zinc-100">
-                  {images.map((img, idx) => (
-                    <div key={idx} className="relative w-16 h-16 flex-shrink-0">
-                      <img className="w-full h-full object-cover rounded border border-zinc-200" src={img} alt="" />
-                      <button 
-                        type="button" 
-                        onClick={() => setImages(images.filter((_, i) => i !== idx))}
-                        className="absolute -top-1.5 -right-1.5 bg-black/80 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] border-none font-bold"
-                        style={{ cursor: "pointer", padding: 0 }}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className="flex gap-2 overflow-x-auto mb-4 py-1.5 border-b border-zinc-100 items-center">
+                {images.map((img, idx) => (
+                  <div key={idx} className="relative w-16 h-16 flex-shrink-0">
+                    <img className="w-full h-full object-cover rounded border border-zinc-200" src={img} alt="" />
+                    <button 
+                      type="button" 
+                      onClick={() => setImages(images.filter((_, i) => i !== idx))}
+                      className="absolute -top-1.5 -right-1.5 bg-black/80 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] border-none font-bold"
+                      style={{ cursor: "pointer", padding: 0 }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                {images.length < 10 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      console.log("[UI] Photo add button clicked");
+                      fileInputRef.current.click();
+                    }}
+                    className="w-16 h-16 flex flex-col items-center justify-center border border-dashed border-zinc-300 rounded text-zinc-400 bg-zinc-50 flex-shrink-0"
+                    style={{ cursor: "pointer", fontSize: "20px" }}
+                  >
+                    +
+                    <span className="text-[9px] mt-0.5 font-normal">사진 추가</span>
+                  </button>
+                )}
+              </div>
               <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handlePhoto} className="hidden" />
 
               <label>
@@ -2931,55 +2970,83 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
       const fileInputRef = useRef(null);
 
-      useEffect(() => {
-        if (fileInputRef.current && (!initialImages || initialImages.length === 0)) {
-          fileInputRef.current.click();
-        }
-      }, [initialImages]);
-
       // Cloudflare R2 업로드 (압축 및 백엔드 프록시 처리)
       async function handlePhoto(e) {
-        const files = Array.from(e.target.files).slice(0, 10);
-        if (files.length === 0) return;
+        console.log("[COMMUNITY UPLOAD STEP 1] handlePhoto started. Target files:", e.target.files);
+        let files = [];
+        try {
+          files = Array.from(e.target.files).slice(0, 10);
+        } catch (filesErr) {
+          console.error("[COMMUNITY UPLOAD STEP 1.1] Error parsing files array:", filesErr);
+          alert("파일 목록을 가져오는 중 오류가 발생했습니다.");
+          return;
+        }
+        
+        if (files.length === 0) {
+          console.log("[COMMUNITY UPLOAD STEP 1.2] No files selected.");
+          return;
+        }
+        
         setLoading(true);
+        console.log("[COMMUNITY UPLOAD STEP 2] Parsing complete. Files count:", files.length);
 
         const uploadedUrls = [];
         const options = {
           maxSizeMB: 1, // 최대 용량 제한 1MB
           maxWidthOrHeight: 1200, // 최대 해상도 1200px
-          useWebWorker: true,
+          useWebWorker: false, // Android WebView WebWorker crash 방지
           initialQuality: 0.8 // 품질 80%
         };
 
-        for (const file of files) {
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          console.log(`[COMMUNITY UPLOAD STEP 3] Processing file [${i + 1}/${files.length}]: ${file.name}, Size: ${file.size} bytes`);
+          
+          let fileToUpload = file;
           try {
-            console.log(`[Image Compression] Compressing file: ${file.name}`);
+            console.log(`[COMMUNITY UPLOAD STEP 4] Compressing file: ${file.name}`);
             const compressedBlob = await imageCompression(file, options);
-            const compressedFile = new File([compressedBlob], file.name, { type: file.type });
-            
-            console.log(`[Cloudflare R2 Proxy] Uploading ${file.name} via backend...`);
-            const formData = new FormData();
-            formData.append("file", compressedFile);
+            fileToUpload = compressedBlob;
+            console.log(`[COMMUNITY UPLOAD STEP 4.1] Compression successful. New size: ${compressedBlob.size} bytes`);
+          } catch (compressErr) {
+            console.error(`[COMMUNITY UPLOAD STEP 4.2] Compression failed for ${file.name}. Uploading original file. Error:`, compressErr);
+            fileToUpload = file; // 압축 실패 시 원본 파일 그대로 업로드하여 앱 크래시 방지
+          }
 
+          try {
+            console.log(`[COMMUNITY UPLOAD STEP 5] Creating FormData for ${file.name}`);
+            const formData = new FormData();
+            // new File() 생성자를 사용하지 않고, blob 객체 그대로 append하며 파일명을 세 번째 인자로 추가하여 Android 호환성 극대화
+            formData.append("file", fileToUpload, file.name);
+
+            console.log(`[COMMUNITY UPLOAD STEP 6] Sending POST request to /api/v1/upload for ${file.name}`);
             const response = await fetch("/api/v1/upload", {
               method: "POST",
               body: formData
             });
+
+            console.log(`[COMMUNITY UPLOAD STEP 7] Received response for ${file.name}. Status: ${response.status}`);
             const res = await response.json();
+            console.log(`[COMMUNITY UPLOAD STEP 8] Parsed JSON response for ${file.name}:`, res);
+            
             if (res.success && res.url) {
               uploadedUrls.push(res.url);
-              console.log(`[Cloudflare R2 Proxy] Upload success:`, res.url);
+              console.log(`[COMMUNITY UPLOAD STEP 9] Upload success:`, res.url);
             } else {
-              throw new Error(res.message || "업로드 실패");
+              throw new Error(res.message || "서버 응답 실패");
             }
-          } catch (err) {
-            console.error("Upload error:", err);
-            alert(`사진 업로드 중 오류가 발생했습니다: ${err.message || err}`);
+          } catch (uploadErr) {
+            console.error(`[COMMUNITY UPLOAD STEP 10] Upload API request failed for ${file.name}:`, uploadErr);
+            alert(`사진 업로드 중 오류가 발생했습니다: ${uploadErr.message || uploadErr}`);
           }
         }
 
-        setImages(prev => [...prev, ...uploadedUrls]);
+        console.log("[COMMUNITY UPLOAD STEP 11] All files processed. Uploaded URLs:", uploadedUrls);
+        if (uploadedUrls.length > 0) {
+          setImages(prev => [...prev, ...uploadedUrls]);
+        }
         setLoading(false);
+        console.log("[COMMUNITY UPLOAD STEP 12] handlePhoto finished.");
       }
 
       function handleSubmitPost(e) {
@@ -3046,14 +3113,36 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
               </label>
               <label className="text-xs font-bold text-zinc-500 flex flex-col gap-1.5">
                 사진 첨부 (최대 10장)
-                <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handlePhoto} className="border p-2 rounded text-xs" />
-                {images.length > 0 && (
-                  <div className="flex gap-2 overflow-x-auto mt-2 py-1">
-                    {images.map((img, idx) => (
-                      <img key={idx} className="w-16 h-16 object-cover rounded border border-zinc-200" src={img} alt="" />
-                    ))}
-                  </div>
-                )}
+                <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handlePhoto} className="hidden" />
+                <div className="flex gap-2 overflow-x-auto mt-2 py-1 items-center">
+                  {images.map((img, idx) => (
+                    <div key={idx} className="relative w-16 h-16 flex-shrink-0">
+                      <img className="w-full h-full object-cover rounded border border-zinc-200" src={img} alt="" />
+                      <button 
+                        type="button" 
+                        onClick={() => setImages(images.filter((_, i) => i !== idx))}
+                        className="absolute -top-1.5 -right-1.5 bg-black/80 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] border-none font-bold"
+                        style={{ cursor: "pointer", padding: 0 }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  {images.length < 10 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        console.log("[UI] Community Photo add button clicked");
+                        fileInputRef.current.click();
+                      }}
+                      className="w-16 h-16 flex flex-col items-center justify-center border border-dashed border-zinc-300 rounded text-zinc-400 bg-zinc-50 flex-shrink-0"
+                      style={{ cursor: "pointer", fontSize: "20px" }}
+                    >
+                      +
+                      <span className="text-[9px] mt-0.5 font-normal">사진 추가</span>
+                    </button>
+                  )}
+                </div>
               </label>
               <button type="submit" className="primary full py-3 rounded-lg text-xs font-bold" disabled={loading}>
                 {loading ? "사진 최적화 및 등록 중..." : "등록하기"}
