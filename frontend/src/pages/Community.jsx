@@ -119,7 +119,7 @@ export function CommunityView({
                     className="everytime-user-info cursor-pointer"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onAuthorClick(post.author);
+                      onAuthorClick(post.userId || post.author);
                     }}
                   >
                     <span className="everytime-avatar">
@@ -210,7 +210,8 @@ export function CommunityDetailView({
   onAuthorClick,
   ImageCarousel,
   db,
-  generateId
+  generateId,
+  currentUserUid
 }) {
   const post = communityPosts.find(p => p.id === activeComPostId);
   if (!post) return (
@@ -230,7 +231,7 @@ export function CommunityDetailView({
   const [editingCommentText, setEditingCommentText] = useState("");
   const [openCommentKebabId, setOpenCommentKebabId] = useState(null);
 
-  const isMyPost = post.author === "나" || post.author === currentUserName;
+  const isMyPost = post.userId === currentUserUid || post.author === "나" || post.author === currentUserName;
   const isAdmin = currentUserRole === "admin";
 
   useEffect(() => {
@@ -313,7 +314,7 @@ export function CommunityDetailView({
           <div className="community-detail-meta">
             <span className="font-bold text-zinc-800">{post.category}</span>
             <span className="mx-1.5">·</span>
-            <span className="cursor-pointer hover:underline font-semibold text-zinc-950" onClick={() => onAuthorClick(post.author)}>{post.author}</span>
+            <span className="cursor-pointer hover:underline font-semibold text-zinc-950" onClick={() => onAuthorClick(post.userId || post.author)}>{post.author}</span>
           </div>
           <div>
             {!isEditingCom && (
@@ -353,7 +354,7 @@ export function CommunityDetailView({
                         }}>신고내역 보기</button>
                         <button onClick={() => {
                           setShowKebabMenu(false);
-                          onAuthorClick(post.author);
+                          onAuthorClick(post.userId || post.author, post.author);
                         }}>작성자 정보 보기</button>
                       </>
                     )}
@@ -421,11 +422,11 @@ export function CommunityDetailView({
         <span className="text-xs font-bold text-zinc-800 block mb-2">댓글 ({(post.comments || []).length})</span>
         <div className="flex flex-col gap-1 mb-4 divide-y divide-zinc-50">
           {(post.comments || []).map(c => {
-            const isMyComment = c.author === "나" || c.author === currentUserName;
+            const isMyComment = c.userId === currentUserUid || c.author === "나" || c.author === currentUserName;
             return (
               <div className="comment-item" key={c.id}>
                 <div className="comment-header">
-                  <span className="comment-author cursor-pointer hover:underline" onClick={() => onAuthorClick(c.author)}>{c.author}</span>
+                  <span className="comment-author cursor-pointer hover:underline" onClick={() => onAuthorClick(c.userId || c.author)}>{c.author}</span>
                   <div className="comment-actions">
                     {editingCommentId === c.id ? (
                       <>
@@ -496,7 +497,7 @@ export function CommunityDetailView({
                       <div key={r.id} className="flex flex-col gap-0.5">
                         <div className="flex items-center gap-1.5">
                           <i className="fa-solid fa-turn-up fa-flip-horizontal text-zinc-300" style={{fontSize:'9px'}}></i>
-                          <span className="text-[11px] font-bold text-zinc-700 cursor-pointer hover:underline" onClick={() => onAuthorClick(r.author)}>{r.author}</span>
+                          <span className="text-[11px] font-bold text-zinc-700 cursor-pointer hover:underline" onClick={() => onAuthorClick(r.userId || r.author)}>{r.author}</span>
                         </div>
                         <p className="text-xs text-zinc-650" style={{marginLeft:'14px'}}>{r.text}</p>
                       </div>

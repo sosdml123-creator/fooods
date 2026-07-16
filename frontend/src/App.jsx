@@ -1303,7 +1303,49 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       const [myCategory, setMyCategory] = useState("전체");
       const [scrapSubTab, setScrapSubTab] = useState("recipe"); // "recipe" or "community"
       const [followModal, setFollowModal] = useState(null); // null, "followers", or "following"
-      const mockFollowers = ["카페투어러", "푸드스타일리스트"];
+      const [followersList, setFollowersList] = useState([]); // Firestore 기반 실제 팔로워 목록
+      const [removingFollower, setRemovingFollower] = useState(null); // 삭제 진행 중인 팔로워
+
+      // 내 팔로워 목록 실시간 로드
+      React.useEffect(() => {
+        const user = auth.currentUser;
+        if (!user) return;
+        // users 컬렉션에서 followingList에 내 닉네임이 포함된 유저를 팔로워로 판별
+        const unsub = db.collection("users")
+          .where("followingList", "array-contains", profile.name)
+          .onSnapshot(snap => {
+            const list = [];
+            snap.forEach(doc => {
+              const data = doc.data();
+              list.push({
+                uid: doc.id,
+                nickname: data.nickname || data.name || "알 수 없음",
+                bio: data.bio || "소개글이 없습니다.",
+                avatarImg: data.avatarImg || ""
+              });
+            });
+            setFollowersList(list);
+          }, err => console.error("[Followers] 로드 실패:", err));
+        return () => unsub();
+      }, [profile.name]);
+
+      // 팔로워 삭제 (내 팔로워 목록에서 제거)
+      async function handleRemoveFollower(followerUid, followerNickname) {
+        if (!await window.showConfirm(`"${followerNickname}"님을 팔로워 목록에서 삭제하시겠습니까?`)) return;
+        setRemovingFollower(followerUid);
+        try {
+          // 해당 유저의 followingList에서 내 닉네임 제거
+          await db.collection("users").doc(followerUid).update({
+            followingList: firebase.firestore.FieldValue.arrayRemove(profile.name)
+          });
+          showToast(`${followerNickname}님을 팔로워에서 삭제했습니다.`, "success");
+        } catch (err) {
+          console.error("[RemoveFollower] 실패:", err);
+          showToast("삭제에 실패했습니다. 다시 시도해 주세요.", "error");
+        } finally {
+          setRemovingFollower(null);
+        }
+      }
 
       const myPosts = posts.filter(post => post.author === "나" || post.author === profile.name);
       const scrappedPosts = posts.filter(post => post.scrapped);
@@ -1495,7 +1537,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                     <span className="text-[10px] text-zinc-450 font-bold mt-2">게시물</span>
                   </div>
                   <div className="flex flex-col items-center cursor-pointer active:scale-95 transition-transform" onClick={() => setFollowModal("followers")}>
-                    <span className="text-lg font-black text-zinc-950 leading-none">{mockFollowers.length}</span>
+                    <span className="text-lg font-black text-zinc-950 leading-none">{followersList.length}</span>
                     <span className="text-[10px] text-zinc-450 font-bold mt-2 hover:text-zinc-800">팔로워</span>
                   </div>
                   <div className="flex flex-col items-center cursor-pointer active:scale-95 transition-transform" onClick={() => setFollowModal("following")}>
@@ -1682,59 +1724,92 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             <div className="sheet-backdrop animate-fade-in" onClick={() => setFollowModal(null)} style={{ zIndex: 1200 }}>
               <section className="sheet animate-slide-up" onClick={(e) => e.stopPropagation()}>
                 <header className="sheet-head">
-                  <h2>{followModal === "followers" ? "팔로워" : "팔로잉"}</h2>
+                  <h2>{followModal === "followers" ? `팔로워 (${followersList.length})` : `팔로잉 (${followingList.length})`}</h2>
                   <button type="button" onClick={() => setFollowModal(null)}>×</button>
                 </header>
                 <div className="py-2 max-h-[350px] overflow-y-auto no-scrollbar">
                   {(() => {
-                    const list = followModal === "followers" ? mockFollowers : followingList;
-                    if (!list || list.length === 0) {
-                      return (
-                        <div className="text-center py-12 text-zinc-400 text-xs">
-                          {followModal === "followers" ? "팔로워가 없습니다." : "팔로잉하는 사용자가 없습니다."}
-                        </div>
-                      );
-                    }
-                    return list.map(username => {
-                      const userData = creatorsData[username] || { 
-                        bio: "플레이팅 크리에이터입니다.", 
-                        avatarImg: "" 
-                      };
-                      const isFollowing = followingList.includes(username);
-                      return (
-                        <div key={username} className="flex items-center justify-between py-2.5 border-b border-zinc-100 last:border-none">
-                          <div 
+                    if (followModal === "followers") {
+                      // ── 팔로워 목록 (삭제 기능 포함)
+                      if (followersList.length === 0) {
+                        return (
+                          <div className="text-center py-12 text-zinc-400 text-xs">
+                            팔로워가 없습니다.
+                          </div>
+                        );
+                      }
+                      return followersList.map(follower => (
+                        <div key={follower.uid} className="flex items-center justify-between py-2.5 px-4 border-b border-zinc-100 last:border-none">
+                          <div
                             className="flex items-center gap-3 cursor-pointer min-w-0 flex-1"
-                            onClick={() => {
-                              setFollowModal(null);
-                              onAuthorClick(username);
-                            }}
+                            onClick={() => { setFollowModal(null); onAuthorClick(follower.nickname); }}
                           >
                             <span className="w-9 h-9 rounded-full border border-zinc-200 overflow-hidden bg-zinc-100 flex items-center justify-center text-zinc-700 text-xs font-bold flex-shrink-0">
-                              {userData.avatarImg ? (
-                                <img src={userData.avatarImg} alt="" className="w-full h-full object-cover" />
+                              {follower.avatarImg ? (
+                                <img src={follower.avatarImg} alt="" className="w-full h-full object-cover" />
                               ) : (
-                                username.slice(0, 1)
+                                follower.nickname.slice(0, 1)
                               )}
                             </span>
                             <div className="min-w-0 flex-1">
-                              <strong className="text-xs text-zinc-900 block truncate">{username}</strong>
-                              <span className="text-[10px] text-zinc-400 block truncate mt-0.5">{userData.bio}</span>
+                              <strong className="text-xs text-zinc-900 block truncate">{follower.nickname}</strong>
+                              <span className="text-[10px] text-zinc-400 block truncate mt-0.5">{follower.bio}</span>
                             </div>
                           </div>
-                          <button 
-                            className={`text-[10px] font-bold px-3 py-1.5 rounded-lg active:scale-95 transition-all ${
-                              isFollowing 
-                                ? "bg-zinc-100 text-zinc-650 hover:bg-zinc-200" 
-                                : "bg-zinc-950 text-white hover:bg-zinc-800"
-                            }`}
-                            onClick={() => onFollowToggle(username)}
+                          <button
+                            className="text-[10px] font-bold px-3 py-1.5 rounded-lg active:scale-95 transition-all bg-red-50 text-red-500 hover:bg-red-100 border border-red-100 disabled:opacity-40"
+                            onClick={() => handleRemoveFollower(follower.uid, follower.nickname)}
+                            disabled={removingFollower === follower.uid}
                           >
-                            {isFollowing ? "팔로잉" : "팔로우"}
+                            {removingFollower === follower.uid ? "삭제 중..." : "삭제"}
                           </button>
                         </div>
-                      );
-                    });
+                      ));
+                    } else {
+                      // ── 팔로잉 목록
+                      const list = followingList;
+                      if (!list || list.length === 0) {
+                        return (
+                          <div className="text-center py-12 text-zinc-400 text-xs">
+                            팔로잉하는 사용자가 없습니다.
+                          </div>
+                        );
+                      }
+                      return list.map(username => {
+                        const userData = creatorsData[username] || { bio: "플레이팅 크리에이터입니다.", avatarImg: "" };
+                        const isFollowing = followingList.includes(username);
+                        return (
+                          <div key={username} className="flex items-center justify-between py-2.5 px-4 border-b border-zinc-100 last:border-none">
+                            <div
+                              className="flex items-center gap-3 cursor-pointer min-w-0 flex-1"
+                              onClick={() => { setFollowModal(null); onAuthorClick(username); }}
+                            >
+                              <span className="w-9 h-9 rounded-full border border-zinc-200 overflow-hidden bg-zinc-100 flex items-center justify-center text-zinc-700 text-xs font-bold flex-shrink-0">
+                                {userData.avatarImg ? (
+                                  <img src={userData.avatarImg} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  username.slice(0, 1)
+                                )}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <strong className="text-xs text-zinc-900 block truncate">{username}</strong>
+                                <span className="text-[10px] text-zinc-400 block truncate mt-0.5">{userData.bio}</span>
+                              </div>
+                            </div>
+                            <button
+                              className={`text-[10px] font-bold px-3 py-1.5 rounded-lg active:scale-95 transition-all ${
+                                isFollowing
+                                  ? "bg-zinc-100 text-zinc-650 hover:bg-zinc-200"
+                                  : "bg-zinc-950 text-white hover:bg-zinc-800"
+                              }`}
+                              onClick={() => onFollowToggle(username)}
+                            >
+                              {isFollowing ? "팔로잉" : "팔로우"}
+                            </button>
+                          </div>
+                        );
+                      });
+                    }
                   })()}
                 </div>
               </section>
@@ -2184,29 +2259,102 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         </div>
       );
     }
-    function LoginModal({ onClose, onLogin, deviceId }) {
+    function LoginModal({ onClose, onLogin, onRegister }) {
+      const [tab, setTab] = React.useState("login"); // "login" | "register"
+      const [loginId, setLoginId] = React.useState("");
+      const [password, setPassword] = React.useState("");
+      const [nickname, setNickname] = React.useState("");
       const [error, setError] = React.useState("");
+      const [loading, setLoading] = React.useState(false);
+
+      async function handleSubmitLogin(e) {
+        e.preventDefault();
+        setError("");
+        setLoading(true);
+        try {
+          await onLogin("local", loginId, password);
+        } catch (err) {
+          setError(err.message || "로그인에 실패했습니다.");
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      async function handleSubmitRegister(e) {
+        e.preventDefault();
+        setError("");
+        setLoading(true);
+        try {
+          await onRegister(loginId, password, nickname);
+        } catch (err) {
+          setError(err.message || "회원가입에 실패했습니다.");
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      const inputCls = "w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 mb-3";
+      const btnCls = "w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl text-sm transition-colors disabled:opacity-50";
 
       return (
         <div className="sheet-backdrop" onClick={onClose}>
           <section className="sheet" onClick={(e) => e.stopPropagation()}>
             <header className="sheet-head">
-              <h2>로그인</h2>
+              <h2>{tab === "login" ? "로그인" : "회원가입"}</h2>
               <button type="button" onClick={() => onClose()}>×</button>
             </header>
-            <div className="text-center py-6 px-4">
-              <p className="text-base text-zinc-950 font-extrabold mb-1">플레이팅에 오신 것을 환영합니다</p>
-              <p className="text-xs text-zinc-400 mb-8">글쓰기와 장소 연동 수익 창출은 로그인 후 가능합니다.</p>
-              
-              {/* 카카오 소셜 간편 로그인 */}
-              <button 
-                className="full kakao-btn py-3 w-full rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-[#FEE500] text-[#191919] hover:bg-[#FDD835] active:scale-98 transition-transform" 
-                onClick={() => onLogin("kakao")}
-              >
-                <i className="fa-solid fa-comment text-zinc-950 text-base"></i> 카카오톡 간편 시작하기
-              </button>
+            <div className="py-4 px-4">
+              {/* 탭 전환 */}
+              <div className="flex rounded-xl overflow-hidden border border-zinc-200 mb-5">
+                <button
+                  className={`flex-1 py-2 text-sm font-bold transition-colors ${tab === "login" ? "bg-orange-500 text-white" : "bg-white text-zinc-500"}`}
+                  onClick={() => { setTab("login"); setError(""); }}
+                >로그인</button>
+                <button
+                  className={`flex-1 py-2 text-sm font-bold transition-colors ${tab === "register" ? "bg-orange-500 text-white" : "bg-white text-zinc-500"}`}
+                  onClick={() => { setTab("register"); setError(""); }}
+                >회원가입</button>
+              </div>
 
-              {error && <p className="text-[10px] text-red-550 font-bold mt-4">{error}</p>}
+              {tab === "login" ? (
+                <form onSubmit={handleSubmitLogin}>
+                  <input className={inputCls} type="text" placeholder="아이디" value={loginId}
+                    onChange={e => setLoginId(e.target.value)} autoComplete="username" />
+                  <input className={inputCls} type="password" placeholder="비밀번호" value={password}
+                    onChange={e => setPassword(e.target.value)} autoComplete="current-password" />
+                  {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
+                  <button type="submit" className={btnCls} disabled={loading}>
+                    {loading ? "로그인 중..." : "로그인"}
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleSubmitRegister}>
+                  <input className={inputCls} type="text" placeholder="아이디 (영문·숫자)" value={loginId}
+                    onChange={e => setLoginId(e.target.value)} autoComplete="username" />
+                  <input className={inputCls} type="password" placeholder="비밀번호 (6자 이상)" value={password}
+                    onChange={e => setPassword(e.target.value)} autoComplete="new-password" />
+                  <input className={inputCls} type="text" placeholder="닉네임" value={nickname}
+                    onChange={e => setNickname(e.target.value)} />
+                  {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
+                  <button type="submit" className={btnCls} disabled={loading}>
+                    {loading ? "가입 중..." : "회원가입"}
+                  </button>
+                </form>
+              )}
+
+              <div className="mt-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="flex-1 h-px bg-zinc-200"></div>
+                  <span className="text-xs text-zinc-400">또는</span>
+                  <div className="flex-1 h-px bg-zinc-200"></div>
+                </div>
+                <button
+                  className="w-full kakao-btn py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-[#FEE500] text-[#191919] hover:bg-[#FDD835] transition-colors"
+                  onClick={() => onLogin("kakao")}
+                >
+                  <i className="fa-solid fa-comment text-zinc-950 text-base"></i> 카카오톡 간편 시작하기
+                </button>
+              </div>
             </div>
           </section>
         </div>
@@ -4055,13 +4203,127 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         }
       }
 
-      function handleLogin(type) {
+      async function handleLogin(type, loginId, password) {
         if (type === "kakao") {
           window.location.href = "/api/v1/auth/authorize";
         } else {
+          // 일반 로그인 (이메일/비밀번호)
+          loginId = (loginId || "").trim();
+          password = (password || "").trim();
+          if (!loginId || !password) throw new Error("아이디와 비밀번호를 모두 입력해 주세요.");
+
+          const email = `${loginId}@plating.app`;
+          const userCredential = await auth.signInWithEmailAndPassword(email, password);
+          const user = userCredential.user;
+
+          // Firestore에서 프로필 정보 로드
+          const userSnap = await db.collection("users").doc(user.uid).get();
+          if (userSnap.exists) {
+            const userData = userSnap.data();
+            if (userData.status === "suspended" || userData.status === "permanent_suspended") {
+              await auth.signOut();
+              throw new Error("정지된 계정입니다. 관리자에게 문의하세요.");
+            }
+            const updatedProfile = {
+              name: userData.nickname || userData.name || "플레이터",
+              bio: userData.bio || "소개글이 없습니다.",
+              avatar: (userData.nickname || userData.name || "플").slice(0, 1),
+              avatarImg: userData.avatarImg || "",
+              role: userData.role || "user"
+            };
+            setProfile(updatedProfile);
+            setDBData("foodhouse_profile", updatedProfile).catch(e => console.error(e));
+          }
+
+          // lastLoginAt 업데이트
+          await db.collection("users").doc(user.uid).update({
+            lastLoginAt: firebase.firestore.FieldValue.serverTimestamp()
+          }).catch(err => console.warn("lastLoginAt 업데이트 실패:", err));
+
+          // 네이티브 자동 로그인 토큰 저장
+          if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+            const credential = { type: "local", username: loginId, password };
+            await window.flutter_inappwebview.callHandler('saveToken', { token: JSON.stringify(credential) }).catch(e => console.error(e));
+          }
+
           setIsLoggedIn(true);
           setDBData("foodhouse_logged_in", "true").catch(e => console.error(e));
           setLoginOpen(false);
+          showToast("로그인 성공!", "success");
+        }
+      }
+
+      async function handleRegister(loginId, password, nickname) {
+        let authUserCreated = null;
+        try {
+          // 입력값 정리
+          loginId = (loginId || "").trim();
+          password = (password || "").trim();
+          nickname = (nickname || "").trim();
+
+          if (!loginId || !password || !nickname) throw new Error("아이디, 비밀번호, 닉네임을 모두 입력해 주세요.");
+          if (password.length < 6) throw new Error("비밀번호는 6자 이상이어야 합니다.");
+
+          // 기기 핑거프린트
+          const fingerprint = typeof getDeviceFingerprint === "function" ? await getDeviceFingerprint() : "web_" + Date.now();
+
+          // ① Firebase Auth 계정 먼저 생성 (이후 인증된 상태에서 Firestore 쿼리 가능)
+          const email = `${loginId}@plating.app`;
+          const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+          authUserCreated = userCredential.user;
+          const uid = authUserCreated.uid;
+
+          // ② 인증된 상태에서 아이디 중복 확인
+          const idQuery = await db.collection("users").where("loginId", "==", loginId).get();
+          if (!idQuery.empty) throw new Error("이미 존재하는 아이디입니다.");
+
+          // ③ 닉네임 중복 확인
+          const nicknameQuery = await db.collection("users").where("nickname", "==", nickname).get();
+          if (!nicknameQuery.empty) throw new Error("이미 존재하는 닉네임입니다.");
+
+          // ④ 기기 중복 확인
+          let bypassLimit = false;
+          const deviceQuery = await db.collection("users").where("deviceFingerprint", "==", fingerprint).limit(1).get();
+          if (!deviceQuery.empty) {
+            const existingData = deviceQuery.docs[0].data();
+            if (existingData.bypassLimit !== true) throw new Error("이 기기에서는 이미 가입된 계정이 있습니다.");
+            bypassLimit = true;
+          }
+
+          // ⑤ Firestore 유저 문서 저장
+          await db.collection("users").doc(uid).set({
+            loginId,
+            nickname,
+            provider: "local",
+            deviceFingerprint: fingerprint,
+            bypassLimit,
+            role: "user",
+            status: "active",
+            photoURL: "",
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+
+          // ⑥ 프로필 상태 업데이트
+          const updatedProfile = {
+            name: nickname,
+            bio: "소개글이 없습니다.",
+            avatar: nickname.slice(0, 1),
+            avatarImg: "",
+            role: "user"
+          };
+          setProfile(updatedProfile);
+          setDBData("foodhouse_profile", updatedProfile).catch(e => console.error(e));
+          setIsLoggedIn(true);
+          setLoginOpen(false);
+          showToast("회원가입이 완료되었습니다!", "success");
+
+        } catch (err) {
+          console.error("[Registration] 실패:", err);
+          if (authUserCreated) {
+            try { await authUserCreated.delete(); console.log("[Rollback] Auth 계정 삭제 완료"); }
+            catch (de) { console.error("[Rollback] Auth 계정 삭제 실패:", de); }
+          }
+          throw new Error(err.message || "회원가입에 실패했습니다.");
         }
       }
 
@@ -4300,7 +4562,10 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
       function handleFollowToggle(userName) {
         const currentFollowing = Array.isArray(followingList) ? followingList : [];
+        const user = auth.currentUser;
+
         if (currentFollowing.includes(userName)) {
+          // 언팔로우
           setFollowingList(currentFollowing.filter(name => name !== userName));
           setCreatorsData(prev => {
             const userData = prev[userName] || { bio: "플레이팅 크리에이터입니다.", followersCount: 15, followingCount: 8, avatarImg: "" };
@@ -4312,7 +4577,14 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
               }
             };
           });
+          // Firestore에 내 followingList 업데이트
+          if (user) {
+            db.collection("users").doc(user.uid).update({
+              followingList: firebase.firestore.FieldValue.arrayRemove(userName)
+            }).catch(err => console.error("[Follow] Firestore 언팔 업데이트 실패:", err));
+          }
         } else {
+          // 팔로우
           setFollowingList([...currentFollowing, userName]);
           setCreatorsData(prev => {
             const userData = prev[userName] || { bio: "플레이팅 크리에이터입니다.", followersCount: 15, followingCount: 8, avatarImg: "" };
@@ -4324,6 +4596,12 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
               }
             };
           });
+          // Firestore에 내 followingList 업데이트
+          if (user) {
+            db.collection("users").doc(user.uid).update({
+              followingList: firebase.firestore.FieldValue.arrayUnion(userName)
+            }).catch(err => console.error("[Follow] Firestore 팔로우 업데이트 실패:", err));
+          }
 
           // 팔로우 대상 유저의 nickname으로 Firestore users 컬렉션에서 UID 조회 후 알림 생성
           db.collection("users").where("nickname", "==", userName).limit(1).get()
@@ -5191,7 +5469,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             <LoginModal 
               onClose={() => setLoginOpen(false)}
               onLogin={handleLogin}
-              deviceId={deviceId}
+              onRegister={handleRegister}
             />
           )}
 

@@ -20,7 +20,8 @@ function MyPage({
   API_URL,
   auth,
   db,
-  firebase
+  firebase,
+  usersList = []
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(profile.name);
@@ -34,7 +35,17 @@ function MyPage({
   const [followModal, setFollowModal] = useState(null); // null, "followers", or "following"
   const mockFollowers = ["카페투어러", "푸드스타일리스트"];
 
-  const myPosts = posts.filter(post => post.author === "나" || post.author === profile.name);
+  const currentUserUid = auth?.currentUser?.uid;
+  console.log("[MyPage myPosts Debug]", {
+    "auth.currentUser.uid": auth?.currentUser?.uid,
+    "currentUserUid": currentUserUid,
+    "profile.name": profile?.name,
+    "profile.uid": profile?.uid,
+    "posts[0].userId": posts?.[0]?.userId
+  });
+  const myPosts = posts.filter(
+    post => post.userId === auth.currentUser?.uid
+  );
   const scrappedPosts = posts.filter(post => post.scrapped);
   const scrappedCommunityPosts = communityPosts.filter(post => post.scrapped);
   const totalScrappedCount = scrappedPosts.length + scrappedCommunityPosts.length;
@@ -418,30 +429,35 @@ function MyPage({
                     </div>
                   );
                 }
-                return list.map(username => {
-                  const userData = creatorsData[username] || { 
+                return list.map(uidOrNickname => {
+                  const dbUser = (usersList || []).find(u => u.uid === uidOrNickname);
+                  const nickname = dbUser ? (dbUser.nickname || dbUser.name || "플레이터") : uidOrNickname;
+                  const userData = dbUser ? {
+                    bio: dbUser.bio || dbUser.intro || "플레이팅 크리에이터입니다.",
+                    avatarImg: dbUser.avatarImg || dbUser.profileImage || ""
+                  } : (creatorsData[uidOrNickname] || { 
                     bio: "플레이팅 크리에이터입니다.", 
                     avatarImg: "" 
-                  };
-                  const isFollowing = followingList.includes(username);
+                  });
+                  const isFollowing = followingList.includes(uidOrNickname);
                   return (
-                    <div key={username} className="flex items-center justify-between py-2.5 border-b border-zinc-100 last:border-none">
+                    <div key={uidOrNickname} className="flex items-center justify-between py-2.5 border-b border-zinc-100 last:border-none">
                       <div 
                         className="flex items-center gap-3 cursor-pointer min-w-0 flex-1"
                         onClick={() => {
                           setFollowModal(null);
-                          onAuthorClick(username);
+                          onAuthorClick(uidOrNickname);
                         }}
                       >
                         <span className="w-9 h-9 rounded-full border border-zinc-200 overflow-hidden bg-zinc-100 flex items-center justify-center text-zinc-700 text-xs font-bold flex-shrink-0">
                           {userData.avatarImg ? (
                             <img src={userData.avatarImg} alt="" className="w-full h-full object-cover" />
                           ) : (
-                            username.slice(0, 1)
+                            nickname.slice(0, 1)
                           )}
                         </span>
                         <div className="min-w-0 flex-1">
-                          <strong className="text-xs text-zinc-900 block truncate">{username}</strong>
+                          <strong className="text-xs text-zinc-900 block truncate">{nickname}</strong>
                           <span className="text-[10px] text-zinc-450 block truncate mt-0.5">{userData.bio}</span>
                         </div>
                       </div>
@@ -451,7 +467,7 @@ function MyPage({
                             ? "bg-zinc-100 text-zinc-650 hover:bg-zinc-200" 
                             : "bg-zinc-950 text-white hover:bg-zinc-800"
                         }`}
-                        onClick={() => onFollowToggle(username)}
+                        onClick={() => onFollowToggle(uidOrNickname)}
                       >
                         {isFollowing ? "팔로잉" : "팔로우"}
                       </button>

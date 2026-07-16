@@ -250,7 +250,15 @@ router.post("/profile/update", async function (req, res) {
     writeUsers(users);
   }
 
-  // 세션 정보 갱신
+  // 세션 정보 갱신 (세션 만료 또는 미생성 상태 시 자동 초기화 및 복구)
+  if (!req.session.user) {
+    req.session.user = {
+      uid: currentUser.uid || null,
+      kakao_id: currentUser.kakao_id || null,
+      username: currentUser.username || null,
+      role: currentUser.role || "user"
+    };
+  }
   req.session.user.nickname = targetNickname;
   if (avatarImg) {
     req.session.user.profile_image = avatarImg;

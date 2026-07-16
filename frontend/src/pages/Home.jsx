@@ -41,7 +41,7 @@ function Home({
               post={post} 
               onLike={() => handleLike(post.id)}
               onCardClick={() => handleRecipePostClick(post.id)}
-              onAuthorClick={() => handleAuthorClick(post.author)}
+              onAuthorClick={() => handleAuthorClick(post.userId || post.author)}
             />
           ))
         ) : (

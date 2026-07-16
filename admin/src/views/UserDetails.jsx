@@ -19,9 +19,62 @@ export default function UserDetails({ uid, onBack }) {
   const [activityData, setActivityData] = useState([]);
   const [activityLoading, setActivityLoading] = useState(false);
 
+  // Device limitation states
+  const [device, setDevice] = useState(null);
+  const [deviceLoading, setDeviceLoading] = useState(false);
+  const [isUpdatingDevice, setIsUpdatingDevice] = useState(false);
+
   useEffect(() => {
     loadUser();
   }, [uid]);
+
+  useEffect(() => {
+    if (user && user.deviceFingerprint) {
+      loadDevice(user.deviceFingerprint);
+    } else {
+      setDevice(null);
+    }
+  }, [user]);
+
+  async function loadDevice(fingerprint) {
+    setDeviceLoading(true);
+    try {
+      const devSnap = await getDoc(doc(db, "devices", fingerprint));
+      if (devSnap.exists()) {
+        setDevice({ id: devSnap.id, ...devSnap.data() });
+      } else {
+        setDevice(null);
+      }
+    } catch (err) {
+      console.error("Error loading device:", err);
+    } finally {
+      setDeviceLoading(false);
+    }
+  }
+
+  async function handleToggleBypassLimit() {
+    if (!device) return;
+    setIsUpdatingDevice(true);
+    const newBypass = !device.bypassLimit;
+    try {
+      await updateDoc(doc(db, "devices", device.id), {
+        bypassLimit: newBypass
+      });
+      // Add audit log
+      await addDoc(collection(db, "adminLogs"), {
+        action: "기기 제한 설정 변경",
+        detail: `대상 회원: ${user?.name || "알 수 없음"} (${uid}) | 기기: ${device.id} | bypassLimit 변경: ${!!device.bypassLimit} -> ${newBypass}`,
+        targetId: uid,
+        createdAt: new Date().toISOString(),
+      });
+      alert(`기기 제한 설정이 ${newBypass ? '해제(bypass)' : '적용'}되었습니다.`);
+      loadDevice(device.id);
+    } catch (err) {
+      alert("기기 설정 변경 실패: " + err.message);
+    } finally {
+      setIsUpdatingDevice(false);
+    }
+  }
 
   async function loadUser() {
     setLoading(true);
@@ -216,6 +269,55 @@ export default function UserDetails({ uid, onBack }) {
               <span className="text-zinc-400 font-semibold">계정상태</span>
               <span className="font-bold uppercase">{user.status || "normal"}</span>
             </div>
+
+            {user.deviceFingerprint && (
+              <div className="border-t border-zinc-100 dark:border-[#30363d] pt-4 space-y-3">
+                <h5 className="font-bold text-xs text-zinc-800 dark:text-white mb-2">디바이스 정보</h5>
+                <div className="flex justify-between">
+                  <span className="text-zinc-400 font-semibold">핑거프린트</span>
+                  <span className="text-zinc-800 dark:text-zinc-200 font-mono text-[9px] truncate max-w-[130px]" title={user.deviceFingerprint}>
+                    {user.deviceFingerprint}
+                  </span>
+                </div>
+                {deviceLoading ? (
+                  <p className="text-[10px] text-zinc-400">불러오는 중...</p>
+                ) : device ? (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-zinc-400 font-semibold">기기 첫 등록</span>
+                      <span className="text-zinc-800 dark:text-zinc-200 font-medium">
+                        {device.createdAt ? device.createdAt.replace("T", " ").slice(0, 16) : "-"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-zinc-400 font-semibold">기기 최종 로그인</span>
+                      <span className="text-zinc-800 dark:text-zinc-200 font-medium">
+                        {device.lastLoginAt ? device.lastLoginAt.replace("T", " ").slice(0, 16) : "-"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-zinc-400 font-semibold">중복가입 차단</span>
+                      <span className={`font-bold ${device.bypassLimit ? 'text-emerald-500' : 'text-red-500'}`}>
+                        {device.bypassLimit ? '우회 허용됨' : '차단 활성'}
+                      </span>
+                    </div>
+                    <button 
+                      onClick={handleToggleBypassLimit}
+                      disabled={isUpdatingDevice}
+                      className={`w-full mt-2 py-1.5 rounded-lg text-[10px] font-bold transition-colors ${
+                        device.bypassLimit 
+                          ? 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-[#30363d] dark:text-zinc-300' 
+                          : 'bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500/20'
+                      }`}
+                    >
+                      {isUpdatingDevice ? "처리 중..." : (device.bypassLimit ? "기기 가입 제한 활성화" : "기기 가입 제한 해제 (우회 허용)")}
+                    </button>
+                  </>
+                ) : (
+                  <p className="text-[10px] text-zinc-400">등록된 기기 정보가 없습니다.</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
