@@ -2282,7 +2282,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         </div>
       );
     }
-    function LoginModal({ onClose, onLogin, onRegister }) {
+    function LoginModal({ onClose, onLogin, onRegister, isGate = false }) {
       const [tab, setTab] = React.useState("login"); // "login" | "register"
       const [loginId, setLoginId] = React.useState("");
       const [password, setPassword] = React.useState("");
@@ -2326,11 +2326,11 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       const btnCls = "w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl text-sm transition-colors disabled:opacity-50";
 
       return (
-        <div className="sheet-backdrop" onClick={onClose}>
+        <div className="sheet-backdrop" onClick={() => { if (!isGate && onClose) onClose(); }}>
           <section className="sheet" onClick={(e) => e.stopPropagation()}>
             <header className="sheet-head">
               <h2>{tab === "login" ? "로그인" : "회원가입"}</h2>
-              <button type="button" onClick={() => onClose()}>×</button>
+              {!isGate && <button type="button" onClick={() => onClose && onClose()}>×</button>}
             </header>
             <div className="py-4 px-4">
               {/* 탭 전환 */}
@@ -3537,6 +3537,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       const [writeOpen, setWriteOpen] = useState(false);
       const [loginOpen, setLoginOpen] = useState(false);
       const [isLoggedIn, setIsLoggedIn] = useState(false);
+      const [appInitializing, setAppInitializing] = useState(true);
       const [writeInitialImages, setWriteInitialImages] = useState([]);
       const [communityInitialImages, setCommunityInitialImages] = useState([]);
 
@@ -4096,7 +4097,9 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           }
         }
 
-        initSession();
+        initSession().finally(() => {
+          setAppInitializing(false);
+        });
 
         return () => {
           window.removeEventListener("flutterInAppWebViewPlatformReady", handleReady);
@@ -4418,8 +4421,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           // 1. 아이디 중복 체크
           const idQuery = await db.collection("users").where("loginId", "==", safeId).get();
           if (!idQuery.empty) {
-            const docSnap = idQuery.docs[0];
-            console.warn("[Registration] 기존 동일 아이디 문서 발견:", docSnap.id);
+            throw new Error("이미 존재하거나 사용 중인 아이디입니다.");
           }
 
           // 2. 닉네임 중복 체크
@@ -5142,6 +5144,46 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           post.author.toLowerCase().includes(query)
         );
       });
+
+      // 1. 앱 세션 초기화 로딩 화면 (스플래시 화면)
+      if (appInitializing) {
+        return (
+          <div className="flex flex-col items-center justify-center min-h-screen bg-white text-zinc-900 px-6">
+            <div className="w-16 h-16 rounded-2xl bg-orange-500 flex items-center justify-center text-white text-3xl font-black mb-4 shadow-xl animate-bounce">
+              P
+            </div>
+            <h1 className="text-xl font-extrabold text-zinc-900 mb-1 tracking-tight">플레이팅 (PLAYTING)</h1>
+            <p className="text-xs text-zinc-400 mb-8 font-medium">맛있는 순간을 기록하는 푸드 픽 커뮤니티</p>
+            <div className="flex items-center gap-2 text-xs text-orange-500 font-bold bg-orange-50 px-4 py-2 rounded-full border border-orange-100">
+              <i className="fa-solid fa-spinner animate-spin"></i> 로딩 중...
+            </div>
+          </div>
+        );
+      }
+
+      // 2. 비로그인 사용자 피드 접근 전면 차단 & 회원가입/로그인 게이트 뷰 노출
+      if (!isLoggedIn && !["privacy", "terms", "delete-account"].includes(activeTab)) {
+        return (
+          <div className="min-h-screen bg-zinc-950 flex flex-col justify-end">
+            <div className="flex-1 flex flex-col items-center justify-center text-white px-6 text-center pt-12">
+              <div className="w-20 h-20 rounded-3xl bg-orange-500 flex items-center justify-center text-white text-4xl font-black mb-6 shadow-2xl animate-pulse">
+                P
+              </div>
+              <h1 className="text-2xl font-black mb-2 tracking-tight">플레이팅 시작하기</h1>
+              <p className="text-sm text-zinc-400 max-w-xs leading-relaxed">
+                나만의 푸드 레시피를 공유하고<br />
+                맛있는 일상을 이웃들과 나누어보세요!
+              </p>
+            </div>
+            <LoginModal 
+              isGate={true}
+              onClose={() => {}}
+              onLogin={handleLogin}
+              onRegister={handleRegister}
+            />
+          </div>
+        );
+      }
 
       if (["privacy", "terms", "delete-account", "landing"].includes(activeTab)) {
         const renderStaticContent = () => {
