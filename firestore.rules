@@ -15,10 +15,14 @@ service cloud.firestore {
 
     // 2. users 컬렉션 보안 규칙
     match /users/{userId} {
-      allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
-      allow create: if request.auth != null && request.auth.uid == userId && request.app != null;
-      allow update: if request.auth != null && (request.auth.uid == userId || isAdmin()) && request.app != null;
-      allow delete: if isAdmin();
+      allow get, list: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && (
+        request.auth.uid == userId ||
+        isAdmin() ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followingList'])
+      );
+      allow delete: if request.auth != null && (request.auth.uid == userId || isAdmin());
     }
 
     // 3. posts (레시피) 컬렉션 보안 규칙
@@ -84,10 +88,13 @@ service cloud.firestore {
 
     // 11. devices 컬렉션 보안 규칙
     match /devices/{deviceFingerprint} {
-      allow read: if request.auth != null && (resource.data.uid == request.auth.uid || isAdmin());
-      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid && request.app != null;
-      allow update: if request.auth != null && (resource.data.uid == request.auth.uid || isAdmin()) && request.app != null;
-      allow delete: if isAdmin();
+      allow read, write: if request.auth != null;
+    }
+
+    // 12. dailyStats 컬렉션 보안 규칙
+    match /dailyStats/{dateId} {
+      allow read: if true;
+      allow write: if request.auth != null;
     }
   }
 }

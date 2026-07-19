@@ -12,6 +12,7 @@ import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
 import 'firebase/compat/storage';
+import { getDeviceFingerprint } from './utils/fingerprint';
 
 // API URL 설정 (개발/배포 환경변수 연동)
 const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "");
@@ -4225,53 +4226,83 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         }
       }
 
+      function formatAuthError(err) {
+        if (!err) return "인증 처리에 실패했습니다.";
+        const code = err.code || "";
+        const msg = err.message || "";
+        if (code === "auth/invalid-credential" || code === "auth/user-not-found" || code === "auth/wrong-password") {
+          return "아이디 또는 비밀번호가 올바르지 않습니다.";
+        }
+        if (code === "auth/email-already-in-use") {
+          return "이미 등록된 아이디입니다.";
+        }
+        if (code === "auth/weak-password") {
+          return "비밀번호는 6자 이상이어야 합니다.";
+        }
+        if (code === "auth/invalid-email") {
+          return "아이디 형식이 올바르지 않습니다.";
+        }
+        if (code === "auth/too-many-requests") {
+          return "시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.";
+        }
+        return msg;
+      }
+
       async function handleLogin(type, loginId, password) {
         if (type === "kakao") {
           window.location.href = "/api/v1/auth/authorize";
         } else {
           // 일반 로그인 (이메일/비밀번호)
-          loginId = (loginId || "").trim();
+          loginId = (loginId || "").trim().toLowerCase();
           password = (password || "").trim();
           if (!loginId || !password) throw new Error("아이디와 비밀번호를 모두 입력해 주세요.");
 
-          const email = `${loginId}@plating.app`;
-          const userCredential = await auth.signInWithEmailAndPassword(email, password);
-          const user = userCredential.user;
+          const safeId = loginId.replace(/[^a-z0-9_-]/g, "");
+          if (!safeId) throw new Error("아이디는 영문과 숫자만 가능합니다.");
+          const email = `${safeId}@plating.app`;
 
-          // Firestore에서 프로필 정보 로드
-          const userSnap = await db.collection("users").doc(user.uid).get();
-          if (userSnap.exists) {
-            const userData = userSnap.data();
-            if (userData.status === "suspended" || userData.status === "permanent_suspended") {
-              await auth.signOut();
-              throw new Error("정지된 계정입니다. 관리자에게 문의하세요.");
+          try {
+            const userCredential = await auth.signInWithEmailAndPassword(email, password);
+            const user = userCredential.user;
+
+            // Firestore에서 프로필 정보 로드
+            const userSnap = await db.collection("users").doc(user.uid).get();
+            if (userSnap.exists) {
+              const userData = userSnap.data();
+              if (userData.status === "suspended" || userData.status === "permanent_suspended") {
+                await auth.signOut();
+                throw new Error("정지된 계정입니다. 관리자에게 문의하세요.");
+              }
+              const updatedProfile = {
+                name: userData.nickname || userData.name || "플레이터",
+                bio: userData.bio || "소개글이 없습니다.",
+                avatar: (userData.nickname || userData.name || "플").slice(0, 1),
+                avatarImg: userData.avatarImg || "",
+                role: userData.role || "user"
+              };
+              setProfile(updatedProfile);
+              setDBData("foodhouse_profile", updatedProfile).catch(e => console.error(e));
             }
-            const updatedProfile = {
-              name: userData.nickname || userData.name || "플레이터",
-              bio: userData.bio || "소개글이 없습니다.",
-              avatar: (userData.nickname || userData.name || "플").slice(0, 1),
-              avatarImg: userData.avatarImg || "",
-              role: userData.role || "user"
-            };
-            setProfile(updatedProfile);
-            setDBData("foodhouse_profile", updatedProfile).catch(e => console.error(e));
+
+            // lastLoginAt 업데이트
+            await db.collection("users").doc(user.uid).update({
+              lastLoginAt: firebase.firestore.FieldValue.serverTimestamp()
+            }).catch(err => console.warn("lastLoginAt 업데이트 실패:", err));
+
+            // 네이티브 자동 로그인 토큰 저장
+            if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+              const credential = { type: "local", username: loginId, password };
+              await window.flutter_inappwebview.callHandler('saveToken', { token: JSON.stringify(credential) }).catch(e => console.error(e));
+            }
+
+            setIsLoggedIn(true);
+            setDBData("foodhouse_logged_in", "true").catch(e => console.error(e));
+            setLoginOpen(false);
+            showToast("로그인 성공!", "success");
+          } catch (err) {
+            console.error("[Login] 실패:", err);
+            throw new Error(formatAuthError(err));
           }
-
-          // lastLoginAt 업데이트
-          await db.collection("users").doc(user.uid).update({
-            lastLoginAt: firebase.firestore.FieldValue.serverTimestamp()
-          }).catch(err => console.warn("lastLoginAt 업데이트 실패:", err));
-
-          // 네이티브 자동 로그인 토큰 저장
-          if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-            const credential = { type: "local", username: loginId, password };
-            await window.flutter_inappwebview.callHandler('saveToken', { token: JSON.stringify(credential) }).catch(e => console.error(e));
-          }
-
-          setIsLoggedIn(true);
-          setDBData("foodhouse_logged_in", "true").catch(e => console.error(e));
-          setLoginOpen(false);
-          showToast("로그인 성공!", "success");
         }
       }
 
@@ -4279,42 +4310,46 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         let authUserCreated = null;
         try {
           // 입력값 정리
-          loginId = (loginId || "").trim();
+          loginId = (loginId || "").trim().toLowerCase();
           password = (password || "").trim();
           nickname = (nickname || "").trim();
 
           if (!loginId || !password || !nickname) throw new Error("아이디, 비밀번호, 닉네임을 모두 입력해 주세요.");
           if (password.length < 6) throw new Error("비밀번호는 6자 이상이어야 합니다.");
 
-          // 기기 핑거프린트
-          const fingerprint = typeof getDeviceFingerprint === "function" ? await getDeviceFingerprint() : "web_" + Date.now();
+          const safeId = loginId.replace(/[^a-z0-9_-]/g, "");
+          if (!safeId) throw new Error("아이디는 영문소문자와 숫자만 사용 가능합니다.");
 
-          // ① Firebase Auth 계정 먼저 생성 (이후 인증된 상태에서 Firestore 쿼리 가능)
-          const email = `${loginId}@plating.app`;
+          // ① 기기 핑거프린트 확인 (가입 시도 전 기기 제한 사전 확인)
+          const fingerprint = typeof getDeviceFingerprint === "function" ? await getDeviceFingerprint() : "web_" + Date.now();
+          
+          let bypassLimit = false;
+          // 기존 유저 중에서 동일 기기 핑거프린트 조회
+          const deviceQuery = await db.collection("users").where("deviceFingerprint", "==", fingerprint).limit(1).get();
+          if (!deviceQuery.empty) {
+            const existingData = deviceQuery.docs[0].data();
+            if (existingData.bypassLimit !== true) {
+              throw new Error("이미 이 기기에서 가입된 계정이 존재합니다. (기기당 1개 계정 제한)");
+            }
+            bypassLimit = true;
+          }
+
+          // ② Firebase Auth 계정 생성
+          const email = `${safeId}@plating.app`;
           const userCredential = await auth.createUserWithEmailAndPassword(email, password);
           authUserCreated = userCredential.user;
           const uid = authUserCreated.uid;
 
-          // ② 인증된 상태에서 아이디 중복 확인
-          const idQuery = await db.collection("users").where("loginId", "==", loginId).get();
+          // ③ 인증된 상태에서 아이디 및 닉네임 중복 체크
+          const idQuery = await db.collection("users").where("loginId", "==", safeId).get();
           if (!idQuery.empty) throw new Error("이미 존재하는 아이디입니다.");
 
-          // ③ 닉네임 중복 확인
           const nicknameQuery = await db.collection("users").where("nickname", "==", nickname).get();
           if (!nicknameQuery.empty) throw new Error("이미 존재하는 닉네임입니다.");
 
-          // ④ 기기 중복 확인
-          let bypassLimit = false;
-          const deviceQuery = await db.collection("users").where("deviceFingerprint", "==", fingerprint).limit(1).get();
-          if (!deviceQuery.empty) {
-            const existingData = deviceQuery.docs[0].data();
-            if (existingData.bypassLimit !== true) throw new Error("이 기기에서는 이미 가입된 계정이 있습니다.");
-            bypassLimit = true;
-          }
-
-          // ⑤ Firestore 유저 문서 저장
+          // ④ Firestore 유저 문서 작성
           await db.collection("users").doc(uid).set({
-            loginId,
+            loginId: safeId,
             nickname,
             provider: "local",
             deviceFingerprint: fingerprint,
@@ -4325,7 +4360,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           });
 
-          // ⑥ 프로필 상태 업데이트
+          // ⑤ 프로필 상태 반영 및 자동 로그인
           const updatedProfile = {
             name: nickname,
             bio: "소개글이 없습니다.",
@@ -4342,10 +4377,14 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         } catch (err) {
           console.error("[Registration] 실패:", err);
           if (authUserCreated) {
-            try { await authUserCreated.delete(); console.log("[Rollback] Auth 계정 삭제 완료"); }
-            catch (de) { console.error("[Rollback] Auth 계정 삭제 실패:", de); }
+            try { 
+              await authUserCreated.delete(); 
+              console.log("[Rollback] Auth 계정 롤백 삭제 완료"); 
+            } catch (de) { 
+              console.error("[Rollback] Auth 계정 삭제 실패:", de); 
+            }
           }
-          throw new Error(err.message || "회원가입에 실패했습니다.");
+          throw new Error(formatAuthError(err));
         }
       }
 
