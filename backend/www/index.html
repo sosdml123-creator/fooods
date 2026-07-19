@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, shrink-to-fit=no">
   <title>플레이팅 - 오늘의집 스타일 푸드 커뮤니티</title>
   
   <!-- SEO 메타 태그 -->
@@ -34,6 +34,16 @@
   
   <!-- 커스텀 스타일시트 -->
   <style>
+    html, body {
+      touch-action: manipulation;
+      -webkit-text-size-adjust: 100%;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    input, textarea {
+      user-select: text !important;
+      -webkit-user-select: text !important;
+    }
     .bottom-nav {
       grid-template-columns: repeat(5, 1fr) !important;
     }
@@ -49,7 +59,25 @@
       letter-spacing: -0.025em;
     }
   </style>
-  <script type="module" crossorigin src="/assets/js/index-CrVDzjyx.js"></script>
+  <script>
+    // 핀치 줌 및 두 손가락 확대 방지 스크립트
+    document.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
+    document.addEventListener('gesturechange', function (e) { e.preventDefault(); }, { passive: false });
+    document.addEventListener('gestureend', function (e) { e.preventDefault(); }, { passive: false });
+    
+    // 더블 탭 확대 방지
+    let lastTouchEnd = 0;
+    document.addEventListener('touchend', function (event) {
+      const now = (new Date()).getTime();
+      if (now - lastTouchEnd <= 300) {
+        if (event.target.tagName !== 'INPUT' && event.target.tagName !== 'TEXTAREA') {
+          event.preventDefault();
+        }
+      }
+      lastTouchEnd = now;
+    }, false);
+  </script>
+  <script type="module" crossorigin src="/assets/js/index-BEgTMLls.js"></script>
   <link rel="modulepreload" crossorigin href="/assets/js/vendor-react-DiEw8YRT.js">
   <link rel="modulepreload" crossorigin href="/assets/js/vendor-firebase-CM1Bb-cX.js">
   <link rel="stylesheet" crossorigin href="/assets/css/index-BvGlPC_j.css">

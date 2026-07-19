@@ -1947,6 +1947,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       const [linkPreviews, setLinkPreviews] = useState({}); // key: link.id, value: { url, title, image, host, loading }
 
       function parsePastedMapText(text) {
+        if (!text) return { url: "", name: "", address: "" };
         const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
         let parsed = { url: "", name: "", address: "" };
         
@@ -1955,13 +1956,21 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           parsed.url = urlMatch[0];
         }
         
-        const mapIdx = lines.findIndex(l => l.includes("[네이버지도]"));
+        const mapIdx = lines.findIndex(l => l.includes("[네이버") || l.includes("[카카오") || l.includes("[지도]"));
         if (mapIdx !== -1) {
-          if (lines[mapIdx + 1] && !lines[mapIdx + 1].startsWith("http") && !lines[mapIdx + 1].includes("[네이버지도]")) {
+          if (lines[mapIdx + 1] && !lines[mapIdx + 1].startsWith("http")) {
             parsed.name = lines[mapIdx + 1];
           }
           if (lines[mapIdx + 2] && !lines[mapIdx + 2].startsWith("http")) {
             parsed.address = lines[mapIdx + 2];
+          }
+        } else if (lines.length > 1) {
+          const nonUrlLines = lines.filter(l => !l.startsWith("http"));
+          if (nonUrlLines.length > 0) {
+            parsed.name = nonUrlLines[0];
+          }
+          if (nonUrlLines.length > 1) {
+            parsed.address = nonUrlLines[1];
           }
         }
         return parsed;

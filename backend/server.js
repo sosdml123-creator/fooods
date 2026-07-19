@@ -181,24 +181,35 @@ app.get(["/api/link-meta", "/api/v1/link-meta"], async (req, res) => {
     return res.status(400).json({ success: false, message: "URL이 누락되었습니다." });
   }
 
+  let host = "link";
   try {
     const parsedUrl = new URL(targetUrl);
-    const host = parsedUrl.hostname.replace("www.", "");
+    host = parsedUrl.hostname.replace("www.", "");
+  } catch (e) {}
+
+  const isNaverMap = host.includes("naver") || host.includes("map");
+  const isCoupang = host.includes("coupang");
+
+  try {
+    const userAgent = isCoupang
+      ? "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
+      : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
     const response = await axios.get(targetUrl, {
       timeout: 6000,
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "User-Agent": userAgent,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
         "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7"
       },
-      maxRedirects: 5
+      maxRedirects: 10
     });
 
     const html = typeof response.data === "string" ? response.data : JSON.stringify(response.data);
 
     let title = "";
     let image = "";
+    let description = "";
 
     // 1. og:title / twitter:title / <title> 파싱
     const ogTitleMatch = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i) ||
@@ -227,13 +238,11 @@ app.get(["/api/link-meta", "/api/v1/link-meta"], async (req, res) => {
       image = twitterImageMatch[1].trim();
     }
 
-    // 상대 경로 이미지인 경우 Absolute URL로 정제
-    if (image && !image.startsWith("http")) {
-      if (image.startsWith("//")) {
-        image = `https:${image}`;
-      } else if (image.startsWith("/")) {
-        image = `${parsedUrl.protocol}//${parsedUrl.host}${image}`;
-      }
+    // 3. og:description 파싱 (주소 / 장소 정보용)
+    const ogDescMatch = html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i) ||
+                        html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:description["']/i);
+    if (ogDescMatch && ogDescMatch[1]) {
+      description = ogDescMatch[1].trim();
     }
 
     // HTML Entity 디코딩
@@ -247,12 +256,44 @@ app.get(["/api/link-meta", "/api/v1/link-meta"], async (req, res) => {
         .replace(/&#x27;/g, "'");
     }
 
-    if (!title || title.length === 0) {
-      title = `상세 링크 (${host})`;
+    // 네이버 지도 타이틀 및 주소 정제
+    if (isNaverMap) {
+      title = title.replace(/^\[네이버\s*지도\]\s*/i, "").replace(/\s*-\s*네이버\s*지도$/i, "").trim();
+      if (description && !title.includes(description) && description.length < 50) {
+        title = `${title} (${description})`;
+      }
     }
 
-    if (!image) {
-      image = "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400";
+    // 쿠팡 타이틀 정제
+    if (isCoupang) {
+      title = title.replace(/^쿠팡!\s*-\s*/i, "").replace(/\s*\|\s*쿠팡$/i, "").trim();
+    }
+
+    // 상대 경로 이미지 처리
+    if (image && !image.startsWith("http")) {
+      try {
+        const parsedUrl = new URL(targetUrl);
+        if (image.startsWith("//")) {
+          image = `https:${image}`;
+        } else if (image.startsWith("/")) {
+          image = `${parsedUrl.protocol}//${parsedUrl.host}${image}`;
+        }
+      } catch (e) {}
+    }
+
+    // 디폴트 Fallback
+    if (!title || title.length === 0 || title === "네이버 지도" || title === "Naver Map") {
+      title = isNaverMap ? "네이버 장소 / 맛집 정보" : isCoupang ? "쿠팡 추천 상품 정보" : `상세 링크 (${host})`;
+    }
+
+    if (!image || image.includes("favicon") || image.includes("blank")) {
+      if (isCoupang) {
+        image = "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&q=80&w=400";
+      } else if (isNaverMap) {
+        image = "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=400"; // 고화질 맛집/장소 썸네일
+      } else {
+        image = "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400";
+      }
     }
 
     return res.json({
@@ -263,12 +304,22 @@ app.get(["/api/link-meta", "/api/v1/link-meta"], async (req, res) => {
     });
   } catch (err) {
     console.error("[Link Meta API Error]:", err.message);
-    let host = "link";
-    try { host = new URL(targetUrl).hostname.replace("www.", ""); } catch(e) {}
+
+    let fallbackTitle = `상세 링크 (${host})`;
+    let fallbackImg = "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400";
+
+    if (isCoupang) {
+      fallbackTitle = "쿠팡 추천 상품 정보";
+      fallbackImg = "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&q=80&w=400";
+    } else if (isNaverMap) {
+      fallbackTitle = "네이버 장소 / 맛집 정보";
+      fallbackImg = "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=400";
+    }
+
     return res.json({
       success: true,
-      title: `상세 링크 (${host})`,
-      image: "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+      title: fallbackTitle,
+      image: fallbackImg,
       host
     });
   }
