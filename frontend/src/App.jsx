@@ -2288,6 +2288,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       const [password, setPassword] = React.useState("");
       const [confirmPassword, setConfirmPassword] = React.useState("");
       const [nickname, setNickname] = React.useState("");
+      const [showPassword, setShowPassword] = React.useState(false);
       const [error, setError] = React.useState("");
       const [loading, setLoading] = React.useState(false);
 
@@ -2348,8 +2349,17 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                 <form onSubmit={handleSubmitLogin}>
                   <input className={inputCls} type="text" placeholder="아이디" value={loginId}
                     onChange={e => setLoginId(e.target.value)} autoComplete="username" />
-                  <input className={inputCls} type="password" placeholder="비밀번호" value={password}
-                    onChange={e => setPassword(e.target.value)} autoComplete="current-password" />
+                  <div className="relative mb-3">
+                    <input className="w-full border border-zinc-200 rounded-xl pl-4 pr-11 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" 
+                      type={showPassword ? "text" : "password"} 
+                      placeholder="비밀번호" 
+                      value={password}
+                      onChange={e => setPassword(e.target.value)} 
+                      autoComplete="current-password" />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-3.5 text-zinc-400 hover:text-zinc-600 text-sm">
+                      <i className={`fa-solid ${showPassword ? "fa-eye-slash" : "fa-eye"}`}></i>
+                    </button>
+                  </div>
                   {error && (
                     <div className="bg-red-50 border border-red-200 text-red-600 rounded-xl p-3 mb-4 text-xs font-bold flex items-center gap-2">
                       <i className="fa-solid fa-circle-exclamation text-red-500 text-sm flex-shrink-0"></i>
@@ -2364,9 +2374,18 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                 <form onSubmit={handleSubmitRegister}>
                   <input className={inputCls} type="text" placeholder="아이디 (영문·숫자)" value={loginId}
                     onChange={e => setLoginId(e.target.value)} autoComplete="username" />
-                  <input className={inputCls} type="password" placeholder="비밀번호 (6자 이상)" value={password}
-                    onChange={e => setPassword(e.target.value)} autoComplete="new-password" />
-                  <input className={inputCls} type="password" placeholder="비밀번호 확인" value={confirmPassword}
+                  <div className="relative mb-3">
+                    <input className="w-full border border-zinc-200 rounded-xl pl-4 pr-11 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" 
+                      type={showPassword ? "text" : "password"} 
+                      placeholder="비밀번호 (6자 이상)" 
+                      value={password}
+                      onChange={e => setPassword(e.target.value)} 
+                      autoComplete="new-password" />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-3.5 text-zinc-400 hover:text-zinc-600 text-sm">
+                      <i className={`fa-solid ${showPassword ? "fa-eye-slash" : "fa-eye"}`}></i>
+                    </button>
+                  </div>
+                  <input className={inputCls} type={showPassword ? "text" : "password"} placeholder="비밀번호 확인" value={confirmPassword}
                     onChange={e => setConfirmPassword(e.target.value)} autoComplete="new-password" />
                   <input className={inputCls} type="text" placeholder="닉네임" value={nickname}
                     onChange={e => setNickname(e.target.value)} />
