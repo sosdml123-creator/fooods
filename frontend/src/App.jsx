@@ -913,11 +913,11 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                     <div className="everytime-meta" onClick={(e) => e.stopPropagation()}>
                       <div className="everytime-actions">
                         <span 
-                          className={`cursor-pointer ${post.liked ? 'text-red-500 font-semibold' : ''}`}
+                          className={`cursor-pointer flex items-center gap-1 text-sm font-bold active:scale-90 transition-transform ${ post.liked ? 'text-red-500' : 'text-zinc-400'}`}
                           onClick={() => onLikePost(post.id)}
                         >
-                          <i className={post.liked ? "fa-solid fa-heart text-red-500" : "fa-regular fa-heart"}></i>
-                          <span style={{marginLeft:'3px'}}>{post.likeCount}</span>
+                          <i className={post.liked ? "fa-solid fa-heart text-red-500" : "fa-regular fa-heart"} style={{fontSize:'15px'}}></i>
+                          <span style={{fontSize:'13px'}}>{post.likeCount}</span>
                         </span>
                         <span>
                           <i className="fa-regular fa-comment"></i>
@@ -1149,10 +1149,10 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
               </div>
               <div className="flex gap-2">
                 <button 
-                  className={`border rounded-full px-3 py-1 flex items-center gap-1 active:scale-95 transition-transform ${post.liked ? 'border-zinc-950 bg-zinc-950 text-white font-bold' : 'border-zinc-200 text-zinc-500 bg-white'}`}
+                  className={`border rounded-full px-4 py-1.5 flex items-center gap-1.5 text-sm font-bold active:scale-95 transition-transform ${post.liked ? 'border-red-400 bg-red-50 text-red-500' : 'border-zinc-200 text-zinc-500 bg-white'}`}
                   onClick={() => onLikePost(post.id)}
                 >
-                  <i className={post.liked ? "fa-solid fa-heart" : "fa-regular fa-heart"}></i> 공감 {post.likeCount}
+                  <i className={post.liked ? "fa-solid fa-heart" : "fa-regular fa-heart"} style={{fontSize:'15px'}}></i> 좋아요 {post.likeCount}
                 </button>
                 <button 
                   className={`border rounded-full px-3 py-1 flex items-center gap-1 active:scale-95 transition-transform ${post.scrapped ? 'border-zinc-950 bg-zinc-950 text-white font-bold' : 'border-zinc-200 text-zinc-500 bg-white'}`}
@@ -4413,10 +4413,27 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         const user = auth.currentUser;
         if (!user) return;
 
+        // ① 즉시 UI 반영 (낙관적 업데이트)
+        let isAddLike = false;
+        setPosts(prev => prev.map(p => {
+          if (p.id !== id) return p;
+          const likedBy = p.likedBy || [];
+          const hasLiked = likedBy.includes(user.uid) || likedBy.includes(profile.name);
+          isAddLike = !hasLiked;
+          return {
+            ...p,
+            liked: !hasLiked,
+            likeCount: hasLiked ? Math.max(0, (p.likeCount || 0) - 1) : (p.likeCount || 0) + 1,
+            likedBy: hasLiked
+              ? likedBy.filter(uid => uid !== user.uid && uid !== profile.name)
+              : [...likedBy, user.uid]
+          };
+        }));
+
+        // ② Firestore 비동기 동기화
         const postRef = db.collection("posts").doc(id);
         let targetUserId = "";
         let postTitle = "";
-        let isAddLike = false;
 
         db.runTransaction(async (transaction) => {
           const doc = await transaction.get(postRef);
@@ -4444,11 +4461,11 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         }).then(() => {
           if (isAddLike && targetUserId) {
             sendInAppNotification(
-              targetUserId, 
-              "like", 
-              id, 
-              "새로운 공감", 
-              `${profile.name || "이웃"}님이 회원님의 요리 "${postTitle}"에 공감했습니다.`
+              targetUserId,
+              "like",
+              id,
+              "새로운 좋아요",
+              `${profile.name || "이웃"}님이 회원님의 요리 "${postTitle}"에 좋아요를 눌렀습니다.`
             );
           }
         }).catch(err => console.error("[Firestore Transaction] Like error:", err));
@@ -4785,7 +4802,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         }).catch(err => console.error("[Firestore Transaction] Community comment error:", err));
       }
 
-      // 공감 토글
+      // 좋아요 토글 (낙관적 업데이트: 클릭 즉시 UI 반영 후 Firestore 동기화)
       function handleLikeCommunityPost(postId) {
         if (!isLoggedIn) {
           setLoginOpen(true);
@@ -4794,6 +4811,22 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         const user = auth.currentUser;
         if (!user) return;
 
+        // ① 즉시 UI 반영 (낙관적 업데이트)
+        setCommunityPosts(prev => prev.map(p => {
+          if (p.id !== postId) return p;
+          const likedBy = p.likedBy || [];
+          const hasLiked = likedBy.includes(user.uid) || likedBy.includes(profile.name);
+          return {
+            ...p,
+            liked: !hasLiked,
+            likeCount: hasLiked ? Math.max(0, (p.likeCount || 0) - 1) : (p.likeCount || 0) + 1,
+            likedBy: hasLiked
+              ? likedBy.filter(id => id !== user.uid && id !== profile.name)
+              : [...likedBy, user.uid]
+          };
+        }));
+
+        // ② Firestore 비동기 동기화
         const postRef = db.collection("community_posts").doc(postId);
         db.runTransaction(async (transaction) => {
           const doc = await transaction.get(postRef);
@@ -4801,7 +4834,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           const data = doc.data();
           const likedBy = data.likedBy || [];
           let likeCount = data.likeCount || 0;
-          
+
           const hasLikedUid = likedBy.includes(user.uid);
           const hasLikedName = likedBy.includes(profile.name);
 
