@@ -33,7 +33,48 @@ function MyPage({
   const [myCategory, setMyCategory] = useState("전체");
   const [scrapSubTab, setScrapSubTab] = useState("recipe"); // "recipe" or "community"
   const [followModal, setFollowModal] = useState(null); // null, "followers", or "following"
-  const mockFollowers = ["카페투어러", "푸드스타일리스트"];
+  const [followersList, setFollowersList] = useState([]); // Firestore 기반 실제 팔로워 목록
+
+  // 내 팔로워 목록 실시간 로드
+  React.useEffect(() => {
+    if (!db || !profile?.name) return;
+    try {
+      const unsub = db.collection("users")
+        .where("followingList", "array-contains", profile.name)
+        .onSnapshot(snap => {
+          const list = [];
+          snap.forEach(doc => {
+            const data = doc.data();
+            list.push({
+              uid: doc.id,
+              nickname: data.nickname || data.name || "알 수 없음",
+              bio: data.bio || data.intro || "소개글이 없습니다.",
+              avatarImg: data.avatarImg || data.profileImage || ""
+            });
+          });
+          setFollowersList(list);
+        }, err => console.error("[Followers] 로드 실패:", err));
+      return () => unsub && unsub();
+    } catch (err) {
+      console.error("[Followers useEffect catch]:", err);
+    }
+  }, [db, profile?.name]);
+
+  // 팔로워 삭제 (상대의 followingList에서 내 닉네임 제거)
+  async function handleRemoveFollower(followerUid, followerNickname) {
+    if (!window.confirm(`"${followerNickname}"님을 내 팔로워에서 삭제(언팔로우)하시겠습니까?`)) return;
+    try {
+      if (db) {
+        await db.collection("users").doc(followerUid).update({
+          followingList: firebase.firestore.FieldValue.arrayRemove(profile.name)
+        });
+        alert(`${followerNickname}님을 팔로워에서 삭제했습니다.`);
+      }
+    } catch (err) {
+      console.error("[RemoveFollower] 실패:", err);
+      alert("삭제에 실패했습니다. 다시 시도해 주세요.");
+    }
+  }
 
   const currentUserUid = auth?.currentUser?.uid;
   console.log("[MyPage myPosts Debug]", {
@@ -48,15 +89,16 @@ function MyPage({
   );
   const scrappedPosts = posts.filter(post => post.scrapped);
   const scrappedCommunityPosts = communityPosts.filter(post => post.scrapped);
-  const totalScrappedCount = scrappedPosts.length + scrappedCommunityPosts.length;
+  const totalScrapsCount = scrappedPosts.length + scrappedCommunityPosts.length;
   
   const filteredMyPosts = myCategory === "전체" 
     ? myPosts 
     : myPosts.filter(post => post.category === myCategory);
 
-  function handlePhotoChange(e) {
+  function handlePhotoSelect(e) {
     const file = e.target.files?.[0];
     if (!file) return;
+
     const reader = new FileReader();
     reader.onload = () => setEditPhoto(reader.result);
     reader.readAsDataURL(file);
@@ -69,16 +111,16 @@ function MyPage({
     setIsEditing(true);
   }
 
-  async function handleSave() {
-    const targetName = editName.trim();
-    if (!targetName) return;
+  async function handleSaveProfile() {
+    const trimmedName = editName.trim();
+    if (!trimmedName) return;
 
     let token = "";
     if (auth && auth.currentUser) {
       try {
         token = await auth.currentUser.getIdToken();
-      } catch (tokenErr) {
-        console.error("Failed to retrieve Firebase ID Token:", tokenErr);
+      } catch (e) {
+        console.error("Failed to retrieve Firebase ID Token:", e);
       }
     }
 
@@ -87,32 +129,33 @@ function MyPage({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         token,
-        nickname: targetName,
+        nickname: trimmedName,
         bio: editBio.trim(),
         avatarImg: editPhoto
       })
     })
-    .then(r => r.json())
+    .then(res => res.json())
     .then(res => {
       if (res.success) {
         if (auth.currentUser) {
           db.collection("users").doc(auth.currentUser.uid).update({
-            nickname: targetName,
+            nickname: trimmedName,
             bio: editBio.trim(),
             intro: editBio.trim(),
             avatarImg: editPhoto,
             profileImage: editPhoto,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-          }).catch(e => console.error("Firestore user profile update failed:", e));
+          }).catch(err => console.error("Firestore user profile update failed:", err));
         }
 
         setProfile({
-          name: targetName,
+          name: trimmedName,
           bio: editBio.trim(),
-          avatar: targetName.slice(0, 1),
+          avatar: trimmedName.slice(0, 1),
           avatarImg: editPhoto,
           role: profile.role || "user"
         });
+
         setIsEditing(false);
         alert("프로필이 저장되었습니다.");
       } else {
@@ -123,22 +166,23 @@ function MyPage({
       console.error("프로필 저장 실패:", err);
       if (auth.currentUser) {
         db.collection("users").doc(auth.currentUser.uid).update({
-          nickname: targetName,
+          nickname: trimmedName,
           bio: editBio.trim(),
           intro: editBio.trim(),
           avatarImg: editPhoto,
           profileImage: editPhoto,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        }).catch(e => console.error("Firestore user profile update failed (fallback):", e));
+        }).catch(err => console.error("Firestore user profile update failed (fallback):", err));
       }
 
       setProfile({
-        name: targetName,
+        name: trimmedName,
         bio: editBio.trim(),
-        avatar: targetName.slice(0, 1),
+        avatar: trimmedName.slice(0, 1),
         avatarImg: editPhoto,
         role: profile.role || "user"
       });
+
       setIsEditing(false);
     });
   }
@@ -175,7 +219,7 @@ function MyPage({
                 ref={fileInputRef} 
                 type="file" 
                 accept="image/*" 
-                onChange={handlePhotoChange} 
+                onChange={handlePhotoSelect} 
                 style={{ display: "none" }} 
               />
             </div>
@@ -189,7 +233,7 @@ function MyPage({
               <textarea value={editBio} maxLength={40} onChange={(e) => setEditBio(e.target.value)} className="border border-zinc-200 p-2 rounded-xl text-xs h-16 resize-none bg-white text-zinc-950 focus:outline-none focus:border-zinc-950" placeholder="자기소개를 입력해주세요" />
             </label>
             <div className="flex gap-2 mt-2">
-              <button className="primary flex-1 py-2 rounded-xl text-xs font-bold" onClick={handleSave}>저장</button>
+              <button className="primary flex-1 py-2 rounded-xl text-xs font-bold" onClick={handleSaveProfile}>저장</button>
               <button className="secondary flex-1 py-2 rounded-xl text-xs font-bold" onClick={() => setIsEditing(false)}>취소</button>
             </div>
           </div>
@@ -229,7 +273,7 @@ function MyPage({
                 <span className="text-[10px] text-zinc-450 font-bold mt-2">게시물</span>
               </div>
               <div className="flex flex-col items-center cursor-pointer active:scale-95 transition-transform" onClick={() => setFollowModal("followers")}>
-                <span className="text-lg font-black text-zinc-950 leading-none">{mockFollowers.length}</span>
+                <span className="text-lg font-black text-zinc-950 leading-none">{followersList.length}</span>
                 <span className="text-[10px] text-zinc-450 font-bold mt-2 hover:text-zinc-800">팔로워</span>
               </div>
               <div className="flex flex-col items-center cursor-pointer active:scale-95 transition-transform" onClick={() => setFollowModal("following")}>
@@ -252,13 +296,12 @@ function MyPage({
           className={`flex-1 py-3 text-xs font-bold text-center border-b-2 ${myTab === 'scraps' ? 'border-zinc-950 text-zinc-950' : 'border-transparent text-zinc-400'}`}
           onClick={() => setMyTab("scraps")}
         >
-          스크랩북 ({totalScrappedCount})
+          스크랩북 ({totalScrapsCount})
         </button>
       </div>
 
       {myTab === "posts" ? (
         <div className="my-card">
-          <h2>카테고리별 글 보기</h2>
           <div className="category-tabs no-scrollbar mb-4">
             {categories.filter(c => c !== "팔로잉").map(cat => (
               <button 
@@ -282,7 +325,7 @@ function MyPage({
                   <img src={Array.isArray(post.image) ? post.image[0] : post.image} alt="" />
                   <div className="min-w-0 flex-1">
                     <strong className="truncate block">{post.title}</strong>
-                    <span>{post.category} · 링크 {post.productLinks.length}개</span>
+                    <span>{post.category} · 링크 {post.productLinks?.length || 0}개</span>
                   </div>
                 </div>
               ))
@@ -416,64 +459,112 @@ function MyPage({
         <div className="sheet-backdrop animate-fade-in" onClick={() => setFollowModal(null)} style={{ zIndex: 1200 }}>
           <section className="sheet animate-slide-up" onClick={(e) => e.stopPropagation()}>
             <header className="sheet-head">
-              <h2>{followModal === "followers" ? "팔로워" : "팔로잉"}</h2>
+              <h2>{followModal === "followers" ? `팔로워 (${followersList.length})` : `팔로잉 (${followingList.length})`}</h2>
               <button type="button" onClick={() => setFollowModal(null)}>×</button>
             </header>
             <div className="py-2 max-h-[350px] overflow-y-auto no-scrollbar">
               {(() => {
-                const list = followModal === "followers" ? mockFollowers : followingList;
-                if (!list || list.length === 0) {
-                  return (
-                    <div className="text-center py-12 text-zinc-400 text-xs">
-                      {followModal === "followers" ? "팔로워가 없습니다." : "팔로잉하는 사용자가 없습니다."}
-                    </div>
-                  );
-                }
-                return list.map(uidOrNickname => {
-                  const dbUser = (usersList || []).find(u => u.uid === uidOrNickname);
-                  const nickname = dbUser ? (dbUser.nickname || dbUser.name || "플레이터") : uidOrNickname;
-                  const userData = dbUser ? {
-                    bio: dbUser.bio || dbUser.intro || "플레이팅 크리에이터입니다.",
-                    avatarImg: dbUser.avatarImg || dbUser.profileImage || ""
-                  } : (creatorsData[uidOrNickname] || { 
-                    bio: "플레이팅 크리에이터입니다.", 
-                    avatarImg: "" 
-                  });
-                  const isFollowing = followingList.includes(uidOrNickname);
-                  return (
-                    <div key={uidOrNickname} className="flex items-center justify-between py-2.5 border-b border-zinc-100 last:border-none">
-                      <div 
-                        className="flex items-center gap-3 cursor-pointer min-w-0 flex-1"
-                        onClick={() => {
-                          setFollowModal(null);
-                          onAuthorClick(uidOrNickname);
-                        }}
-                      >
-                        <span className="w-9 h-9 rounded-full border border-zinc-200 overflow-hidden bg-zinc-100 flex items-center justify-center text-zinc-700 text-xs font-bold flex-shrink-0">
-                          {userData.avatarImg ? (
-                            <img src={userData.avatarImg} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            nickname.slice(0, 1)
-                          )}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <strong className="text-xs text-zinc-900 block truncate">{nickname}</strong>
-                          <span className="text-[10px] text-zinc-450 block truncate mt-0.5">{userData.bio}</span>
+                if (followModal === "followers") {
+                  if (!followersList || followersList.length === 0) {
+                    return (
+                      <div className="text-center py-12 text-zinc-400 text-xs">
+                        팔로워가 없습니다.
+                      </div>
+                    );
+                  }
+                  return followersList.map(follower => {
+                    const isFollowingBack = followingList.includes(follower.uid) || followingList.includes(follower.nickname);
+                    return (
+                      <div key={follower.uid} className="flex items-center justify-between py-2.5 border-b border-zinc-100 last:border-none">
+                        <div 
+                          className="flex items-center gap-3 cursor-pointer min-w-0 flex-1"
+                          onClick={() => {
+                            setFollowModal(null);
+                            onAuthorClick(follower.uid);
+                          }}
+                        >
+                          <span className="w-9 h-9 rounded-full border border-zinc-200 overflow-hidden bg-zinc-100 flex items-center justify-center text-zinc-700 text-xs font-bold flex-shrink-0">
+                            {follower.avatarImg ? (
+                              <img src={follower.avatarImg} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              follower.nickname.slice(0, 1)
+                            )}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <strong className="text-xs text-zinc-900 block truncate">{follower.nickname}</strong>
+                            <span className="text-[10px] text-zinc-450 block truncate mt-0.5">{follower.bio}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <button 
+                            className={`text-[10px] font-bold px-2.5 py-1.5 rounded-lg active:scale-95 transition-all ${
+                              isFollowingBack 
+                                ? "bg-zinc-100 text-zinc-650 hover:bg-zinc-200" 
+                                : "bg-zinc-950 text-white hover:bg-zinc-800"
+                            }`}
+                            onClick={() => onFollowToggle(follower.uid || follower.nickname)}
+                          >
+                            {isFollowingBack ? "맞팔로잉" : "팔로우"}
+                          </button>
+                          <button 
+                            className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 active:scale-95 transition-all"
+                            onClick={() => handleRemoveFollower(follower.uid, follower.nickname)}
+                          >
+                            삭제
+                          </button>
                         </div>
                       </div>
-                      <button 
-                        className={`text-[10px] font-bold px-3 py-1.5 rounded-lg active:scale-95 transition-all ${
-                          isFollowing 
-                            ? "bg-zinc-100 text-zinc-650 hover:bg-zinc-200" 
-                            : "bg-zinc-950 text-white hover:bg-zinc-800"
-                        }`}
-                        onClick={() => onFollowToggle(uidOrNickname)}
-                      >
-                        {isFollowing ? "팔로잉" : "팔로우"}
-                      </button>
-                    </div>
-                  );
-                });
+                    );
+                  });
+                } else {
+                  if (!followingList || followingList.length === 0) {
+                    return (
+                      <div className="text-center py-12 text-zinc-400 text-xs">
+                        팔로잉하는 사용자가 없습니다.
+                      </div>
+                    );
+                  }
+                  return followingList.map(uidOrNickname => {
+                    const dbUser = (usersList || []).find(u => u.uid === uidOrNickname);
+                    const nickname = dbUser ? (dbUser.nickname || dbUser.name || "플레이터") : uidOrNickname;
+                    const userData = dbUser ? {
+                      bio: dbUser.bio || dbUser.intro || "플레이팅 크리에이터입니다.",
+                      avatarImg: dbUser.avatarImg || dbUser.profileImage || ""
+                    } : (creatorsData[uidOrNickname] || { 
+                      bio: "플레이팅 크리에이터입니다.", 
+                      avatarImg: "" 
+                    });
+                    return (
+                      <div key={uidOrNickname} className="flex items-center justify-between py-2.5 border-b border-zinc-100 last:border-none">
+                        <div 
+                          className="flex items-center gap-3 cursor-pointer min-w-0 flex-1"
+                          onClick={() => {
+                            setFollowModal(null);
+                            onAuthorClick(uidOrNickname);
+                          }}
+                        >
+                          <span className="w-9 h-9 rounded-full border border-zinc-200 overflow-hidden bg-zinc-100 flex items-center justify-center text-zinc-700 text-xs font-bold flex-shrink-0">
+                            {userData.avatarImg ? (
+                              <img src={userData.avatarImg} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              nickname.slice(0, 1)
+                            )}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <strong className="text-xs text-zinc-900 block truncate">{nickname}</strong>
+                            <span className="text-[10px] text-zinc-450 block truncate mt-0.5">{userData.bio}</span>
+                          </div>
+                        </div>
+                        <button 
+                          className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-zinc-100 text-zinc-650 hover:bg-zinc-200 active:scale-95 transition-all"
+                          onClick={() => onFollowToggle(uidOrNickname)}
+                        >
+                          언팔로우
+                        </button>
+                      </div>
+                    );
+                  });
+                }
               })()}
             </div>
           </section>
