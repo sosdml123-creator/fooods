@@ -2282,8 +2282,8 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         </div>
       );
     }
-    function LoginModal({ onClose, onLogin, onRegister, isGate = false }) {
-      const [tab, setTab] = React.useState("login"); // "login" | "register"
+    function LoginModal({ onClose, onLogin, onRegister, isGate = false, defaultTab = "login" }) {
+      const [tab, setTab] = React.useState(defaultTab); // "login" | "register"
       const [loginId, setLoginId] = React.useState("");
       const [password, setPassword] = React.useState("");
       const [confirmPassword, setConfirmPassword] = React.useState("");
@@ -2416,6 +2416,93 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
               </div>
             </div>
           </section>
+        </div>
+      );
+    }
+
+    function LandingAuthGate({ onLogin, onRegister }) {
+      const [localFormOpen, setLocalFormOpen] = React.useState(false);
+      const [initialTab, setInitialTab] = React.useState("login");
+
+      return (
+        <div className="min-h-screen bg-white flex flex-col justify-between items-center px-6 py-12 text-zinc-900 select-none">
+          {/* 상단 스페이서 */}
+          <div className="w-full flex justify-end"></div>
+
+          {/* 중앙 로고, 3초 회원가입 뱃지, 카카오 버튼, 아이디 로그인/가입 */}
+          <div className="w-full max-w-sm flex flex-col items-center my-auto text-center">
+            {/* 브랜드 로고 */}
+            <div className="flex items-center justify-center gap-3 mb-12">
+              <div className="w-12 h-12 rounded-2xl bg-orange-500 flex items-center justify-center text-white text-2xl font-black shadow-lg shadow-orange-200">
+                <i className="fa-solid fa-house-utensils"></i>
+              </div>
+              <h1 className="text-3xl font-black tracking-tight text-zinc-950">플레이팅</h1>
+            </div>
+
+            {/* ⚡ 3초만에 빠른 회원가입 말풍선 뱃지 */}
+            <div className="relative mb-3.5 animate-bounce">
+              <div className="bg-white border border-zinc-200 shadow-md rounded-full px-5 py-2 text-xs font-extrabold text-zinc-800 flex items-center gap-1.5">
+                <span className="text-amber-500 text-sm font-black">⚡</span>
+                <span>3초만에 빠른 회원가입</span>
+              </div>
+              {/* 말풍선 꼬리 */}
+              <div className="w-3 h-3 bg-white border-r border-b border-zinc-200 rotate-45 absolute -bottom-1.5 left-1/2 -translate-x-1/2"></div>
+            </div>
+
+            {/* 카카오톡으로 계속하기 메인 버튼 */}
+            <button
+              type="button"
+              onClick={() => onLogin("kakao")}
+              className="w-full bg-[#FEE500] hover:bg-[#FADA00] text-[#191919] font-extrabold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2.5 text-sm shadow-sm active:scale-98 transition-all mb-8 cursor-pointer"
+            >
+              <div className="w-5 h-5 rounded-md bg-[#191919] flex items-center justify-center text-[#FEE500] text-[10px]">
+                <i className="fa-solid fa-comment"></i>
+              </div>
+              <span>카카오톡으로 계속하기</span>
+            </button>
+
+            {/* 아이디로 로그인 | 아이디로 가입 서브 링크 */}
+            <div className="flex items-center justify-center gap-4 text-xs font-semibold text-zinc-600 mb-6">
+              <button 
+                type="button" 
+                onClick={() => { setInitialTab("login"); setLocalFormOpen(true); }}
+                className="hover:text-zinc-950 underline decoration-zinc-300 underline-offset-4 cursor-pointer"
+              >
+                이메일/아이디로 로그인
+              </button>
+              <span className="text-zinc-300 text-[10px]">|</span>
+              <button 
+                type="button" 
+                onClick={() => { setInitialTab("register"); setLocalFormOpen(true); }}
+                className="hover:text-zinc-950 underline decoration-zinc-300 underline-offset-4 cursor-pointer"
+              >
+                이메일/아이디로 가입
+              </button>
+            </div>
+
+            <button 
+              type="button" 
+              onClick={() => { setInitialTab("login"); setLocalFormOpen(true); }}
+              className="text-[11px] text-zinc-400 hover:text-zinc-600 cursor-pointer"
+            >
+              로그인에 문제가 있으신가요?
+            </button>
+          </div>
+
+          {/* 하단 푸터 */}
+          <div className="text-[11px] text-zinc-400 font-medium">
+            © PLAYTING. All rights reserved.
+          </div>
+
+          {/* 서브 모달 (이메일/아이디 로그인 및 가입 폼) */}
+          {localFormOpen && (
+            <LoginModal 
+              defaultTab={initialTab}
+              onClose={() => setLocalFormOpen(false)}
+              onLogin={onLogin}
+              onRegister={onRegister}
+            />
+          )}
         </div>
       );
     }
@@ -5164,24 +5251,10 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       // 2. 비로그인 사용자 피드 접근 전면 차단 & 회원가입/로그인 게이트 뷰 노출
       if (!isLoggedIn && !["privacy", "terms", "delete-account"].includes(activeTab)) {
         return (
-          <div className="min-h-screen bg-zinc-950 flex flex-col justify-end">
-            <div className="flex-1 flex flex-col items-center justify-center text-white px-6 text-center pt-12">
-              <div className="w-20 h-20 rounded-3xl bg-orange-500 flex items-center justify-center text-white text-4xl font-black mb-6 shadow-2xl animate-pulse">
-                P
-              </div>
-              <h1 className="text-2xl font-black mb-2 tracking-tight">플레이팅 시작하기</h1>
-              <p className="text-sm text-zinc-400 max-w-xs leading-relaxed">
-                나만의 푸드 레시피를 공유하고<br />
-                맛있는 일상을 이웃들과 나누어보세요!
-              </p>
-            </div>
-            <LoginModal 
-              isGate={true}
-              onClose={() => {}}
-              onLogin={handleLogin}
-              onRegister={handleRegister}
-            />
-          </div>
+          <LandingAuthGate 
+            onLogin={handleLogin}
+            onRegister={handleRegister}
+          />
         );
       }
 
