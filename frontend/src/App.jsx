@@ -4423,15 +4423,15 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
               throw new Error("이미 존재하는 닉네임입니다.");
             }
 
-            // 3. 기기 중복 체크
-            const deviceQuery = await db.collection("users").where("deviceFingerprint", "==", fingerprint).limit(1).get();
-            if (!deviceQuery.empty) {
-              const existingData = deviceQuery.docs[0].data();
-              if (existingData.bypassLimit !== true) {
-                throw new Error("이미 이 기기에서 가입된 계정이 존재합니다. (기기당 1개 계정 제한)");
-              }
-              bypassLimit = true;
-            }
+            // 3. 기기 중복 체크 (사용자 요청으로 제한 해제)
+            // const deviceQuery = await db.collection("users").where("deviceFingerprint", "==", fingerprint).limit(1).get();
+            // if (!deviceQuery.empty) {
+            //   const existingData = deviceQuery.docs[0].data();
+            //   if (existingData.bypassLimit !== true) {
+            //     throw new Error("이미 이 기기에서 가입된 계정이 존재합니다. (기기당 1개 계정 제한)");
+            //   }
+            //   bypassLimit = true;
+            // }
           } catch (checkErr) {
             if (checkErr.message && checkErr.message.includes("이미")) {
               throw checkErr;
