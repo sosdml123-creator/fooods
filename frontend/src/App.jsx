@@ -567,14 +567,14 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
 
 
-              <div className="flex justify-between items-center border-y border-zinc-100 py-2.5 my-4">
-                <button className={`text-xs font-bold flex items-center gap-1.5 ${post.liked ? 'text-black' : 'text-zinc-400'}`} onClick={onLike}>
-                  <i className={post.liked ? "fa-solid fa-heart" : "fa-regular fa-heart"}></i>
-                  좋아요 {post.likeCount}
+              <div className="flex justify-between items-center border-y border-zinc-100 py-3 my-4">
+                <button className={`text-sm font-bold flex items-center gap-2 px-1 active:scale-95 transition-transform ${post.liked ? 'text-red-500' : 'text-zinc-400'}`} onClick={onLike}>
+                  <i className={post.liked ? "fa-solid fa-heart text-red-500" : "fa-regular fa-heart"} style={{fontSize:'18px'}}></i>
+                  <span style={{fontSize:'14px'}}>좋아요 {post.likeCount}</span>
                 </button>
-                <button className={`text-xs font-bold flex items-center gap-1.5 ${post.scrapped ? 'text-black' : 'text-zinc-400'}`} onClick={onScrap}>
-                  <i className={post.scrapped ? "fa-solid fa-bookmark" : "fa-regular fa-bookmark"}></i>
-                  {post.scrapped ? "스크랩됨" : "스크랩"}
+                <button className={`text-sm font-bold flex items-center gap-2 px-1 active:scale-95 transition-transform ${post.scrapped ? 'text-zinc-950' : 'text-zinc-400'}`} onClick={onScrap}>
+                  <i className={post.scrapped ? "fa-solid fa-bookmark" : "fa-regular fa-bookmark"} style={{fontSize:'16px'}}></i>
+                  <span style={{fontSize:'14px'}}>{post.scrapped ? "스크랩됨" : "스크랩"}</span>
                 </button>
               </div>
 
@@ -870,7 +870,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                     className="everytime-post cursor-pointer"
                     onClick={() => onPostClick(post.id)}
                   >
-                    {/* 상단 작성자 정보 및 뱃지 */}
+                    {/* 상단 작성자 정보 + 조회수 + 뱃지 */}
                     <div className="everytime-user-row">
                       <div 
                         className="everytime-user-info cursor-pointer"
@@ -887,6 +887,10 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                           )}
                         </span>
                         <span className="everytime-author hover:underline font-bold">{post.author}</span>
+                        <span className="text-[10px] text-zinc-350 ml-1 flex items-center gap-0.5">
+                          <i className="fa-regular fa-eye" style={{fontSize:'10px'}}></i>
+                          {(post.viewCount || 0).toLocaleString()}
+                        </span>
                       </div>
                       {badge && (
                         <span className={`everytime-badge ${badge.type}`}>{badge.text}</span>
@@ -909,26 +913,28 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                       )}
                     </div>
 
-                    {/* 하단 피드백 액션바 */}
+                    {/* 하단 액션바: 좋아요·댓글·스크랩 */}
                     <div className="everytime-meta" onClick={(e) => e.stopPropagation()}>
                       <div className="everytime-actions">
                         <span 
-                          className={`cursor-pointer flex items-center gap-1 text-sm font-bold active:scale-90 transition-transform ${ post.liked ? 'text-red-500' : 'text-zinc-400'}`}
+                          className={`cursor-pointer flex items-center gap-1 font-bold active:scale-90 transition-transform ${post.liked ? 'text-red-500' : 'text-zinc-400'}`}
+                          style={{fontSize:'13px'}}
                           onClick={() => onLikePost(post.id)}
                         >
-                          <i className={post.liked ? "fa-solid fa-heart text-red-500" : "fa-regular fa-heart"} style={{fontSize:'15px'}}></i>
-                          <span style={{fontSize:'13px'}}>{post.likeCount}</span>
+                          <i className={post.liked ? "fa-solid fa-heart text-red-500" : "fa-regular fa-heart"} style={{fontSize:'14px'}}></i>
+                          좋아요 {post.likeCount}
                         </span>
-                        <span>
-                          <i className="fa-regular fa-comment"></i>
-                          <span style={{marginLeft:'3px'}}>{post.comments.length}</span>
+                        <span className="flex items-center gap-1 text-zinc-400" style={{fontSize:'13px'}}>
+                          <i className="fa-regular fa-comment" style={{fontSize:'13px'}}></i>
+                          {post.comments.length}
                         </span>
                         <span 
-                          className={`cursor-pointer ${post.scrapped ? 'text-zinc-950 font-bold' : ''}`}
+                          className={`cursor-pointer flex items-center gap-1 font-bold active:scale-90 transition-transform ${post.scrapped ? 'text-zinc-950' : 'text-zinc-400'}`}
+                          style={{fontSize:'13px'}}
                           onClick={() => onScrapPost(post.id)}
                         >
-                          <i className={post.scrapped ? "fa-solid fa-bookmark text-zinc-950" : "fa-regular fa-bookmark"}></i>
-                          <span style={{marginLeft:'3px'}}>{post.scrapped ? "스크랩됨" : "스크랩"}</span>
+                          <i className={post.scrapped ? "fa-solid fa-bookmark text-zinc-950" : "fa-regular fa-bookmark"} style={{fontSize:'13px'}}></i>
+                          스크랩
                         </span>
                       </div>
                     </div>
@@ -1143,22 +1149,38 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
               </div>
             )}
 
-            <div className="flex justify-between items-center text-xs text-zinc-400 border-t border-zinc-100 pt-3 mt-3">
-              <div className="flex items-center gap-2">
-                <span>조회 {(post.viewCount || 0).toLocaleString()}</span>
+            {/* 하단: 날짜+조회수 / 좋아요+스크랩 */}
+            <div className="flex justify-between items-center border-t border-zinc-100 pt-3 mt-3">
+              <div className="flex items-center gap-2 text-[11px] text-zinc-400">
+                <span className="flex items-center gap-1">
+                  <i className="fa-regular fa-eye"></i>
+                  조회 {(post.viewCount || 0).toLocaleString()}
+                </span>
+                <span>·</span>
+                <span>{post.createdAt ? post.createdAt.slice(0,10) : ""}</span>
               </div>
               <div className="flex gap-2">
                 <button 
-                  className={`border rounded-full px-4 py-1.5 flex items-center gap-1.5 text-sm font-bold active:scale-95 transition-transform ${post.liked ? 'border-red-400 bg-red-50 text-red-500' : 'border-zinc-200 text-zinc-500 bg-white'}`}
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold border active:scale-95 transition-transform ${
+                    post.liked
+                      ? 'bg-red-50 border-red-300 text-red-500'
+                      : 'bg-white border-zinc-200 text-zinc-500'
+                  }`}
                   onClick={() => onLikePost(post.id)}
                 >
-                  <i className={post.liked ? "fa-solid fa-heart" : "fa-regular fa-heart"} style={{fontSize:'15px'}}></i> 좋아요 {post.likeCount}
+                  <i className={post.liked ? "fa-solid fa-heart" : "fa-regular fa-heart"} style={{fontSize:'15px'}}></i>
+                  <span>좋아요 {post.likeCount}</span>
                 </button>
                 <button 
-                  className={`border rounded-full px-3 py-1 flex items-center gap-1 active:scale-95 transition-transform ${post.scrapped ? 'border-zinc-950 bg-zinc-950 text-white font-bold' : 'border-zinc-200 text-zinc-500 bg-white'}`}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-bold border active:scale-95 transition-transform ${
+                    post.scrapped
+                      ? 'bg-zinc-900 border-zinc-900 text-white'
+                      : 'bg-white border-zinc-200 text-zinc-500'
+                  }`}
                   onClick={() => onScrapPost(post.id)}
                 >
-                  <i className={post.scrapped ? "fa-solid fa-bookmark" : "fa-regular fa-bookmark"}></i> 스크랩
+                  <i className={post.scrapped ? "fa-solid fa-bookmark" : "fa-regular fa-bookmark"} style={{fontSize:'14px'}}></i>
+                  <span>스크랩</span>
                 </button>
               </div>
             </div>
