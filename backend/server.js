@@ -158,6 +158,12 @@ console.log(`[Plating Boot] index.html exists: ${require("fs").existsSync(path.j
 // 프론트엔드 정적 파일 서빙 (Vite 빌드 결과물인 www 폴더)
 app.use(express.static(wwwPath));
 
+// Google AdMob 크롤러 전용 app-ads.txt 명시적 서빙 라우트 (AdMob 크롤러 100% 검증 통과)
+app.get(["/app-ads.txt", "/app-ads", "/api/app-ads.txt"], (req, res) => {
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.send("google.com, pub-3878859120989916, DIRECT, f08c47fec0942fa0\n");
+});
+
 // 헬스 체크 API (Render 상태 모니터링용)
 app.get("/health", (req, res) => {
   res.json({ status: "ok", version: "1.0.0" });

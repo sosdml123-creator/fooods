@@ -3,6 +3,19 @@
   "outputDirectory": "dist",
   "headers": [
     {
+      "source": "/app-ads.txt",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/plain; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600, must-revalidate"
+        }
+      ]
+    },
+    {
       "source": "/assets/(.*)",
       "headers": [
         {
@@ -22,6 +35,14 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/app-ads.txt",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/app-ads",
+      "destination": "/api/index.js"
+    },
     {
       "source": "/api/v1/:path*",
       "destination": "/api/index.js"
@@ -43,7 +64,7 @@
       "destination": "/api/index.js"
     },
     {
-      "source": "/((?!api|health|admin).*)",
+      "source": "/((?!api|health|admin|app-ads).*)",
       "destination": "/index.html"
     }
   ]
