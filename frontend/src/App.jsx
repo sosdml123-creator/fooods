@@ -229,7 +229,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         const response = await fetch(`/api/link-meta?url=${encodeURIComponent(url)}`);
         if (response.ok) {
           const res = await response.json();
-          if (res.success) {
+          if (res.success && res.title) {
             return {
               title: res.title,
               image: res.image,
@@ -241,14 +241,25 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         console.error("Backend fetchLinkMeta error:", e);
       }
 
-      let host = "shopping";
+      let host = "link";
+      let fallbackTitle = "상세 링크";
+      let fallbackImg = "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400";
+      
       try {
-        host = new URL(url).hostname.replace("www.", "");
+        const parsedUrl = new URL(url);
+        host = parsedUrl.hostname.replace("www.", "");
+        if (host.includes("coupang")) {
+          fallbackTitle = "쿠팡 추천 상품 정보";
+          fallbackImg = "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&q=80&w=400";
+        } else if (host.includes("naver") || host.includes("map")) {
+          fallbackTitle = "네이버 장소 / 상품 정보";
+          fallbackImg = "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400";
+        }
       } catch (e) {}
 
       return {
-        title: `상세 링크 (${host})`,
-        image: "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+        title: fallbackTitle,
+        image: fallbackImg,
         host: host
       };
     }

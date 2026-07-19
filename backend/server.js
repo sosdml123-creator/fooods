@@ -4,6 +4,7 @@ const session = require("express-session");
 const helmet = require("helmet");
 const compression = require("compression");
 const morgan = require("morgan");
+const axios = require("axios");
 const { corsOptions } = require("./middlewares");
 const { syncDbsFromR2, hasR2Config } = require("./firebase");
 
@@ -171,6 +172,106 @@ app.use(express.static(wwwPath));
 app.get(["/app-ads.txt", "/app-ads", "/api/app-ads.txt"], (req, res) => {
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
   res.send("google.com, pub-3878859120989916, DIRECT, f08c47fec0942fa0\n");
+});
+
+// 외부 링크(쿠팡, 네이버 지도, 외부 쇼핑몰 등) OG 메타데이터 크롤링 및 파싱 API
+app.get(["/api/link-meta", "/api/v1/link-meta"], async (req, res) => {
+  const targetUrl = req.query.url;
+  if (!targetUrl) {
+    return res.status(400).json({ success: false, message: "URL이 누락되었습니다." });
+  }
+
+  try {
+    const parsedUrl = new URL(targetUrl);
+    const host = parsedUrl.hostname.replace("www.", "");
+
+    const response = await axios.get(targetUrl, {
+      timeout: 6000,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7"
+      },
+      maxRedirects: 5
+    });
+
+    const html = typeof response.data === "string" ? response.data : JSON.stringify(response.data);
+
+    let title = "";
+    let image = "";
+
+    // 1. og:title / twitter:title / <title> 파싱
+    const ogTitleMatch = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i) ||
+                         html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i);
+    const twitterTitleMatch = html.match(/<meta[^>]*name=["']twitter:title["'][^>]*content=["']([^"']+)["']/i) ||
+                             html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']twitter:title["']/i);
+    const titleTagMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+
+    if (ogTitleMatch && ogTitleMatch[1]) {
+      title = ogTitleMatch[1].trim();
+    } else if (twitterTitleMatch && twitterTitleMatch[1]) {
+      title = twitterTitleMatch[1].trim();
+    } else if (titleTagMatch && titleTagMatch[1]) {
+      title = titleTagMatch[1].trim();
+    }
+
+    // 2. og:image / twitter:image 파싱
+    const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i) ||
+                         html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
+    const twitterImageMatch = html.match(/<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i) ||
+                             html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']twitter:image["']/i);
+
+    if (ogImageMatch && ogImageMatch[1]) {
+      image = ogImageMatch[1].trim();
+    } else if (twitterImageMatch && twitterImageMatch[1]) {
+      image = twitterImageMatch[1].trim();
+    }
+
+    // 상대 경로 이미지인 경우 Absolute URL로 정제
+    if (image && !image.startsWith("http")) {
+      if (image.startsWith("//")) {
+        image = `https:${image}`;
+      } else if (image.startsWith("/")) {
+        image = `${parsedUrl.protocol}//${parsedUrl.host}${image}`;
+      }
+    }
+
+    // HTML Entity 디코딩
+    if (title) {
+      title = title
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&#x27;/g, "'");
+    }
+
+    if (!title || title.length === 0) {
+      title = `상세 링크 (${host})`;
+    }
+
+    if (!image) {
+      image = "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400";
+    }
+
+    return res.json({
+      success: true,
+      title,
+      image,
+      host
+    });
+  } catch (err) {
+    console.error("[Link Meta API Error]:", err.message);
+    let host = "link";
+    try { host = new URL(targetUrl).hostname.replace("www.", ""); } catch(e) {}
+    return res.json({
+      success: true,
+      title: `상세 링크 (${host})`,
+      image: "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+      host
+    });
+  }
 });
 
 // 헬스 체크 API (Render 상태 모니터링용)
