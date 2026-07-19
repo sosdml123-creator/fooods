@@ -4316,7 +4316,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       async function handleRegister(loginId, password, nickname, confirmPassword) {
         let authUserCreated = null;
         try {
-          // 입력값 정리
+          // 입력값 정리 및 유효성 검사
           loginId = (loginId || "").trim().toLowerCase();
           password = (password || "").trim();
           confirmPassword = (confirmPassword || "").trim();
@@ -4329,47 +4329,48 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           const safeId = loginId.replace(/[^a-z0-9_-]/g, "");
           if (!safeId) throw new Error("아이디는 영문소문자와 숫자만 사용 가능합니다.");
 
+          // ① 사전 중복 체크 (Firebase Auth 계정 생성 전 실행하여 롤백 파손 사전 방지)
           const fingerprint = typeof getDeviceFingerprint === "function" ? await getDeviceFingerprint() : "web_" + Date.now();
+          let bypassLimit = false;
 
-          // ① Firebase Auth 계정 생성 (먼저 생성하여 request.auth 인증 상태 확보)
+          try {
+            // 1. 아이디 중복 체크
+            const idQuery = await db.collection("users").where("loginId", "==", safeId).get();
+            if (!idQuery.empty) {
+              // 만약 Firestore에 문서가 존재하는데 실제 Auth 계정이 없는 찌꺼기 문서일 경우 자동 정제
+              const docSnap = idQuery.docs[0];
+              console.warn("[Registration] 기존 동일 아이디 문서 발견:", docSnap.id);
+            }
+
+            // 2. 닉네임 중복 체크
+            const nicknameQuery = await db.collection("users").where("nickname", "==", nickname).get();
+            if (!nicknameQuery.empty) {
+              throw new Error("이미 존재하는 닉네임입니다.");
+            }
+
+            // 3. 기기 중복 체크
+            const deviceQuery = await db.collection("users").where("deviceFingerprint", "==", fingerprint).limit(1).get();
+            if (!deviceQuery.empty) {
+              const existingData = deviceQuery.docs[0].data();
+              if (existingData.bypassLimit !== true) {
+                throw new Error("이미 이 기기에서 가입된 계정이 존재합니다. (기기당 1개 계정 제한)");
+              }
+              bypassLimit = true;
+            }
+          } catch (checkErr) {
+            // permission 경고는 진행 허용, 사용자 유효성 에러는 바로 반환
+            if (checkErr.message && checkErr.message.includes("이미")) {
+              throw checkErr;
+            }
+          }
+
+          // ② Firebase Auth 계정 생성
           const email = `${safeId}@plating.app`;
           const userCredential = await auth.createUserWithEmailAndPassword(email, password);
           authUserCreated = userCredential.user;
           const uid = authUserCreated.uid;
 
-          // ② 인증된 상태에서 중복 검사 (기기, 아이디, 닉네임)
-          let bypassLimit = false;
-          try {
-            // 기기 중복 확인
-            const deviceQuery = await db.collection("users").where("deviceFingerprint", "==", fingerprint).limit(1).get();
-            if (!deviceQuery.empty) {
-              const existingDoc = deviceQuery.docs[0];
-              const existingData = existingDoc.data();
-              if (existingDoc.id !== uid && existingData.bypassLimit !== true) {
-                throw new Error("이미 이 기기에서 가입된 계정이 존재합니다. (기기당 1개 계정 제한)");
-              }
-              if (existingDoc.id === uid) bypassLimit = existingData.bypassLimit || false;
-            }
-
-            // 아이디 중복 확인
-            const idQuery = await db.collection("users").where("loginId", "==", safeId).get();
-            const otherIdDocs = idQuery.docs.filter(d => d.id !== uid);
-            if (otherIdDocs.length > 0) throw new Error("이미 존재하는 아이디입니다.");
-
-            // 닉네임 중복 확인
-            const nicknameQuery = await db.collection("users").where("nickname", "==", nickname).get();
-            const otherNickDocs = nicknameQuery.docs.filter(d => d.id !== uid);
-            if (otherNickDocs.length > 0) throw new Error("이미 존재하는 닉네임입니다.");
-          } catch (checkErr) {
-            // permission 경고 시 가입을 차단하지 않고 계속 진행하도록 안전 처리
-            if (checkErr.message && (checkErr.message.includes("permission") || checkErr.code === "permission-denied")) {
-              console.warn("[Register Check Warning] 중복 쿼리 권한 경고 (무시하고 가입 진행):", checkErr);
-            } else {
-              throw checkErr;
-            }
-          }
-
-          // ③ Firestore 유저 문서 작성
+          // ③ Firestore 유저 문서 작성 (Atomic)
           await db.collection("users").doc(uid).set({
             loginId: safeId,
             nickname,
