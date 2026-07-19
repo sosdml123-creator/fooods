@@ -2421,39 +2421,71 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
     }
 
     function LandingAuthGate({ onLogin, onRegister }) {
-      const [localFormOpen, setLocalFormOpen] = React.useState(false);
-      const [initialTab, setInitialTab] = React.useState("login");
+      const [mode, setMode] = React.useState("register"); // "register" | "login"
+      const [loginId, setLoginId] = React.useState("");
+      const [password, setPassword] = React.useState("");
+      const [confirmPassword, setConfirmPassword] = React.useState("");
+      const [nickname, setNickname] = React.useState("");
+      const [showPassword, setShowPassword] = React.useState(false);
+      const [error, setError] = React.useState("");
+      const [loading, setLoading] = React.useState(false);
+
+      async function handleSubmitRegister(e) {
+        e.preventDefault();
+        setError("");
+        if (password !== confirmPassword) {
+          setError("비밀번호가 일치하지 않습니다.");
+          return;
+        }
+        setLoading(true);
+        try {
+          await onRegister(loginId, password, nickname, confirmPassword);
+        } catch (err) {
+          setError(err.message || "회원가입에 실패했습니다.");
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      async function handleSubmitLogin(e) {
+        e.preventDefault();
+        setError("");
+        setLoading(true);
+        try {
+          await onLogin("local", loginId, password);
+        } catch (err) {
+          setError(err.message || "로그인에 실패했습니다.");
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      const inputCls = "w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-zinc-50 focus:bg-white mb-2.5";
+      const btnCls = "w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3.5 rounded-xl text-sm transition-all shadow-md active:scale-98 disabled:opacity-50 mt-1 cursor-pointer";
 
       return (
-        <div className="min-h-screen bg-white flex flex-col justify-between items-center px-6 py-12 text-zinc-900 select-none">
+        <div className="min-h-screen bg-white flex flex-col justify-between items-center px-6 py-8 text-zinc-900 select-none">
           {/* 상단 스페이서 */}
           <div className="w-full flex justify-end"></div>
 
-          {/* 중앙 로고, 3초 회원가입 뱃지, 카카오 버튼, 아이디 로그인/가입 */}
+          {/* 중앙 영역 */}
           <div className="w-full max-w-sm flex flex-col items-center my-auto text-center">
-            {/* 브랜드 로고 */}
-            <div className="flex items-center justify-center gap-3 mb-12">
-              <div className="w-12 h-12 rounded-2xl bg-orange-500 flex items-center justify-center text-white text-2xl font-black shadow-lg shadow-orange-200">
-                <i className="fa-solid fa-house-utensils"></i>
-              </div>
+            {/* 브랜드 로고 (주황색 아이콘 제거 및 공식 로고 배치) */}
+            <div className="flex items-center justify-center gap-2 mb-8">
+              <img 
+                src="/admin_logo.png" 
+                alt="플레이팅" 
+                className="h-10 w-auto object-contain rounded-xl"
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
               <h1 className="text-3xl font-black tracking-tight text-zinc-950">플레이팅</h1>
-            </div>
-
-            {/* ⚡ 3초만에 빠른 회원가입 말풍선 뱃지 */}
-            <div className="relative mb-3.5 animate-bounce">
-              <div className="bg-white border border-zinc-200 shadow-md rounded-full px-5 py-2 text-xs font-extrabold text-zinc-800 flex items-center gap-1.5">
-                <span className="text-amber-500 text-sm font-black">⚡</span>
-                <span>3초만에 빠른 회원가입</span>
-              </div>
-              {/* 말풍선 꼬리 */}
-              <div className="w-3 h-3 bg-white border-r border-b border-zinc-200 rotate-45 absolute -bottom-1.5 left-1/2 -translate-x-1/2"></div>
             </div>
 
             {/* 카카오톡으로 계속하기 메인 버튼 */}
             <button
               type="button"
               onClick={() => onLogin("kakao")}
-              className="w-full bg-[#FEE500] hover:bg-[#FADA00] text-[#191919] font-extrabold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2.5 text-sm shadow-sm active:scale-98 transition-all mb-8 cursor-pointer"
+              className="w-full bg-[#FEE500] hover:bg-[#FADA00] text-[#191919] font-extrabold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2.5 text-sm shadow-sm active:scale-98 transition-all mb-6 cursor-pointer"
             >
               <div className="w-5 h-5 rounded-md bg-[#191919] flex items-center justify-center text-[#FEE500] text-[10px]">
                 <i className="fa-solid fa-comment"></i>
@@ -2461,48 +2493,140 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
               <span>카카오톡으로 계속하기</span>
             </button>
 
-            {/* 아이디로 로그인 | 아이디로 가입 서브 링크 */}
-            <div className="flex items-center justify-center gap-4 text-xs font-semibold text-zinc-600 mb-6">
-              <button 
-                type="button" 
-                onClick={() => { setInitialTab("login"); setLocalFormOpen(true); }}
-                className="hover:text-zinc-950 underline decoration-zinc-300 underline-offset-4 cursor-pointer"
-              >
-                이메일/아이디로 로그인
-              </button>
-              <span className="text-zinc-300 text-[10px]">|</span>
-              <button 
-                type="button" 
-                onClick={() => { setInitialTab("register"); setLocalFormOpen(true); }}
-                className="hover:text-zinc-950 underline decoration-zinc-300 underline-offset-4 cursor-pointer"
-              >
-                이메일/아이디로 가입
-              </button>
+            {/* 구분선 */}
+            <div className="w-full flex items-center gap-3 mb-6">
+              <div className="flex-1 h-px bg-zinc-200"></div>
+              <span className="text-xs text-zinc-400 font-medium">또는 이메일/아이디로 {mode === "register" ? "가입" : "로그인"}</span>
+              <div className="flex-1 h-px bg-zinc-200"></div>
             </div>
 
-            <button 
-              type="button" 
-              onClick={() => { setInitialTab("login"); setLocalFormOpen(true); }}
-              className="text-[11px] text-zinc-400 hover:text-zinc-600 cursor-pointer"
-            >
-              로그인에 문제가 있으신가요?
-            </button>
+            {/* 카카오 밑에 바로 일반 회원가입(또는 로그인) 창 직접 노출 */}
+            {mode === "register" ? (
+              <form onSubmit={handleSubmitRegister} className="w-full text-left">
+                <input 
+                  className={inputCls} 
+                  type="text" 
+                  placeholder="아이디 (영문·숫자)" 
+                  value={loginId}
+                  onChange={e => setLoginId(e.target.value)} 
+                  autoComplete="username" 
+                  required
+                />
+                <div className="relative mb-2.5">
+                  <input 
+                    className="w-full border border-zinc-200 rounded-xl pl-4 pr-11 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-zinc-50 focus:bg-white" 
+                    type={showPassword ? "text" : "password"} 
+                    placeholder="비밀번호 (6자 이상)" 
+                    value={password}
+                    onChange={e => setPassword(e.target.value)} 
+                    autoComplete="new-password"
+                    required 
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowPassword(!showPassword)} 
+                    className="absolute right-3.5 top-3.5 text-zinc-400 hover:text-zinc-600 text-sm"
+                  >
+                    <i className={`fa-solid ${showPassword ? "fa-eye-slash" : "fa-eye"}`}></i>
+                  </button>
+                </div>
+                <input 
+                  className={inputCls} 
+                  type={showPassword ? "text" : "password"} 
+                  placeholder="비밀번호 확인" 
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)} 
+                  autoComplete="new-password"
+                  required 
+                />
+                <input 
+                  className={inputCls} 
+                  type="text" 
+                  placeholder="닉네임" 
+                  value={nickname}
+                  onChange={e => setNickname(e.target.value)}
+                  required 
+                />
+
+                {error && (
+                  <div className="bg-red-50 border border-red-200 text-red-600 rounded-xl p-3 mb-3 text-xs font-bold flex items-center gap-2">
+                    <i className="fa-solid fa-circle-exclamation text-red-500 text-sm flex-shrink-0"></i>
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                <button type="submit" className={btnCls} disabled={loading}>
+                  {loading ? "가입 처리 중..." : "회원가입하기"}
+                </button>
+
+                <div className="text-center mt-4">
+                  <button 
+                    type="button" 
+                    onClick={() => { setMode("login"); setError(""); }}
+                    className="text-xs text-zinc-500 hover:text-zinc-950 font-semibold underline underline-offset-4 cursor-pointer"
+                  >
+                    이미 계정이 있으신가요? 로그인하기
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleSubmitLogin} className="w-full text-left">
+                <input 
+                  className={inputCls} 
+                  type="text" 
+                  placeholder="아이디" 
+                  value={loginId}
+                  onChange={e => setLoginId(e.target.value)} 
+                  autoComplete="username"
+                  required 
+                />
+                <div className="relative mb-2.5">
+                  <input 
+                    className="w-full border border-zinc-200 rounded-xl pl-4 pr-11 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-zinc-50 focus:bg-white" 
+                    type={showPassword ? "text" : "password"} 
+                    placeholder="비밀번호" 
+                    value={password}
+                    onChange={e => setPassword(e.target.value)} 
+                    autoComplete="current-password"
+                    required 
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowPassword(!showPassword)} 
+                    className="absolute right-3.5 top-3.5 text-zinc-400 hover:text-zinc-600 text-sm"
+                  >
+                    <i className={`fa-solid ${showPassword ? "fa-eye-slash" : "fa-eye"}`}></i>
+                  </button>
+                </div>
+
+                {error && (
+                  <div className="bg-red-50 border border-red-200 text-red-600 rounded-xl p-3 mb-3 text-xs font-bold flex items-center gap-2">
+                    <i className="fa-solid fa-circle-exclamation text-red-500 text-sm flex-shrink-0"></i>
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                <button type="submit" className={btnCls} disabled={loading}>
+                  {loading ? "로그인 중..." : "로그인하기"}
+                </button>
+
+                <div className="text-center mt-4">
+                  <button 
+                    type="button" 
+                    onClick={() => { setMode("register"); setError(""); }}
+                    className="text-xs text-zinc-500 hover:text-zinc-950 font-semibold underline underline-offset-4 cursor-pointer"
+                  >
+                    계정이 없으신가요? 회원가입하기
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
 
           {/* 하단 푸터 */}
           <div className="text-[11px] text-zinc-400 font-medium">
             © PLAYTING. All rights reserved.
           </div>
-
-          {/* 서브 모달 (이메일/아이디 로그인 및 가입 폼) */}
-          {localFormOpen && (
-            <LoginModal 
-              defaultTab={initialTab}
-              onClose={() => setLocalFormOpen(false)}
-              onLogin={onLogin}
-              onRegister={onRegister}
-            />
-          )}
         </div>
       );
     }
