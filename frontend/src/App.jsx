@@ -4297,9 +4297,29 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           if (!safeId) throw new Error("아이디는 영문과 숫자만 가능합니다.");
           const email = `${safeId}@plating.app`;
 
+          // 📌 [DEBUG LOG] 로그인 직전 요구사항 2, 3번 출력
+          console.log("==================== [DEBUG: LOGIN ATTEMPT] ====================");
+          console.log("[DEBUG Firebase Auth Config]", {
+            projectId: auth?.app?.options?.projectId,
+            apiKey: auth?.app?.options?.apiKey,
+            authDomain: auth?.app?.options?.authDomain
+          });
+          console.log("[DEBUG Login Params]", {
+            loginId: loginId,
+            safeId: safeId,
+            email: email,
+            passwordLength: password ? password.length : 0
+          });
+          console.log("================================================================");
+
           try {
             const userCredential = await auth.signInWithEmailAndPassword(email, password);
             const user = userCredential.user;
+
+            console.log("[DEBUG Login Success]", {
+              currentUserEmail: auth.currentUser?.email,
+              currentUserUid: auth.currentUser?.uid
+            });
 
             // Firestore에서 프로필 정보 로드
             const userSnap = await db.collection("users").doc(user.uid).get();
@@ -4336,7 +4356,16 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             setLoginOpen(false);
             showToast("로그인 성공!", "success");
           } catch (err) {
-            console.error("[Login] 실패:", err);
+            // 📌 [DEBUG LOG] 로그인 실패 시 요구사항 4번 전체 정보 로깅
+            console.error("==================== [DEBUG: LOGIN FAIL] ====================");
+            console.error("[DEBUG Login Error Details]", {
+              errorCode: err?.code,
+              errorMessage: err?.message,
+              errorCustomData: err?.customData,
+              attemptedEmail: email,
+              passwordLength: password ? password.length : 0
+            });
+            console.error("=============================================================");
             throw new Error(formatAuthError(err));
           }
         }
@@ -4358,6 +4387,24 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           const safeId = loginId.replace(/[^a-z0-9_-]/g, "");
           if (!safeId) throw new Error("아이디는 영문소문자와 숫자만 사용 가능합니다.");
 
+          const email = `${safeId}@plating.app`;
+
+          // 📌 [DEBUG LOG] 요구사항 1, 3번: 회원가입 직전 및 Firebase Config 로깅
+          console.log("==================== [DEBUG: REGISTER ATTEMPT] ====================");
+          console.log("[DEBUG Firebase Auth Config]", {
+            projectId: auth?.app?.options?.projectId,
+            apiKey: auth?.app?.options?.apiKey,
+            authDomain: auth?.app?.options?.authDomain
+          });
+          console.log("[DEBUG Register Params]", {
+            loginId: loginId,
+            safeId: safeId,
+            email: email,
+            passwordLength: password ? password.length : 0,
+            isPasswordMatch: password === confirmPassword
+          });
+          console.log("===================================================================");
+
           // ① 사전 중복 체크 (Firebase Auth 계정 생성 전 실행하여 롤백 파손 사전 방지)
           const fingerprint = typeof getDeviceFingerprint === "function" ? await getDeviceFingerprint() : "web_" + Date.now();
           let bypassLimit = false;
@@ -4366,7 +4413,6 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             // 1. 아이디 중복 체크
             const idQuery = await db.collection("users").where("loginId", "==", safeId).get();
             if (!idQuery.empty) {
-              // 만약 Firestore에 문서가 존재하는데 실제 Auth 계정이 없는 찌꺼기 문서일 경우 자동 정제
               const docSnap = idQuery.docs[0];
               console.warn("[Registration] 기존 동일 아이디 문서 발견:", docSnap.id);
             }
@@ -4387,17 +4433,23 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
               bypassLimit = true;
             }
           } catch (checkErr) {
-            // permission 경고는 진행 허용, 사용자 유효성 에러는 바로 반환
             if (checkErr.message && checkErr.message.includes("이미")) {
               throw checkErr;
             }
           }
 
           // ② Firebase Auth 계정 생성
-          const email = `${safeId}@plating.app`;
           const userCredential = await auth.createUserWithEmailAndPassword(email, password);
           authUserCreated = userCredential.user;
           const uid = authUserCreated.uid;
+
+          // 📌 [DEBUG LOG] 요구사항 5번: 회원가입 성공 직후 Firebase currentUser 정보 출력
+          console.log("==================== [DEBUG: REGISTER SUCCESS] ====================");
+          console.log("[DEBUG Register CurrentUser]", {
+            currentUserEmail: auth?.currentUser?.email,
+            currentUserUid: auth?.currentUser?.uid
+          });
+          console.log("===================================================================");
 
           // ③ Firestore 유저 문서 작성 (Atomic)
           await db.collection("users").doc(uid).set({
@@ -4441,6 +4493,13 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       }
 
       function handleLogout() {
+        // 📌 [DEBUG LOG] 요구사항 6번: 로그아웃 직전 currentUser.email 출력
+        console.log("==================== [DEBUG: LOGOUT ATTEMPT] ====================");
+        console.log("[DEBUG Logout CurrentUser]", {
+          currentUserEmail: auth?.currentUser?.email
+        });
+        console.log("=================================================================");
+
         auth.signOut().catch(e => console.error("Firebase SignOut Error:", e));
         setIsLoggedIn(false);
         setDBData("foodhouse_logged_in", "false").catch(e => console.error(e));
