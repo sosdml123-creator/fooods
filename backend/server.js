@@ -23,9 +23,14 @@ app.get(["/app-ads.txt", "/app-ads", "/api/app-ads.txt"], (req, res) => {
   return res.status(200).send("google.com, pub-3878859120989916, DIRECT, f08c47fec0942fa0\n");
 });
 
+app.get(["/robots.txt"], (req, res) => {
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  return res.status(200).send("User-agent: Google-adstxt\nDisallow:\n\nUser-agent: Mediapartners-Google\nDisallow:\n\nUser-agent: Googlebot\nDisallow:\n\nUser-agent: *\nAllow: /app-ads.txt\nAllow: /\n");
+});
+
 // myplating.kr 접속 시 www.myplating.kr로 301 캐노니컬 리다이렉트 처리
 app.use((req, res, next) => {
-  if (req.path === "/app-ads.txt" || req.path === "/app-ads") return next();
+  if (req.path === "/app-ads.txt" || req.path === "/app-ads" || req.path === "/robots.txt") return next();
   if (process.env.NODE_ENV === "production" && req.headers.host === "myplating.kr") {
     console.log(`[Canonical Redirect] ${req.headers.host}${req.url} -> www.myplating.kr`);
     return res.redirect(301, `https://www.myplating.kr${req.url}`);
