@@ -2350,7 +2350,12 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                     onChange={e => setLoginId(e.target.value)} autoComplete="username" />
                   <input className={inputCls} type="password" placeholder="비밀번호" value={password}
                     onChange={e => setPassword(e.target.value)} autoComplete="current-password" />
-                  {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
+                  {error && (
+                    <div className="bg-red-50 border border-red-200 text-red-600 rounded-xl p-3 mb-4 text-xs font-bold flex items-center gap-2">
+                      <i className="fa-solid fa-circle-exclamation text-red-500 text-sm flex-shrink-0"></i>
+                      <span>{error}</span>
+                    </div>
+                  )}
                   <button type="submit" className={btnCls} disabled={loading}>
                     {loading ? "로그인 중..." : "로그인"}
                   </button>
@@ -2365,7 +2370,12 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                     onChange={e => setConfirmPassword(e.target.value)} autoComplete="new-password" />
                   <input className={inputCls} type="text" placeholder="닉네임" value={nickname}
                     onChange={e => setNickname(e.target.value)} />
-                  {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
+                  {error && (
+                    <div className="bg-red-50 border border-red-200 text-red-600 rounded-xl p-3 mb-4 text-xs font-bold flex items-center gap-2">
+                      <i className="fa-solid fa-circle-exclamation text-red-500 text-sm flex-shrink-0"></i>
+                      <span>{error}</span>
+                    </div>
+                  )}
                   <button type="submit" className={btnCls} disabled={loading}>
                     {loading ? "가입 중..." : "회원가입"}
                   </button>
