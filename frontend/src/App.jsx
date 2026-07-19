@@ -2286,6 +2286,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       const [tab, setTab] = React.useState("login"); // "login" | "register"
       const [loginId, setLoginId] = React.useState("");
       const [password, setPassword] = React.useState("");
+      const [confirmPassword, setConfirmPassword] = React.useState("");
       const [nickname, setNickname] = React.useState("");
       const [error, setError] = React.useState("");
       const [loading, setLoading] = React.useState(false);
@@ -2306,9 +2307,13 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       async function handleSubmitRegister(e) {
         e.preventDefault();
         setError("");
+        if (password !== confirmPassword) {
+          setError("비밀번호가 일치하지 않습니다.");
+          return;
+        }
         setLoading(true);
         try {
-          await onRegister(loginId, password, nickname);
+          await onRegister(loginId, password, nickname, confirmPassword);
         } catch (err) {
           setError(err.message || "회원가입에 실패했습니다.");
         } finally {
@@ -2356,6 +2361,8 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                     onChange={e => setLoginId(e.target.value)} autoComplete="username" />
                   <input className={inputCls} type="password" placeholder="비밀번호 (6자 이상)" value={password}
                     onChange={e => setPassword(e.target.value)} autoComplete="new-password" />
+                  <input className={inputCls} type="password" placeholder="비밀번호 확인" value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)} autoComplete="new-password" />
                   <input className={inputCls} type="text" placeholder="닉네임" value={nickname}
                     onChange={e => setNickname(e.target.value)} />
                   {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
@@ -4306,15 +4313,17 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         }
       }
 
-      async function handleRegister(loginId, password, nickname) {
+      async function handleRegister(loginId, password, nickname, confirmPassword) {
         let authUserCreated = null;
         try {
           // 입력값 정리
           loginId = (loginId || "").trim().toLowerCase();
           password = (password || "").trim();
+          confirmPassword = (confirmPassword || "").trim();
           nickname = (nickname || "").trim();
 
           if (!loginId || !password || !nickname) throw new Error("아이디, 비밀번호, 닉네임을 모두 입력해 주세요.");
+          if (confirmPassword && password !== confirmPassword) throw new Error("비밀번호와 비밀번호 확인이 일치하지 않습니다.");
           if (password.length < 6) throw new Error("비밀번호는 6자 이상이어야 합니다.");
 
           const safeId = loginId.replace(/[^a-z0-9_-]/g, "");

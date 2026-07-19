@@ -13,9 +13,9 @@ service cloud.firestore {
         );
     }
 
-    // 2. users 컬렉션 보안 규칙
+    // 2. users 컬렉션 보안 규칙 (가입 전 중복체크를 위해 read 허용)
     match /users/{userId} {
-      allow get, list: if request.auth != null;
+      allow read: if true;
       allow create: if request.auth != null && request.auth.uid == userId;
       allow update: if request.auth != null && (
         request.auth.uid == userId ||
@@ -88,13 +88,13 @@ service cloud.firestore {
 
     // 11. devices 컬렉션 보안 규칙
     match /devices/{deviceFingerprint} {
-      allow read, write: if request.auth != null;
+      allow read, write: if true;
     }
 
     // 12. dailyStats 컬렉션 보안 규칙
     match /dailyStats/{dateId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if true;
     }
   }
 }
