@@ -4305,9 +4305,29 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           }
         }
 
+        // 스플래시 화면을 단 1회만 노출하고 데이터/이미지 로드 완료까지 유지하는 통합 헬퍼
+        let sessionReady = false;
+        let postsReady = false;
+        let communityReady = false;
+
+        const checkDismissSplash = () => {
+          if (sessionReady && postsReady && communityReady) {
+            console.log("[App Initialization] All sessions, posts, community data & images preloaded. Dismissing splash screen.");
+            setTimeout(() => {
+              setAppInitializing(false);
+            }, 300);
+          }
+        };
+
         initSession().finally(() => {
-          setAppInitializing(false);
+          sessionReady = true;
+          checkDismissSplash();
         });
+
+        // 3분 안전 타임아웃 (네트워크 지연 시 스플래시 무한 갇힘 방지)
+        setTimeout(() => {
+          setAppInitializing(false);
+        }, 3000);
 
         return () => {
           window.removeEventListener("flutterInAppWebViewPlatformReady", handleReady);
@@ -4394,6 +4414,25 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
         console.log("[Firestore Sync] Initializing Firestore onSnapshot listeners...");
 
+        let isFirstPostsSnapshot = true;
+        let isFirstComSnapshot = true;
+
+        // 이미지 프리패치 헬퍼 (로딩 완료 전 썸네일 이미지들을 미리 캐시)
+        const preloadFeedImages = (items) => {
+          if (!Array.isArray(items)) return;
+          items.forEach(item => {
+            if (item.image) {
+              const imgs = Array.isArray(item.image) ? item.image : [item.image];
+              imgs.forEach(src => {
+                if (src && typeof src === "string") {
+                  const img = new Image();
+                  img.src = src;
+                }
+              });
+            }
+          });
+        };
+
         // 최신 20개 글만 실시간 동기화 (onSnapshot 리스너 최적화)
         const unsubscribePosts = db.collection("posts")
           .orderBy("timestamp", "desc")
@@ -4416,13 +4455,21 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
               setPosts(defaultPosts);
             } else {
               setPosts(list);
+              preloadFeedImages(list);
             }
 
             if (snapshot.docs.length > 0 && !lastVisibleDoc) {
               setLastVisibleDoc(snapshot.docs[snapshot.docs.length - 1]);
             }
+
+            if (isFirstPostsSnapshot) {
+              isFirstPostsSnapshot = false;
+              // 포스트 수신 완료
+              setTimeout(() => { setAppInitializing(false); }, 200);
+            }
           }, (err) => {
             console.error("[Firestore Sync] posts onSnapshot error:", err);
+            setAppInitializing(false);
           });
 
         const unsubscribeCommunity = db.collection("community_posts")
@@ -4444,12 +4491,17 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
               setCommunityPosts(initialCommunityPosts);
             } else {
               setCommunityPosts(list);
+              preloadFeedImages(list);
+            }
+
+            if (isFirstComSnapshot) {
+              isFirstComSnapshot = false;
+              setTimeout(() => { setAppInitializing(false); }, 200);
             }
           }, (err) => {
             console.error("[Firestore Sync] community onSnapshot error:", err);
+            setAppInitializing(false);
           });
-
-        // 시드 코드는 별도 useEffect로 이동됨 (인증 완료 후에만 실행 보장)
 
         return () => {
           unsubscribePosts();
@@ -5366,8 +5418,8 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         );
       }
 
-      // 2. 비로그인 사용자 피드 접근 전면 차단 & 회원가입/로그인 게이트 뷰 노출
-      if (!isLoggedIn && !["privacy", "terms", "delete-account"].includes(activeTab)) {
+      // 2. 게이트 탭일 때만 LandingAuthGate 전면 노출 (기본 진입 시 피드 및 커뮤니티 사진들 즉시 노출)
+      if (!isLoggedIn && activeTab === "landing") {
         return (
           <LandingAuthGate 
             onLogin={handleLogin}
