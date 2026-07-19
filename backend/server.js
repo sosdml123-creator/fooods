@@ -17,11 +17,15 @@ const adminRouter = require("./routes/admin");
 const app = express();
 const port = process.env.PORT || 4000;
 
-// Render.com 등 리버스 프록시 환경에서 HTTPS 인식을 위한 설정
-app.set('trust proxy', 1);
+// Google AdMob 크롤러 최우선 서빙 라우트 (301 리다이렉트 없이 200 OK text/plain 즉시 응답)
+app.get(["/app-ads.txt", "/app-ads", "/api/app-ads.txt"], (req, res) => {
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  return res.status(200).send("google.com, pub-3878859120989916, DIRECT, f08c47fec0942fa0\n");
+});
 
 // myplating.kr 접속 시 www.myplating.kr로 301 캐노니컬 리다이렉트 처리
 app.use((req, res, next) => {
+  if (req.path === "/app-ads.txt" || req.path === "/app-ads") return next();
   if (process.env.NODE_ENV === "production" && req.headers.host === "myplating.kr") {
     console.log(`[Canonical Redirect] ${req.headers.host}${req.url} -> www.myplating.kr`);
     return res.redirect(301, `https://www.myplating.kr${req.url}`);
