@@ -2470,14 +2470,11 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
           {/* 중앙 영역 */}
           <div className="w-full max-w-sm flex flex-col items-center my-auto text-center">
-            {/* 브랜드 로고 (주황색 아이콘 제거 및 공식 로고 배치) */}
-            <div className="flex items-center justify-center gap-2 mb-8">
-              <img 
-                src="/admin_logo.png" 
-                alt="플레이팅" 
-                className="h-10 w-auto object-contain rounded-xl"
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
+            {/* 브랜드 로고 (공식 포크 심볼 적용) */}
+            <div className="flex items-center justify-center gap-3 mb-8">
+              <div className="w-11 h-11 rounded-2xl bg-zinc-950 flex items-center justify-center text-white text-xl font-bold shadow-md">
+                <i className="fa-solid fa-utensils"></i>
+              </div>
               <h1 className="text-3xl font-black tracking-tight text-zinc-950">플레이팅</h1>
             </div>
 
@@ -5356,18 +5353,15 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         );
       });
 
-      // 1. 앱 세션 초기화 로딩 화면 (스플래시 화면)
+      // 1. 앱 세션 초기화 로딩 화면 (공식 포크 로고 단일 스플래시)
       if (appInitializing) {
         return (
-          <div className="flex flex-col items-center justify-center min-h-screen bg-white text-zinc-900 px-6">
-            <div className="w-16 h-16 rounded-2xl bg-orange-500 flex items-center justify-center text-white text-3xl font-black mb-4 shadow-xl animate-bounce">
-              P
+          <div className="flex flex-col items-center justify-center min-h-screen bg-white text-zinc-900 px-6 select-none">
+            <div className="w-24 h-24 rounded-3xl bg-zinc-950 flex items-center justify-center text-white text-5xl mb-4 shadow-xl">
+              <i className="fa-solid fa-utensils"></i>
             </div>
-            <h1 className="text-xl font-extrabold text-zinc-900 mb-1 tracking-tight">플레이팅 (PLAYTING)</h1>
-            <p className="text-xs text-zinc-400 mb-8 font-medium">맛있는 순간을 기록하는 푸드 픽 커뮤니티</p>
-            <div className="flex items-center gap-2 text-xs text-orange-500 font-bold bg-orange-50 px-4 py-2 rounded-full border border-orange-100">
-              <i className="fa-solid fa-spinner animate-spin"></i> 로딩 중...
-            </div>
+            <h1 className="text-xl font-bold text-zinc-900 tracking-tight mb-8">플레이팅</h1>
+            <div className="w-6 h-6 border-2 border-zinc-200 border-t-zinc-600 rounded-full animate-spin"></div>
           </div>
         );
       }
