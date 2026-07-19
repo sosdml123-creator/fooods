@@ -4284,6 +4284,10 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         return msg;
       }
 
+      const showToast = (msg, type = "info") => {
+        console.log(`[Toast ${type}]`, msg);
+      };
+
       async function handleLogin(type, loginId, password) {
         if (type === "kakao") {
           window.location.href = "/api/v1/auth/authorize";
@@ -4373,72 +4377,64 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
       async function handleRegister(loginId, password, nickname, confirmPassword) {
         let authUserCreated = null;
+        let isFirestoreSaved = false;
+
+        // 1. 입력값 정리 및 유효성 검사
+        loginId = (loginId || "").trim().toLowerCase();
+        password = (password || "").trim();
+        confirmPassword = (confirmPassword || "").trim();
+        nickname = (nickname || "").trim();
+
+        if (!loginId || !password || !nickname) throw new Error("아이디, 비밀번호, 닉네임을 모두 입력해 주세요.");
+        if (confirmPassword && password !== confirmPassword) throw new Error("비밀번호와 비밀번호 확인이 일치하지 않습니다.");
+        if (password.length < 6) throw new Error("비밀번호는 6자 이상이어야 합니다.");
+
+        const safeId = loginId.replace(/[^a-z0-9_-]/g, "");
+        if (!safeId) throw new Error("아이디는 영문소문자와 숫자만 사용 가능합니다.");
+
+        const email = `${safeId}@plating.app`;
+
+        // 📌 [DEBUG LOG] 요구사항 1, 3번: 회원가입 직전 및 Firebase Config 로깅
+        console.log("==================== [DEBUG: REGISTER ATTEMPT] ====================");
+        console.log("[DEBUG Firebase Auth Config]", {
+          projectId: auth?.app?.options?.projectId,
+          apiKey: auth?.app?.options?.apiKey,
+          authDomain: auth?.app?.options?.authDomain
+        });
+        console.log("[DEBUG Register Params]", {
+          loginId: loginId,
+          safeId: safeId,
+          email: email,
+          passwordLength: password ? password.length : 0,
+          isPasswordMatch: password === confirmPassword
+        });
+        console.log("===================================================================");
+
+        // ① 사전 중복 체크
+        const fingerprint = typeof getDeviceFingerprint === "function" ? await getDeviceFingerprint() : "web_" + Date.now();
+        let bypassLimit = false;
+
         try {
-          // 입력값 정리 및 유효성 검사
-          loginId = (loginId || "").trim().toLowerCase();
-          password = (password || "").trim();
-          confirmPassword = (confirmPassword || "").trim();
-          nickname = (nickname || "").trim();
-
-          if (!loginId || !password || !nickname) throw new Error("아이디, 비밀번호, 닉네임을 모두 입력해 주세요.");
-          if (confirmPassword && password !== confirmPassword) throw new Error("비밀번호와 비밀번호 확인이 일치하지 않습니다.");
-          if (password.length < 6) throw new Error("비밀번호는 6자 이상이어야 합니다.");
-
-          const safeId = loginId.replace(/[^a-z0-9_-]/g, "");
-          if (!safeId) throw new Error("아이디는 영문소문자와 숫자만 사용 가능합니다.");
-
-          const email = `${safeId}@plating.app`;
-
-          // 📌 [DEBUG LOG] 요구사항 1, 3번: 회원가입 직전 및 Firebase Config 로깅
-          console.log("==================== [DEBUG: REGISTER ATTEMPT] ====================");
-          console.log("[DEBUG Firebase Auth Config]", {
-            projectId: auth?.app?.options?.projectId,
-            apiKey: auth?.app?.options?.apiKey,
-            authDomain: auth?.app?.options?.authDomain
-          });
-          console.log("[DEBUG Register Params]", {
-            loginId: loginId,
-            safeId: safeId,
-            email: email,
-            passwordLength: password ? password.length : 0,
-            isPasswordMatch: password === confirmPassword
-          });
-          console.log("===================================================================");
-
-          // ① 사전 중복 체크 (Firebase Auth 계정 생성 전 실행하여 롤백 파손 사전 방지)
-          const fingerprint = typeof getDeviceFingerprint === "function" ? await getDeviceFingerprint() : "web_" + Date.now();
-          let bypassLimit = false;
-
-          try {
-            // 1. 아이디 중복 체크
-            const idQuery = await db.collection("users").where("loginId", "==", safeId).get();
-            if (!idQuery.empty) {
-              const docSnap = idQuery.docs[0];
-              console.warn("[Registration] 기존 동일 아이디 문서 발견:", docSnap.id);
-            }
-
-            // 2. 닉네임 중복 체크
-            const nicknameQuery = await db.collection("users").where("nickname", "==", nickname).get();
-            if (!nicknameQuery.empty) {
-              throw new Error("이미 존재하는 닉네임입니다.");
-            }
-
-            // 3. 기기 중복 체크 (사용자 요청으로 제한 해제)
-            // const deviceQuery = await db.collection("users").where("deviceFingerprint", "==", fingerprint).limit(1).get();
-            // if (!deviceQuery.empty) {
-            //   const existingData = deviceQuery.docs[0].data();
-            //   if (existingData.bypassLimit !== true) {
-            //     throw new Error("이미 이 기기에서 가입된 계정이 존재합니다. (기기당 1개 계정 제한)");
-            //   }
-            //   bypassLimit = true;
-            // }
-          } catch (checkErr) {
-            if (checkErr.message && checkErr.message.includes("이미")) {
-              throw checkErr;
-            }
+          // 1. 아이디 중복 체크
+          const idQuery = await db.collection("users").where("loginId", "==", safeId).get();
+          if (!idQuery.empty) {
+            const docSnap = idQuery.docs[0];
+            console.warn("[Registration] 기존 동일 아이디 문서 발견:", docSnap.id);
           }
 
-          // ② Firebase Auth 계정 생성
+          // 2. 닉네임 중복 체크
+          const nicknameQuery = await db.collection("users").where("nickname", "==", nickname).get();
+          if (!nicknameQuery.empty) {
+            throw new Error("이미 존재하는 닉네임입니다.");
+          }
+        } catch (checkErr) {
+          if (checkErr.message && checkErr.message.includes("이미")) {
+            throw checkErr;
+          }
+        }
+
+        // ② Firebase Auth 계정 생성 및 Firestore 문서 저장 (핵심 데이터 저장 영역)
+        try {
           const userCredential = await auth.createUserWithEmailAndPassword(email, password);
           authUserCreated = userCredential.user;
           const uid = authUserCreated.uid;
@@ -4463,8 +4459,24 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             photoURL: "",
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           });
+          isFirestoreSaved = true;
 
-          // ④ 프로필 상태 반영 및 자동 로그인
+        } catch (dataErr) {
+          console.error("[Registration Data Failed]", dataErr);
+          // 📌 치명적인 Firestore 저장 실패에서만 Auth 계정 롤백 삭제 진행
+          if (authUserCreated && !isFirestoreSaved) {
+            try { 
+              await authUserCreated.delete(); 
+              console.log("[Rollback] 치명적 DB 저장 실패로 Auth 계정 롤백 삭제 완료"); 
+            } catch (de) { 
+              console.error("[Rollback Failed]", de); 
+            }
+          }
+          throw new Error(formatAuthError(dataErr));
+        }
+
+        // ④ 프로필 상태 반영 및 자동 로그인 (독립된 try-catch: UI 예외가 Auth 계정을 지우지 않음)
+        try {
           const updatedProfile = {
             name: nickname,
             bio: "소개글이 없습니다.",
@@ -4477,18 +4489,8 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           setIsLoggedIn(true);
           setLoginOpen(false);
           showToast("회원가입이 완료되었습니다!", "success");
-
-        } catch (err) {
-          console.error("[Registration] 실패:", err);
-          if (authUserCreated) {
-            try { 
-              await authUserCreated.delete(); 
-              console.log("[Rollback] Auth 계정 롤백 삭제 완료"); 
-            } catch (de) { 
-              console.error("[Rollback] Auth 계정 삭제 실패:", de); 
-            }
-          }
-          throw new Error(formatAuthError(err));
+        } catch (uiErr) {
+          console.warn("[Registration UI Warning] UI 반영 중 경고 (회원가입 자체는 성공함):", uiErr);
         }
       }
 
