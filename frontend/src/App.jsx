@@ -2754,6 +2754,16 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         if (window.naver && window.naver.maps) {
           setMapLoaded(true);
         } else {
+          const scriptUrl = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${clientId}&submodules=geocoder`;
+          const existingScript = document.querySelector(`script[src*="oapi.map.naver.com"]`);
+          if (!existingScript) {
+            const script = document.createElement("script");
+            script.src = scriptUrl;
+            script.async = true;
+            script.onload = () => setMapLoaded(true);
+            script.onerror = () => setAuthError(true);
+            document.head.appendChild(script);
+          }
           intervalId = setInterval(checkNaverMap, 100);
         }
 
