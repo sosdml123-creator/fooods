@@ -260,8 +260,61 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       return {
         title: fallbackTitle,
         image: fallbackImg,
+        price: "",
         host: host
       };
+    }
+
+    // ── 2.2 상품 링크 미리보기 및 자가치유(Self-healing) 카드 컴포넌트 ──
+    function ProductLinkItemCard({ link }) {
+      const [data, setData] = useState({
+        title: link.title || "상세 링크",
+        image: link.image || "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+        price: link.price || "",
+        host: link.host || (link.url && link.url.includes("coupang") ? "쿠팡" : "링크"),
+        url: link.url
+      });
+
+      useEffect(() => {
+        const isBadTitle = !link.title || link.title.includes("Deeplink Redirect") || link.title === "상세 링크" || link.title === "Deeplink";
+        if (isBadTitle || !link.price) {
+          if (link.url && link.url.startsWith("http")) {
+            fetch(`/api/link-meta?url=${encodeURIComponent(link.url)}`)
+              .then(res => res.json())
+              .then(res => {
+                if (res.success && res.title && !res.title.includes("Deeplink Redirect")) {
+                  setData(prev => ({
+                    ...prev,
+                    title: res.title,
+                    image: res.image || prev.image,
+                    price: res.price || prev.price,
+                    host: res.host || prev.host
+                  }));
+                }
+              })
+              .catch(err => console.error("Self-healing link meta error:", err));
+          }
+        }
+      }, [link.url, link.title, link.price]);
+
+      return (
+        <a className="product-preview bg-white border border-zinc-200 rounded-xl p-2.5 flex items-center gap-3 hover:bg-zinc-50 transition-colors text-left" href={data.url} target="_blank" rel="noopener noreferrer">
+          <div className="w-14 h-14 rounded-lg bg-zinc-100 overflow-hidden flex-shrink-0 border border-zinc-150">
+            <img src={data.image} alt="" className="w-full h-full object-cover" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className="text-[9px] font-extrabold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-100">{data.host || "쿠팡"}</span>
+              {data.price && (
+                <span className="text-[11px] font-extrabold text-zinc-950">{data.price}</span>
+              )}
+            </div>
+            <strong className="text-xs font-bold text-zinc-900 block truncate leading-tight">{data.title}</strong>
+            <span className="text-[9px] text-zinc-400 block truncate mt-0.5">{data.url}</span>
+          </div>
+          <i className="fa-solid fa-chevron-right text-zinc-300 text-xs mr-1"></i>
+        </a>
+      );
     }
 
 
@@ -565,13 +618,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                   <div className="text-[10px] font-bold text-zinc-400 mb-2">소개된 아이템 정보 전체 ({post.productLinks.length})</div>
                   <div className="flex flex-col gap-2">
                     {post.productLinks.map((link, idx) => (
-                      <a key={idx} className="product-preview bg-white" href={link.url} target="_blank" rel="noopener noreferrer">
-                        <img src={link.image} alt="" />
-                        <div>
-                          <strong>{link.title}</strong>
-                          <span className="text-[9px] text-zinc-400 block truncate">{link.url}</span>
-                        </div>
-                      </a>
+                      <ProductLinkItemCard key={idx} link={link} />
                     ))}
                   </div>
                 </div>

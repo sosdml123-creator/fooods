@@ -174,156 +174,234 @@ app.get(["/app-ads.txt", "/app-ads", "/api/app-ads.txt"], (req, res) => {
   res.send("google.com, pub-3878859120989916, DIRECT, f08c47fec0942fa0\n");
 });
 
-// 외부 링크(쿠팡, 네이버 지도, 외부 쇼핑몰 등) OG 메타데이터 크롤링 및 파싱 API
+// 외부 링크(쿠팡 단축링크, 네이버 지도, 외부 쇼핑몰 등) 딥링크 해제 및 OG/JSON-LD 메타데이터 파싱 API
 app.get(["/api/link-meta", "/api/v1/link-meta"], async (req, res) => {
   const targetUrl = req.query.url;
   if (!targetUrl) {
     return res.status(400).json({ success: false, message: "URL이 누락되었습니다." });
   }
 
-  let host = "link";
   try {
-    const parsedUrl = new URL(targetUrl);
-    host = parsedUrl.hostname.replace("www.", "");
-  } catch (e) {}
-
-  const isNaverMap = host.includes("naver") || host.includes("map");
-  const isCoupang = host.includes("coupang");
-
-  try {
-    const userAgent = isCoupang
-      ? "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
-      : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-
-    const response = await axios.get(targetUrl, {
-      timeout: 6000,
-      headers: {
-        "User-Agent": userAgent,
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7"
-      },
-      maxRedirects: 10
-    });
-
-    const html = typeof response.data === "string" ? response.data : JSON.stringify(response.data);
-
-    let title = "";
-    let image = "";
-    let description = "";
-
-    // 1. og:title / twitter:title / <title> 파싱
-    const ogTitleMatch = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i) ||
-                         html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i);
-    const twitterTitleMatch = html.match(/<meta[^>]*name=["']twitter:title["'][^>]*content=["']([^"']+)["']/i) ||
-                             html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']twitter:title["']/i);
-    const titleTagMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-
-    if (ogTitleMatch && ogTitleMatch[1]) {
-      title = ogTitleMatch[1].trim();
-    } else if (twitterTitleMatch && twitterTitleMatch[1]) {
-      title = twitterTitleMatch[1].trim();
-    } else if (titleTagMatch && titleTagMatch[1]) {
-      title = titleTagMatch[1].trim();
-    }
-
-    // 2. og:image / twitter:image 파싱
-    const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i) ||
-                         html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
-    const twitterImageMatch = html.match(/<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i) ||
-                             html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']twitter:image["']/i);
-
-    if (ogImageMatch && ogImageMatch[1]) {
-      image = ogImageMatch[1].trim();
-    } else if (twitterImageMatch && twitterImageMatch[1]) {
-      image = twitterImageMatch[1].trim();
-    }
-
-    // 3. og:description 파싱 (주소 / 장소 정보용)
-    const ogDescMatch = html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i) ||
-                        html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:description["']/i);
-    if (ogDescMatch && ogDescMatch[1]) {
-      description = ogDescMatch[1].trim();
-    }
-
-    // HTML Entity 디코딩
-    if (title) {
-      title = title
-        .replace(/&amp;/g, "&")
-        .replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">")
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&#x27;/g, "'");
-    }
-
-    // 네이버 지도 타이틀 및 주소 정제
-    if (isNaverMap) {
-      title = title.replace(/^\[네이버\s*지도\]\s*/i, "").replace(/\s*-\s*네이버\s*지도$/i, "").trim();
-      if (description && !title.includes(description) && description.length < 50) {
-        title = `${title} (${description})`;
-      }
-    }
-
-    // 쿠팡 타이틀 정제
-    if (isCoupang) {
-      title = title.replace(/^쿠팡!\s*-\s*/i, "").replace(/\s*\|\s*쿠팡$/i, "").trim();
-    }
-
-    // 상대 경로 이미지 처리
-    if (image && !image.startsWith("http")) {
-      try {
-        const parsedUrl = new URL(targetUrl);
-        if (image.startsWith("//")) {
-          image = `https:${image}`;
-        } else if (image.startsWith("/")) {
-          image = `${parsedUrl.protocol}//${parsedUrl.host}${image}`;
-        }
-      } catch (e) {}
-    }
-
-    // 디폴트 Fallback
-    if (!title || title.length === 0 || title === "네이버 지도" || title === "Naver Map") {
-      title = isNaverMap ? "네이버 장소 / 맛집 정보" : isCoupang ? "쿠팡 추천 상품 정보" : `상세 링크 (${host})`;
-    }
-
-    if (!image || image.includes("favicon") || image.includes("blank")) {
-      if (isCoupang) {
-        image = "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&q=80&w=400";
-      } else if (isNaverMap) {
-        image = "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=400"; // 고화질 맛집/장소 썸네일
-      } else {
-        image = "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400";
-      }
-    }
-
+    const meta = await fetchDeepLinkMeta(targetUrl);
     return res.json({
       success: true,
-      title,
-      image,
-      host
+      title: meta.title,
+      image: meta.image,
+      price: meta.price,
+      brand: meta.brand,
+      host: meta.host
     });
   } catch (err) {
     console.error("[Link Meta API Error]:", err.message);
-
-    let fallbackTitle = `상세 링크 (${host})`;
-    let fallbackImg = "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400";
-
-    if (isCoupang) {
-      fallbackTitle = "쿠팡 추천 상품 정보";
-      fallbackImg = "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&q=80&w=400";
-    } else if (isNaverMap) {
-      fallbackTitle = "네이버 장소 / 맛집 정보";
-      fallbackImg = "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=400";
-    }
-
+    let host = "link";
+    try { host = new URL(targetUrl).hostname.replace("www.", ""); } catch(e) {}
+    if (host.includes("coupang")) host = "쿠팡";
     return res.json({
       success: true,
-      title: fallbackTitle,
-      image: fallbackImg,
+      title: host === "쿠팡" ? "쿠팡 추천 상품 정보" : `상세 링크 (${host})`,
+      image: host === "쿠팡" 
+        ? "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&q=80&w=400" 
+        : "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+      price: "",
       host
     });
   }
 });
+
+// 리다이렉트 추적 및 OG / JSON-LD / 가격 스마트 파서 헬퍼
+async function fetchDeepLinkMeta(initialUrl) {
+  let finalHtml = "";
+  let finalUrl = initialUrl;
+
+  const headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Cache-Control": "no-cache"
+  };
+
+  // 1단계: HTTP Redirect (301, 302, 307, 308) 10회 추적
+  try {
+    const res = await axios.get(initialUrl, {
+      timeout: 7000,
+      headers,
+      maxRedirects: 10,
+      validateStatus: (status) => status >= 200 && status < 400
+    });
+
+    finalHtml = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+    if (res.request && res.request.res && res.request.res.responseUrl) {
+      finalUrl = res.request.res.responseUrl;
+    } else if (res.config && res.config.url) {
+      finalUrl = res.config.url;
+    }
+  } catch (err) {
+    console.warn("[LinkMeta Redirect Catch]:", err.message);
+  }
+
+  // 2단계: Deeplink Redirect 중간 페이지 감지 시 JS/Meta Refresh 주소 추출 2차 GET
+  if (finalHtml.includes("Deeplink Redirect") || finalHtml.includes("deeplink") || finalHtml.includes("http-equiv=\"refresh\"")) {
+    const refreshMatch = finalHtml.match(/content=["']\d+;\s*url=([^"']+)["']/i) ||
+                         finalHtml.match(/location\.(?:href|replace)\s*=\s*["']([^"']+)["']/i) ||
+                         finalHtml.match(/(https:\/\/www\.coupang\.com\/vp\/products\/[^\s"'<]+)/i);
+
+    if (refreshMatch && refreshMatch[1]) {
+      let nextUrl = refreshMatch[1].replace(/&amp;/g, "&");
+      if (nextUrl.startsWith("/")) {
+        try {
+          const u = new URL(finalUrl);
+          nextUrl = `${u.protocol}//${u.host}${nextUrl}`;
+        } catch(e) {}
+      }
+      try {
+        const res2 = await axios.get(nextUrl, { timeout: 7000, headers, maxRedirects: 10 });
+        finalHtml = typeof res2.data === "string" ? res2.data : JSON.stringify(res2.data);
+        finalUrl = nextUrl;
+      } catch (err2) {
+        console.warn("[LinkMeta Refresh Fetch Error]:", err2.message);
+      }
+    }
+  }
+
+  let host = "link";
+  try {
+    host = new URL(finalUrl).hostname.replace("www.", "");
+  } catch(e) {}
+
+  let title = "";
+  let image = "";
+  let price = "";
+  let brand = "";
+
+  // 3단계: JSON-LD (schema.org) Product 파싱 (우선순위 3)
+  try {
+    const jsonLdMatches = finalHtml.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+    if (jsonLdMatches) {
+      for (const m of jsonLdMatches) {
+        const jsonText = m.replace(/<script[^>]*>/i, "").replace(/<\/script>/i, "").trim();
+        try {
+          const data = JSON.parse(jsonText);
+          const target = Array.isArray(data) ? data.find(item => item["@type"] === "Product") || data[0] : data;
+          if (target && (target["@type"] === "Product" || target.name)) {
+            if (!title && target.name) title = target.name;
+            if (!image && target.image) {
+              image = Array.isArray(target.image) ? target.image[0] : (target.image.url || target.image);
+            }
+            if (!price && target.offers) {
+              const offer = Array.isArray(target.offers) ? target.offers[0] : target.offers;
+              if (offer && offer.price) price = String(offer.price);
+            }
+            if (!brand && target.brand) {
+              brand = typeof target.brand === "object" ? target.brand.name : target.brand;
+            }
+          }
+        } catch(e) {}
+      }
+    }
+  } catch(e) {}
+
+  // 4단계: OpenGraph & Meta Tag 우선순위 파싱
+  // 제목 우선순위: 1. og:title -> 2. product:title -> 3. schema.org -> 4. <title>
+  const ogTitle = (finalHtml.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i) ||
+                   finalHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i))?.[1];
+  const productTitle = (finalHtml.match(/<meta[^>]*property=["']product:title["'][^>]*content=["']([^"']+)["']/i) ||
+                       finalHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']product:title["']/i))?.[1];
+  const pageTitle = (finalHtml.match(/<title[^>]*>([^<]+)<\/title>/i))?.[1];
+
+  if (ogTitle && !ogTitle.includes("Deeplink Redirect")) {
+    title = ogTitle.trim();
+  } else if (productTitle && !productTitle.includes("Deeplink Redirect")) {
+    title = productTitle.trim();
+  } else if (!title && pageTitle && !pageTitle.includes("Deeplink Redirect")) {
+    title = pageTitle.trim();
+  }
+
+  // 이미지 우선순위: 1. og:image -> 2. Product image (완료) -> 3. twitter:image
+  if (!image) {
+    const ogImage = (finalHtml.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i) ||
+                     finalHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i))?.[1];
+    const twitterImage = (finalHtml.match(/<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i) ||
+                         finalHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']twitter:image["']/i))?.[1];
+    image = ogImage || twitterImage || "";
+  }
+
+  // 가격 (Price) 추가 추출
+  if (!price) {
+    const ogPrice = (finalHtml.match(/<meta[^>]*property=["']product:price:amount["'][^>]*content=["']([^"']+)["']/i) ||
+                     finalHtml.match(/<meta[^>]*property=["']og:price:amount["'][^>]*content=["']([^"']+)["']/i))?.[1];
+    if (ogPrice) {
+      price = ogPrice.trim();
+    } else {
+      const priceMatch = finalHtml.match(/class=["'][^"']*total-price[^"']*["'][^>]*>[\s\S]*?strong[^>]*>([\d,]+)/i) ||
+                         finalHtml.match(/class=["'][^"']*prod-sale-price[^"']*["'][^>]*>[\s\S]*?span[^>]*>([\d,]+)/i) ||
+                         finalHtml.match(/(\d{1,3}(?:,\d{3})+)\s*원/);
+      if (priceMatch && priceMatch[1]) {
+        price = priceMatch[1].replace(/,/g, "");
+      }
+    }
+  }
+
+  // HTML Entity 디코딩 및 수식어 정제
+  if (title) {
+    title = title
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&#x27;/g, "'")
+      .replace(/^쿠팡!\s*-\s*/i, "")
+      .replace(/\s*\|\s*쿠팡$/i, "")
+      .replace(/^\[네이버\s*지도\]\s*/i, "")
+      .replace(/\s*-\s*네이버\s*지도$/i, "")
+      .trim();
+  }
+
+  // "Deeplink Redirect" 텍스트 차단 필터
+  if (!title || title.includes("Deeplink Redirect") || title === "Deep Link") {
+    if (host.includes("coupang")) {
+      title = "쿠팡 추천 상품 정보";
+    } else if (host.includes("naver") || host.includes("map")) {
+      title = "네이버 장소 / 맛집 정보";
+    } else {
+      title = `상세 링크 (${host})`;
+    }
+  }
+
+  // 상대경로 이미지 정제
+  if (image && !image.startsWith("http")) {
+    try {
+      const u = new URL(finalUrl);
+      if (image.startsWith("//")) image = `https:${image}`;
+      else if (image.startsWith("/")) image = `${u.protocol}//${u.host}${image}`;
+    } catch(e) {}
+  }
+
+  if (!image) {
+    if (host.includes("coupang")) {
+      image = "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&q=80&w=400";
+    } else if (host.includes("naver") || host.includes("map")) {
+      image = "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=400";
+    } else {
+      image = "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400";
+    }
+  }
+
+  let formattedPrice = "";
+  if (price && !isNaN(Number(price))) {
+    formattedPrice = `${Number(price).toLocaleString()}원`;
+  } else if (price) {
+    formattedPrice = price.includes("원") ? price : `${price}원`;
+  }
+
+  return {
+    title,
+    image,
+    price: formattedPrice,
+    brand,
+    host: host.includes("coupang") ? "쿠팡" : host
+  };
+}
 
 // 헬스 체크 API (Render 상태 모니터링용)
 app.get("/health", (req, res) => {
