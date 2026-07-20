@@ -2730,10 +2730,9 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
     function NaverMapView({ posts, onPostClick }) {
       const mapRef = useRef(null);
       const [mapLoaded, setMapLoaded] = useState(false);
-      const clientId = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || "";
+      const clientId = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || "m16cxm6bi2";
 
       useEffect(() => {
-        if (!clientId) return;
         if (window.naver && window.naver.maps) {
           setMapLoaded(true);
           return;
