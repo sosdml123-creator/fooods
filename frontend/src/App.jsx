@@ -2852,13 +2852,12 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           const mapOptions = {
             center: new window.naver.maps.LatLng(37.5665, 126.9780),
             zoom: 14,
-            zoomControl: true,
-            zoomControlOptions: {
-              position: window.naver.maps.Position.TOP_RIGHT
-            },
-            tileTransition: true,
-            inertialPan: true,
-            inertialPanDuration: 400,
+            zoomControl: false,             // 오른쪽 상단 플러스/마이너스 바 제거!
+            scaleControl: false,            // 축척 바 제거
+            mapDataControl: false,
+            tileTransition: false,          // 모바일 앱 타일 스터터링 걸림 방지 (false 적용 시 훨씬 부드러움)
+            inertialPan: true,             // 관성 스크롤 유지
+            inertialPanDuration: 300,       // 모바일 최적 300ms
             useStyleMap: true
           };
           mapInstanceRef.current = new window.naver.maps.Map(mapRef.current, mapOptions);
@@ -3027,7 +3026,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
               </p>
             </div>
           ) : (
-            <div ref={mapRef} className="w-full h-full" style={{ touchAction: 'pan-x pan-y', willChange: 'transform', transform: 'translateZ(0)' }}></div>
+            <div ref={mapRef} className="w-full h-full" style={{ touchAction: 'none', webkitUserSelect: 'none', userSelect: 'none', willChange: 'transform', transform: 'translateZ(0)' }}></div>
           )}
 
           {/* 선택된 음식점 상세 정보 바텀시트 카드 */}
