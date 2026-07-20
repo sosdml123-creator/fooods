@@ -25,9 +25,10 @@ function StatusBadge({ status }) {
 function QuickActionDropdown({ user, onDone }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const userName = user.nickname || user.name || user.displayName || "해당 회원";
 
   async function applyAction(newStatus, label) {
-    if (!window.confirm(`${user.name || "해당 회원"}을(를) [${label}] 처리하시겠습니까?`)) return;
+    if (!window.confirm(`${userName}을(를) [${label}] 처리하시겠습니까?`)) return;
     setLoading(true);
     try {
       const update = { status: newStatus };
@@ -39,7 +40,7 @@ function QuickActionDropdown({ user, onDone }) {
       await updateDoc(doc(db, "users", user.id), update);
       await addDoc(collection(db, "adminLogs"), {
         action: label,
-        detail: `대상: ${user.name || "알 수 없음"} (${user.id})`,
+        detail: `대상: ${userName} (${user.id})`,
         targetId: user.id,
         createdAt: new Date().toISOString(),
       });
@@ -105,6 +106,9 @@ export default function Users({ navigateToUser }) {
       const allUsers = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setUsers(allUsers);
       setLoading(false);
+    }, (error) => {
+      console.error("Users snapshot error:", error);
+      setLoading(false);
     });
     return () => unsubscribe();
   }, []);
@@ -118,21 +122,26 @@ export default function Users({ navigateToUser }) {
 
     if (searchQuery.trim() !== "") {
       const q = searchQuery.toLowerCase().trim();
-      if (searchType === "uid") result = result.filter(u => u.id?.toLowerCase().includes(q));
-      else if (searchType === "name") result = result.filter(u => u.name?.toLowerCase().includes(q));
-      else if (searchType === "email") result = result.filter(u => u.email?.toLowerCase().includes(q));
-      else result = result.filter(u =>
-        u.id?.toLowerCase().includes(q) ||
-        u.name?.toLowerCase().includes(q) ||
-        u.email?.toLowerCase().includes(q)
-      );
+      result = result.filter(u => {
+        const uid = (u.id || "").toLowerCase();
+        const userName = (u.nickname || u.name || u.displayName || "").toLowerCase();
+        const email = (u.email || "").toLowerCase();
+
+        if (searchType === "name") return userName.includes(q);
+        if (searchType === "uid") return uid.includes(q);
+        if (searchType === "email") return email.includes(q);
+        
+        return uid.includes(q) || userName.includes(q) || email.includes(q);
+      });
     }
 
     // 정렬
     result.sort((a, b) => {
+      const nameA = a.nickname || a.name || a.displayName || "";
+      const nameB = b.nickname || b.name || b.displayName || "";
       if (sortBy === "createdAt_desc") return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
       if (sortBy === "createdAt_asc") return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
-      if (sortBy === "name_asc") return (a.name || "").localeCompare(b.name || "");
+      if (sortBy === "name_asc") return nameA.localeCompare(nameB);
       if (sortBy === "reports_desc") return (b.reportCount || 0) - (a.reportCount || 0);
       return 0;
     });
@@ -247,6 +256,7 @@ export default function Users({ navigateToUser }) {
                 </tr>
               ) : (
                 filteredUsers.map((u) => {
+                  const displayName = u.nickname || u.name || u.displayName || "플레이터";
                   const hasAvatar = u.avatarImg && u.avatarImg.startsWith("http");
                   const dateJoin = u.createdAt ? u.createdAt.split("T")[0] : "-";
                   const lastLogin = u.lastLoginAt ? u.lastLoginAt.split("T")[0] : "-";
@@ -264,7 +274,7 @@ export default function Users({ navigateToUser }) {
                             {hasAvatar ? (
                               <img src={u.avatarImg} alt="" className="w-full h-full object-cover" />
                             ) : (
-                              <span className="font-bold text-zinc-500 dark:text-zinc-300">{u.name ? u.name[0] : "?"}</span>
+                              <span className="font-bold text-zinc-500 dark:text-zinc-300">{displayName ? displayName[0] : "?"}</span>
                             )}
                           </div>
                           {isToday && (
@@ -274,7 +284,7 @@ export default function Users({ navigateToUser }) {
                       </td>
                       <td className="px-4 py-3">
                         <div>
-                          <p className="font-bold text-zinc-800 dark:text-zinc-200">{u.name || "플레이터"}</p>
+                          <p className="font-bold text-zinc-800 dark:text-zinc-200">{displayName}</p>
                           <p className="text-[10px] font-mono text-zinc-400 truncate max-w-[100px]" title={u.id}>{u.id}</p>
                         </div>
                       </td>
