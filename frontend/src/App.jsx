@@ -2345,6 +2345,9 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
+                      if (typeof window !== "undefined" && window.isSelectingPhotosRef) {
+                        window.isSelectingPhotosRef.current = true;
+                      }
                       console.log("[UI] Photo add button clicked");
                       if (fileInputRef.current) {
                         fileInputRef.current.click();
@@ -4462,10 +4465,15 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       }, [activeTab, activePostId, activeComPostId, activeUser, writeOpen, dbLoaded]);
 
       useEffect(() => {
+        window.isSelectingPhotosRef = isSelectingPhotos;
         const handlePopState = (event) => {
           if (isSelectingPhotos.current) {
             console.log("[Navigation] popstate ignored because app is currently returning from native gallery.");
-            isSelectingPhotos.current = false;
+            setTimeout(() => { isSelectingPhotos.current = false; }, 1200);
+            return;
+          }
+          if (writeOpen) {
+            console.log("[Navigation] popstate ignored because write sheet is open.");
             return;
           }
           if (event.state) {
@@ -4481,7 +4489,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
         window.addEventListener("popstate", handlePopState);
         return () => window.removeEventListener("popstate", handlePopState);
-      }, []);
+      }, [writeOpen]);
 
       // Firebase Auth 상태 리스너 등록 (단 한 번 등록되어 생명주기 관리)
       useEffect(() => {
