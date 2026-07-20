@@ -6163,6 +6163,10 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
               <i className="fa-solid fa-magnifying-glass"></i>
               <span>검색</span>
             </button>
+            <button className={`bottom-nav-item ${activeTab === 'map' ? 'active' : ''}`} onClick={() => setActiveTab('map')}>
+              <i className="fa-solid fa-map-location-dot text-emerald-500"></i>
+              <span className="text-emerald-600 font-bold">지도</span>
+            </button>
             <button className={`bottom-nav-item ${(activeTab === 'community' || activeTab === 'community_detail') ? 'active' : ''}`} onClick={() => { setActiveTab('community'); setActiveComPostId(null); }}>
               <i className="fa-solid fa-comments"></i>
               <span>커뮤니티</span>
