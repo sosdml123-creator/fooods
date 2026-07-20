@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { db } from "../firebase";
-import { collection, query, onSnapshot, doc, updateDoc, addDoc } from "firebase/firestore";
+import { collection, query, onSnapshot, doc, updateDoc, addDoc, getDocs, where } from "firebase/firestore";
 import { Search, UserPlus, Shield, ShieldCheck, UserMinus, AlertTriangle } from "lucide-react";
 
 export default function Admins() {
@@ -47,14 +47,27 @@ export default function Admins() {
 
     setIsAdding(true);
     try {
-      // Find the user by email in our users collection
-      const q = query(collection(db, "users"));
-      // Fetch all docs and find match (since email index might not be simple on client)
-      const snap = await collection(db, "users");
-      // For simplicity, we can set the role field for the user document
-      // We will perform a lookup or set directly
-      // Realistically we update their document
-      alert("새 관리자 임명이 요청되었습니다 (관리자 역할 지정).");
+      // Firestore에서 이메일로 사용자 검색
+      const usersSnap = await getDocs(query(collection(db, "users"), where("email", "==", newAdminEmail.trim())));
+      if (usersSnap.empty) {
+        alert("해당 이메일로 가입된 회원을 찾을 수 없습니다.");
+        return;
+      }
+
+      const targetUser = usersSnap.docs[0];
+      const targetUid = targetUser.id;
+      const roleLower = newAdminRole.toLowerCase();
+
+      await updateDoc(doc(db, "users", targetUid), { role: roleLower });
+
+      await addDoc(collection(db, "adminLogs"), {
+        action: "관리자 신규 임명",
+        detail: `대상: ${targetUser.data().name || newAdminEmail} (${targetUid}) | 부여 권한: ${newAdminRole}`,
+        targetId: targetUid,
+        createdAt: new Date().toISOString()
+      });
+
+      alert(`${targetUser.data().name || newAdminEmail} 님에게 [${newAdminRole}] 권한이 부여되었습니다.`);
       setNewAdminEmail("");
     } catch (err) {
       alert("추가 실패: " + err.message);

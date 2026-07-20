@@ -3,6 +3,11 @@ import { db } from "../firebase";
 import { collection, query, onSnapshot, addDoc, doc, updateDoc, getDocs } from "firebase/firestore";
 import { Send, Clock, User, AlertTriangle, ShieldCheck, History } from "lucide-react";
 
+// API URL: 개발환경은 localhost, 프로덕션은 실제 서버
+const API_BASE = typeof window !== "undefined" && window.location.hostname === "localhost"
+  ? "http://localhost:4000"
+  : "https://www.myplating.kr";
+
 export default function Push() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -87,7 +92,7 @@ export default function Push() {
         
         for (const uid of targetUids) {
           try {
-            const response = await fetch("http://localhost:4000/api/v1/admin/send-push", {
+            const response = await fetch(`${API_BASE}/api/v1/admin/send-push`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -158,7 +163,7 @@ export default function Push() {
 
       for (const uid of targetUids) {
         try {
-          const response = await fetch("http://localhost:4000/api/v1/admin/send-push", {
+          const response = await fetch(`${API_BASE}/api/v1/admin/send-push`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
