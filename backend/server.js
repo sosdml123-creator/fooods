@@ -205,7 +205,7 @@ app.get(["/api/naver-geocode", "/api/v1/naver-geocode"], async (req, res) => {
   const query = req.query.query;
   if (!query) return res.status(400).json({ success: false, message: "검색어가 필요합니다." });
 
-  const clientId = process.env.NAVER_CLIENT_ID || "m16cxm6bi2";
+  const clientId = process.env.NAVER_CLIENT_ID || "u35nq8hdr1";
   const clientSecret = process.env.NAVER_CLIENT_SECRET || "";
 
   try {

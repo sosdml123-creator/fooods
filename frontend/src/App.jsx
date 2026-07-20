@@ -2731,7 +2731,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       const mapRef = useRef(null);
       const [mapLoaded, setMapLoaded] = useState(false);
       const [authError, setAuthError] = useState(false);
-      const clientId = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || "m16cxm6bi2";
+      const clientId = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || "u35nq8hdr1";
 
       useEffect(() => {
         window.onNaverMapAuthError = function() {
