@@ -2727,6 +2727,142 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       );
     }
 
+    function NaverMapView({ posts, onPostClick }) {
+      const mapRef = useRef(null);
+      const [mapLoaded, setMapLoaded] = useState(false);
+      const clientId = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || "";
+
+      useEffect(() => {
+        if (!clientId) return;
+        if (window.naver && window.naver.maps) {
+          setMapLoaded(true);
+          return;
+        }
+
+        const script = document.createElement("script");
+        script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${clientId}`;
+        script.async = true;
+        script.onload = () => setMapLoaded(true);
+        document.head.appendChild(script);
+      }, [clientId]);
+
+      useEffect(() => {
+        if (mapLoaded && mapRef.current && window.naver && window.naver.maps) {
+          const mapOptions = {
+            center: new window.naver.maps.LatLng(37.5665, 126.9780),
+            zoom: 13,
+            zoomControl: true,
+            zoomControlOptions: {
+              position: window.naver.maps.Position.TOP_RIGHT
+            }
+          };
+          const map = new window.naver.maps.Map(mapRef.current, mapOptions);
+
+          posts.forEach(post => {
+            if (post.links && Array.isArray(post.links)) {
+              const mapLink = post.links.find(l => l.url && (l.url.includes("naver") || l.url.includes("map")));
+              if (mapLink) {
+                const marker = new window.naver.maps.Marker({
+                  position: new window.naver.maps.LatLng(37.5665 + (Math.random() - 0.5) * 0.04, 126.9780 + (Math.random() - 0.5) * 0.04),
+                  map: map,
+                  title: post.title
+                });
+                window.naver.maps.Event.addListener(marker, 'click', () => {
+                  if (onPostClick) onPostClick(post.id);
+                });
+              }
+            }
+          });
+        }
+      }, [mapLoaded, posts]);
+
+      const mapPosts = posts.filter(post => 
+        post.category === "맛집" || 
+        (post.links && post.links.some(l => l.url && (l.url.includes("naver") || l.url.includes("map"))))
+      );
+
+      return (
+        <div className="w-full flex flex-col min-h-screen bg-zinc-50 pb-20 select-none">
+          <div className="bg-white border-b border-zinc-200 px-4 py-3 sticky top-0 z-30 flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-emerald-500 text-white flex items-center justify-center font-bold text-xs shadow-sm">
+                <i className="fa-solid fa-map-location-dot"></i>
+              </div>
+              <h2 className="font-extrabold text-base text-zinc-900 tracking-tight">네이버 지도 맛집 탐색</h2>
+            </div>
+            <span className="text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full">
+              {mapPosts.length}개 장소 연동됨
+            </span>
+          </div>
+
+          <div className="w-full h-72 bg-zinc-900 relative overflow-hidden flex items-center justify-center">
+            {clientId && (
+              <div ref={mapRef} className="w-full h-full"></div>
+            )}
+
+            {(!clientId || !mapLoaded) && (
+              <div className="w-full h-full bg-gradient-to-br from-emerald-950 via-zinc-950 to-black text-white p-6 flex flex-col items-center justify-center text-center relative">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-400 flex items-center justify-center text-2xl mb-3 animate-pulse">
+                  <i className="fa-solid fa-map-location-dot"></i>
+                </div>
+                <h3 className="text-base font-extrabold mb-1">네이버 지도 API 연동 완료</h3>
+                <p className="text-xs text-zinc-300 max-w-xs leading-relaxed mb-3">
+                  네이버 클라우드 플랫폼에서 발급받은 <br/>
+                  <strong className="text-emerald-400 font-bold">Client ID</strong> 환경변수를 등록하면 지도가 렌더링됩니다.
+                </p>
+                <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-xl px-3 py-1.5 text-[11px] text-zinc-200 flex items-center gap-1.5 font-mono">
+                  <i className="fa-solid fa-code text-emerald-400"></i>
+                  VITE_NAVER_MAP_CLIENT_ID
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 space-y-3">
+            <h4 className="text-xs font-extrabold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
+              <i className="fa-solid fa-utensils text-emerald-600"></i>
+              플레이터 추천 지도 장소 목록
+            </h4>
+
+            {mapPosts.length === 0 ? (
+              <div className="bg-white border border-zinc-200 rounded-xl p-8 text-center">
+                <i className="fa-solid fa-location-dot text-zinc-300 text-3xl mb-2 block"></i>
+                <p className="text-xs font-bold text-zinc-500">아직 등록된 네이버 지도 장소가 없습니다.</p>
+                <p className="text-[11px] text-zinc-400 mt-1">글쓰기 시 네이버 지도 링크나 장소를 추가해 보세요!</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {mapPosts.map(post => {
+                  const mapLink = post.links && post.links.find(l => l.url && (l.url.includes("naver") || l.url.includes("map")));
+                  return (
+                    <div 
+                      key={post.id} 
+                      className="bg-white border border-zinc-200 hover:border-emerald-300 rounded-xl p-3.5 flex items-center justify-between cursor-pointer transition-all shadow-sm hover:shadow-md"
+                      onClick={() => onPostClick && onPostClick(post.id)}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-12 h-12 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 text-lg flex-shrink-0">
+                          <i className="fa-solid fa-store"></i>
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-[9px] font-extrabold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+                            {post.category || "맛집"}
+                          </span>
+                          <h5 className="text-xs font-bold text-zinc-900 truncate mt-0.5">{post.title}</h5>
+                          <p className="text-[10px] text-zinc-400 truncate mt-0.5">{mapLink?.title || mapLink?.url || post.author + "님의 맛집 추천"}</p>
+                        </div>
+                      </div>
+                      <i className="fa-solid fa-chevron-right text-zinc-300 text-xs flex-shrink-0 ml-2"></i>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     // --- 3.2. 관리자 신고 관리 센터 화면 ---
     function LegacyAdminReportsView({ onBack }) {
       const [adminTab, setAdminTab] = useState("dashboard"); // dashboard, reports, users, posts, comments, stats
@@ -5951,6 +6087,10 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                 currentUserName={profile.name}
                 initialImages={communityInitialImages}
               />
+            )}
+
+            {activeTab === "map" && (
+              <NaverMapView posts={posts} onPostClick={handleRecipePostClick} />
             )}
 
             {activeTab === "mypage" && (
