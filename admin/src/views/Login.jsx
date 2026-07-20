@@ -40,8 +40,8 @@ export default function Login() {
       <div className="w-full max-w-[400px] bg-[#161b22] border border-[#30363d] rounded-2xl p-8 shadow-2xl relative z-10">
         {/* Brand header */}
         <div className="text-center mb-8">
-          <div className="w-12 h-12 rounded-xl bg-brand-green-500/10 border border-brand-green-500/20 flex items-center justify-center mx-auto mb-4">
-            <Lock className="w-6 h-6 text-brand-green-500" />
+          <div className="w-14 h-14 rounded-2xl bg-black border border-[#30363d] flex items-center justify-center mx-auto mb-4 shadow-xl overflow-hidden">
+            <img src="/logo.svg" className="w-full h-full object-cover" alt="PLAYTING Logo" />
           </div>
           <h1 className="text-2xl font-black tracking-wider text-white">PLAYTING ADMIN</h1>
           <p className="text-xs text-zinc-400 mt-1.5">플레이팅 서비스 관리자 로그인</p>

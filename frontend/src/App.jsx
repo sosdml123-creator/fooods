@@ -2537,12 +2537,10 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
           {/* 중앙 영역 */}
           <div className="w-full max-w-sm flex flex-col items-center my-auto text-center">
-            {/* 브랜드 로고 (스플래시 화면과 100% 동일 포크 로고 적용) */}
+            {/* 브랜드 로고 (공식 포크 로고 적용) */}
             <div className="flex flex-col items-center justify-center mb-8">
-              <div className="w-14 h-14 rounded-2xl bg-zinc-950 flex items-center justify-center text-white text-2xl shadow-xl">
-                <i className="fa-solid fa-utensils"></i>
-              </div>
-              <h1 className="text-2xl font-black tracking-tight text-zinc-950 mt-3">플레이팅</h1>
+              <img src="/logo.svg" alt="PLAYTING Logo" className="w-16 h-16 rounded-2xl shadow-xl mb-3" />
+              <h1 className="text-2xl font-black tracking-tight text-zinc-950">플레이팅</h1>
             </div>
 
             {/* 3초만에 빠른 회원가입 말풍선 배지 */}
@@ -5485,10 +5483,8 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       if (appInitializing) {
         return (
           <div className="flex flex-col items-center justify-center min-h-screen bg-white text-zinc-900 px-6 select-none">
-            <div className="w-14 h-14 rounded-2xl bg-zinc-950 flex items-center justify-center text-white text-2xl shadow-xl">
-              <i className="fa-solid fa-utensils"></i>
-            </div>
-            <h1 className="text-2xl font-black text-zinc-950 tracking-tight mt-3 mb-6">플레이팅</h1>
+            <img src="/logo.svg" alt="PLAYTING Logo" className="w-16 h-16 rounded-2xl shadow-xl mb-3" />
+            <h1 className="text-2xl font-black text-zinc-950 tracking-tight mb-6">플레이팅</h1>
             <div className="w-6 h-6 border-2 border-zinc-200 border-t-zinc-950 rounded-full animate-spin"></div>
           </div>
         );

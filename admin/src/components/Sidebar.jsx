@@ -48,7 +48,7 @@ export default function Sidebar({ currentView, setCurrentView }) {
       {/* Sidebar Header Brand */}
       <div className="h-16 flex items-center px-6 border-b border-[#30363d]">
         <span className="text-lg font-black tracking-wider text-white flex items-center gap-2">
-          <img src="/admin_logo.png" className="w-6 h-6 rounded-md object-cover border border-[#30363d]" alt="" />
+          <img src="/logo.svg" className="w-7 h-7 rounded-lg object-cover border border-[#30363d]" alt="PLAYTING Logo" />
           PLAYTING ADMIN
         </span>
       </div>
