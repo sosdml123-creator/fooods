@@ -2324,7 +2324,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
               <h2>새 포스팅 등록</h2>
               <button type="button" onClick={onClose} aria-label="닫기">×</button>
             </header>
-            <form onSubmit={submit}>
+            <div className="sheet-form space-y-3">
               <div className="flex gap-2 overflow-x-auto mb-4 py-1.5 border-b border-zinc-100 items-center">
                 {images.map((img, idx) => (
                   <div key={idx} className="relative w-16 h-16 flex-shrink-0">
@@ -2383,8 +2383,6 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                 />
               </label>
 
-
-
               <div className="link-editor-list">
                 <div className="text-xs font-bold text-zinc-500 mb-2">
                   <i className="fa-solid fa-cart-shopping mr-1"></i> 소개된 재료/도구/지도 링크 추가 (네이버지도, 쇼핑몰 등)
@@ -2436,10 +2434,10 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
               <button className="secondary full border border-dashed text-xs" type="button" onClick={() => setLinks([...links, { id: generateId(), url: "" }])}>
                 + 구매 상품 / 지도 장소 링크 추가
               </button>
-              <button className="primary full mt-4 text-xs font-bold" type="submit" disabled={loading}>
+              <button className="primary full mt-4 text-xs font-bold" type="button" onClick={submit} disabled={loading}>
                 {loading ? "사진 최적화 및 등록 중..." : "글 등록 및 수익 모델 연동"}
               </button>
-            </form>
+            </div>
           </section>
         </div>
       );
