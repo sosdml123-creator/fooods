@@ -2537,12 +2537,19 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
           {/* 중앙 영역 */}
           <div className="w-full max-w-sm flex flex-col items-center my-auto text-center">
-            {/* 브랜드 로고 (공식 포크 심볼 적용) */}
-            <div className="flex items-center justify-center gap-3 mb-8">
-              <div className="w-11 h-11 rounded-2xl bg-zinc-950 flex items-center justify-center text-white text-xl font-bold shadow-md">
+            {/* 브랜드 로고 (스플래시 화면과 100% 동일 포크 로고 적용) */}
+            <div className="flex flex-col items-center justify-center mb-8">
+              <div className="w-14 h-14 rounded-2xl bg-zinc-950 flex items-center justify-center text-white text-2xl shadow-xl">
                 <i className="fa-solid fa-utensils"></i>
               </div>
-              <h1 className="text-3xl font-black tracking-tight text-zinc-950">플레이팅</h1>
+              <h1 className="text-2xl font-black tracking-tight text-zinc-950 mt-3">플레이팅</h1>
+            </div>
+
+            {/* 3초만에 빠른 회원가입 말풍선 배지 */}
+            <div className="relative mb-2">
+              <div className="bg-white border border-zinc-200 shadow-sm rounded-full px-3.5 py-1 text-[11px] font-bold text-zinc-700 flex items-center gap-1.5 animate-bounce">
+                <span className="text-amber-500 font-extrabold">⚡</span> 3초만에 빠른 회원가입
+              </div>
             </div>
 
             {/* 카카오톡으로 계속하기 메인 버튼 */}
@@ -3823,15 +3830,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         resolve: null
       });
 
-      const hasShownAutoLoginModalRef = useRef(false);
 
-      // 앱 최초 진입 시 비로그인 상태이면 회원가입/로그인 모달창 자동 팝업
-      useEffect(() => {
-        if (!appInitializing && !isLoggedIn && !hasShownAutoLoginModalRef.current) {
-          hasShownAutoLoginModalRef.current = true;
-          setLoginOpen(true);
-        }
-      }, [appInitializing, isLoggedIn]);
 
       // 운영 전환을 위한 1회성 로컬 캐시(IndexedDB 및 localStorage) 강제 클렌징
       useEffect(() => {
@@ -5486,17 +5485,17 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       if (appInitializing) {
         return (
           <div className="flex flex-col items-center justify-center min-h-screen bg-white text-zinc-900 px-6 select-none">
-            <div className="w-24 h-24 rounded-3xl bg-zinc-950 flex items-center justify-center text-white text-5xl mb-4 shadow-xl">
+            <div className="w-14 h-14 rounded-2xl bg-zinc-950 flex items-center justify-center text-white text-2xl shadow-xl">
               <i className="fa-solid fa-utensils"></i>
             </div>
-            <h1 className="text-xl font-bold text-zinc-900 tracking-tight mb-8">플레이팅</h1>
-            <div className="w-6 h-6 border-2 border-zinc-200 border-t-zinc-600 rounded-full animate-spin"></div>
+            <h1 className="text-2xl font-black text-zinc-950 tracking-tight mt-3 mb-6">플레이팅</h1>
+            <div className="w-6 h-6 border-2 border-zinc-200 border-t-zinc-950 rounded-full animate-spin"></div>
           </div>
         );
       }
 
-      // 2. 게이트 탭일 때만 LandingAuthGate 전면 노출 (기본 진입 시 피드 및 커뮤니티 사진들 즉시 노출)
-      if (!isLoggedIn && activeTab === "landing") {
+      // 2. 로그인 안 되어 있으면 회원가입/로그인 해야만 앱으로 진입할 수 있는 전면 Auth Gate 노출
+      if (!isLoggedIn) {
         return (
           <LandingAuthGate 
             onLogin={handleLogin}
