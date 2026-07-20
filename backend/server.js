@@ -179,6 +179,7 @@ app.get(["/api/link-meta", "/api/v1/link-meta"], async (req, res) => {
       success: true,
       title: meta.title,
       image: meta.image,
+      description: meta.description || "",
       price: meta.price,
       brand: meta.brand,
       host: meta.host
@@ -188,12 +189,16 @@ app.get(["/api/link-meta", "/api/v1/link-meta"], async (req, res) => {
     let host = "link";
     try { host = new URL(targetUrl).hostname.replace("www.", ""); } catch(e) {}
     if (host.includes("coupang")) host = "쿠팡";
+    else if (host.includes("naver") || host.includes("map")) host = "네이버 지도";
     return res.json({
       success: true,
-      title: host === "쿠팡" ? "쿠팡 추천 상품 정보" : `상세 링크 (${host})`,
+      title: host === "쿠팡" ? "쿠팡 추천 상품" : (host === "네이버 지도" ? "네이버 지도 추천 장소" : `상세 링크 (${host})`),
       image: host === "쿠팡" 
         ? "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&q=80&w=400" 
-        : "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+        : (host === "네이버 지도" 
+          ? "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=400"
+          : "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400"),
+      description: "클릭하면 해당 링크로 바로 이동합니다.",
       price: "",
       host
     });
@@ -231,7 +236,7 @@ async function fetchDeepLinkMeta(initialUrl) {
   let finalUrl = initialUrl;
 
   const headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/605.1.15",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
     "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
     "Cache-Control": "no-cache"
@@ -293,6 +298,7 @@ async function fetchDeepLinkMeta(initialUrl) {
 
   let title = "";
   let image = "";
+  let description = "";
   let price = "";
   let brand = "";
 
@@ -304,12 +310,13 @@ async function fetchDeepLinkMeta(initialUrl) {
         const jsonText = m.replace(/<script[^>]*>/i, "").replace(/<\/script>/i, "").trim();
         try {
           const data = JSON.parse(jsonText);
-          const target = Array.isArray(data) ? data.find(item => item["@type"] === "Product") || data[0] : data;
-          if (target && (target["@type"] === "Product" || target.name)) {
+          const target = Array.isArray(data) ? data.find(item => item["@type"] === "Product" || item["@type"] === "Restaurant") || data[0] : data;
+          if (target && (target["@type"] === "Product" || target["@type"] === "Restaurant" || target.name)) {
             if (!title && target.name) title = target.name;
             if (!image && target.image) {
               image = Array.isArray(target.image) ? target.image[0] : (target.image.url || target.image);
             }
+            if (!description && target.description) description = target.description;
             if (!price && target.offers) {
               const offer = Array.isArray(target.offers) ? target.offers[0] : target.offers;
               if (offer && offer.price) price = String(offer.price);
@@ -337,6 +344,14 @@ async function fetchDeepLinkMeta(initialUrl) {
     title = productTitle.trim();
   } else if (!title && pageTitle && !pageTitle.includes("Deeplink Redirect")) {
     title = pageTitle.trim();
+  }
+
+  // description 파싱
+  const ogDesc = (finalHtml.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i) ||
+                  finalHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:description["']/i) ||
+                  finalHtml.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i))?.[1];
+  if (ogDesc && !ogDesc.includes("Deeplink Redirect")) {
+    description = ogDesc.trim();
   }
 
   // 이미지 우선순위: 1. og:image -> 2. Product image (완료) -> 3. twitter:image
@@ -377,6 +392,16 @@ async function fetchDeepLinkMeta(initialUrl) {
       .replace(/\s*\|\s*쿠팡$/i, "")
       .replace(/^\[네이버\s*지도\]\s*/i, "")
       .replace(/\s*-\s*네이버\s*지도$/i, "")
+      .trim();
+  }
+
+  if (description) {
+    description = description
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
       .trim();
   }
 

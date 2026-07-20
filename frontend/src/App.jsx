@@ -265,21 +265,34 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       };
     }
 
-    // ── 2.2 상품 링크 미리보기 및 자가치유(Self-healing) 카드 컴포넌트 ──
+    // ── 2.2 상품/장소 링크 미리보기 및 자가치유(Self-healing) 카드 컴포넌트 ──
     function ProductLinkItemCard({ link }) {
       const isNaverMap = link.url && (link.url.includes("naver.me") || link.url.includes("map.naver") || link.url.includes("place.naver") || (link.url.includes("naver") && link.url.includes("map")) || link.host === "네이버 지도");
 
+      const defaultImage = isNaverMap 
+        ? "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=400"
+        : (link.url && link.url.includes("coupang") 
+          ? "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&q=80&w=400"
+          : "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400");
+
       const [data, setData] = useState({
-        title: link.title || (isNaverMap ? "네이버 지도 장소" : "상세 링크"),
-        image: link.image || "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+        title: link.title || (isNaverMap ? "네이버 지도 맛집 장소" : "상세 추천 링크"),
+        image: link.image || defaultImage,
+        description: link.description || (isNaverMap ? "네이버 지도로 매장 정보 및 위치 보기" : ""),
         price: link.price || "",
-        host: link.host || (isNaverMap ? "네이버 지도" : (link.url && link.url.includes("coupang") ? "쿠팡" : "링크")),
+        host: link.host || (isNaverMap ? "네이버 지도" : (link.url && link.url.includes("coupang") ? "쿠팡" : "외부 링크")),
         url: link.url
       });
 
+      const [imgSrc, setImgSrc] = useState(data.image);
+
+      useEffect(() => {
+        setImgSrc(data.image);
+      }, [data.image]);
+
       useEffect(() => {
         const isBadTitle = !link.title || link.title.includes("Deeplink Redirect") || link.title === "상세 링크" || link.title === "Deeplink";
-        if (isBadTitle || !link.price) {
+        if (isBadTitle || !link.image || !link.description) {
           if (link.url && link.url.startsWith("http")) {
             fetch(`/api/link-meta?url=${encodeURIComponent(link.url)}`)
               .then(res => res.json())
@@ -287,8 +300,9 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                 if (res.success && res.title && !res.title.includes("Deeplink Redirect")) {
                   setData(prev => ({
                     ...prev,
-                    title: res.title,
+                    title: res.title || prev.title,
                     image: res.image || prev.image,
+                    description: res.description || prev.description,
                     price: res.price || prev.price,
                     host: res.host || prev.host
                   }));
@@ -297,44 +311,69 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
               .catch(err => console.error("Self-healing link meta error:", err));
           }
         }
-      }, [link.url, link.title, link.price]);
+      }, [link.url, link.title, link.image]);
 
-      if (isNaverMap || data.host === "네이버 지도") {
-        return (
-          <a className="product-preview bg-emerald-50/50 border border-emerald-200/80 rounded-xl p-2.5 flex items-center gap-3 hover:bg-emerald-50 transition-all text-left group my-1" href={data.url} target="_blank" rel="noopener noreferrer">
-            <div className="w-12 h-12 rounded-lg bg-emerald-500/10 border border-emerald-200/80 overflow-hidden flex-shrink-0 flex items-center justify-center text-emerald-600 text-xl group-hover:scale-105 transition-transform">
-              <i className="fa-solid fa-location-dot"></i>
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 mb-0.5">
-                <span className="text-[9px] font-extrabold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-200/60">
-                  <i className="fa-solid fa-map-location-dot text-[8px] mr-0.5"></i> 네이버 지도
-                </span>
-              </div>
-              <strong className="text-xs font-bold text-zinc-900 block truncate leading-tight group-hover:text-emerald-700 transition-colors">{data.title}</strong>
-              <span className="text-[9px] text-emerald-600/80 block truncate mt-0.5 font-medium">네이버 지도로 장소 및 위치 보기</span>
-            </div>
-            <i className="fa-solid fa-arrow-up-right-from-square text-emerald-500 text-xs mr-1"></i>
-          </a>
-        );
-      }
+      const isMap = isNaverMap || data.host === "네이버 지도";
 
       return (
-        <a className="product-preview bg-white border border-zinc-200 rounded-xl p-2.5 flex items-center gap-3 hover:bg-zinc-50 transition-colors text-left" href={data.url} target="_blank" rel="noopener noreferrer">
-          <div className="w-14 h-14 rounded-lg bg-zinc-100 overflow-hidden flex-shrink-0 border border-zinc-150">
-            <img src={data.image} alt="" className="w-full h-full object-cover" />
+        <a 
+          className={`product-preview my-1.5 rounded-2xl p-3 flex items-center gap-3.5 border transition-all text-left group shadow-sm hover:shadow-md ${
+            isMap 
+              ? "bg-emerald-50/60 border-emerald-200/80 hover:bg-emerald-50 hover:border-emerald-300" 
+              : "bg-white border-zinc-200 hover:border-orange-300 hover:bg-orange-50/20"
+          }`} 
+          href={data.url} 
+          target="_blank" 
+          rel="noopener noreferrer"
+        >
+          {/* [좌측/상단]: 상품 또는 식당 대표 썸네일 이미지 */}
+          <div className="w-16 h-16 rounded-xl bg-zinc-100 overflow-hidden flex-shrink-0 border border-zinc-200/80 relative shadow-inner">
+            <img 
+              src={imgSrc} 
+              alt={data.title} 
+              onError={() => setImgSrc(defaultImage)}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+            />
+            {isMap && (
+              <div className="absolute inset-0 bg-emerald-950/20 flex items-center justify-center text-white text-base">
+                <i className="fa-solid fa-location-dot drop-shadow"></i>
+              </div>
+            )}
           </div>
+
+          {/* [우측/하단]: 상세 브랜드, 상품명/식당이름, 가격 및 카드 설명 */}
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 mb-0.5">
-              <span className="text-[9px] font-extrabold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-100">{data.host || "쿠팡"}</span>
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded border ${
+                isMap 
+                  ? "text-emerald-700 bg-emerald-100 border-emerald-200/80" 
+                  : "text-orange-700 bg-orange-100/80 border-orange-200/80"
+              }`}>
+                {isMap ? (
+                  <><i className="fa-solid fa-map-location-dot text-[8px] mr-1"></i>네이버 지도</>
+                ) : (
+                  data.host || "추천 상품"
+                )}
+              </span>
               {data.price && (
-                <span className="text-[11px] font-extrabold text-zinc-950">{data.price}</span>
+                <span className="text-xs font-extrabold text-zinc-950 bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">
+                  {data.price.includes("원") ? data.price : `${parseInt(data.price).toLocaleString()}원`}
+                </span>
               )}
             </div>
-            <strong className="text-xs font-bold text-zinc-900 block truncate leading-tight">{data.title}</strong>
-            <span className="text-[9px] text-zinc-400 block truncate mt-0.5">{data.url}</span>
+
+            <strong className="text-xs font-bold text-zinc-900 block truncate leading-snug group-hover:text-emerald-700 transition-colors">
+              {data.title}
+            </strong>
+
+            <p className="text-[10px] text-zinc-500 block truncate mt-0.5 font-medium leading-tight">
+              {data.description || (isMap ? "네이버 지도로 위치 및 매장 상세정보 보기" : data.url)}
+            </p>
           </div>
-          <i className="fa-solid fa-chevron-right text-zinc-300 text-xs mr-1"></i>
+
+          <div className="flex-shrink-0 pl-1 text-zinc-400 group-hover:text-emerald-600 transition-colors">
+            <i className={`fa-solid ${isMap ? 'fa-arrow-up-right-from-square text-emerald-500' : 'fa-chevron-right'} text-xs`}></i>
+          </div>
         </a>
       );
     }
