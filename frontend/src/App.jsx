@@ -267,11 +267,13 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
     // ── 2.2 상품 링크 미리보기 및 자가치유(Self-healing) 카드 컴포넌트 ──
     function ProductLinkItemCard({ link }) {
+      const isNaverMap = link.url && (link.url.includes("naver.me") || link.url.includes("map.naver") || link.url.includes("place.naver") || (link.url.includes("naver") && link.url.includes("map")) || link.host === "네이버 지도");
+
       const [data, setData] = useState({
-        title: link.title || "상세 링크",
+        title: link.title || (isNaverMap ? "네이버 지도 장소" : "상세 링크"),
         image: link.image || "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
         price: link.price || "",
-        host: link.host || (link.url && link.url.includes("coupang") ? "쿠팡" : "링크"),
+        host: link.host || (isNaverMap ? "네이버 지도" : (link.url && link.url.includes("coupang") ? "쿠팡" : "링크")),
         url: link.url
       });
 
@@ -296,6 +298,26 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           }
         }
       }, [link.url, link.title, link.price]);
+
+      if (isNaverMap || data.host === "네이버 지도") {
+        return (
+          <a className="product-preview bg-emerald-50/50 border border-emerald-200/80 rounded-xl p-2.5 flex items-center gap-3 hover:bg-emerald-50 transition-all text-left group my-1" href={data.url} target="_blank" rel="noopener noreferrer">
+            <div className="w-12 h-12 rounded-lg bg-emerald-500/10 border border-emerald-200/80 overflow-hidden flex-shrink-0 flex items-center justify-center text-emerald-600 text-xl group-hover:scale-105 transition-transform">
+              <i className="fa-solid fa-location-dot"></i>
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <span className="text-[9px] font-extrabold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-200/60">
+                  <i className="fa-solid fa-map-location-dot text-[8px] mr-0.5"></i> 네이버 지도
+                </span>
+              </div>
+              <strong className="text-xs font-bold text-zinc-900 block truncate leading-tight group-hover:text-emerald-700 transition-colors">{data.title}</strong>
+              <span className="text-[9px] text-emerald-600/80 block truncate mt-0.5 font-medium">네이버 지도로 장소 및 위치 보기</span>
+            </div>
+            <i className="fa-solid fa-arrow-up-right-from-square text-emerald-500 text-xs mr-1"></i>
+          </a>
+        );
+      }
 
       return (
         <a className="product-preview bg-white border border-zinc-200 rounded-xl p-2.5 flex items-center gap-3 hover:bg-zinc-50 transition-colors text-left" href={data.url} target="_blank" rel="noopener noreferrer">
@@ -2025,15 +2047,20 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
       function handleUrlChange(id, value) {
         const parsed = parsePastedMapText(value);
-        if (parsed.url) {
+        const urlToUse = parsed.url || value;
+        const isNaver = urlToUse.includes("naver.me") || urlToUse.includes("map.naver") || urlToUse.includes("place.naver") || (urlToUse.includes("naver") && urlToUse.includes("map"));
+        
+        if (urlToUse) {
           setLinks(links.map(item => item.id === id ? { 
             ...item, 
-            url: parsed.url, 
+            url: urlToUse, 
+            host: isNaver ? "네이버 지도" : item.host,
+            title: parsed.name ? (isNaver ? `[네이버 지도] ${parsed.name}` : parsed.name) : (isNaver ? "네이버 지도 위치 장소" : item.title),
             parsedName: parsed.name, 
             parsedAddress: parsed.address 
           } : item));
           
-          if (parsed.name) {
+          if (parsed.name || isNaver) {
             setCategory("맛집");
           }
         } else {

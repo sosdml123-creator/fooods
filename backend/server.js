@@ -265,7 +265,13 @@ async function fetchDeepLinkMeta(initialUrl) {
 
   let host = "link";
   try {
-    host = new URL(finalUrl).hostname.replace("www.", "");
+    const parsed = new URL(finalUrl);
+    host = parsed.hostname.replace("www.", "");
+    if (host.includes("naver.me") || host.includes("map.naver") || host.includes("place.naver") || initialUrl.includes("naver.me")) {
+      host = "네이버 지도";
+    } else if (host.includes("coupang")) {
+      host = "쿠팡";
+    }
   } catch(e) {}
 
   let title = "";
