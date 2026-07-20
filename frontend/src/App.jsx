@@ -2734,45 +2734,32 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       const clientId = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || "m16cxm6bi2";
 
       useEffect(() => {
-        const scriptUrl = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${clientId}`;
-
-        console.group("🗺️ [Naver Map SDK Diagnostics]");
-        console.log("📍 location.href:", window.location.href);
-        console.log("🌐 userAgent:", navigator.userAgent);
-        console.log("🔑 Active Client ID:", clientId);
-        console.log("📜 Script URL:", scriptUrl);
-        console.log("🔍 window.naver:", !!window.naver, "| window.naver.maps:", !!(window.naver && window.naver.maps));
-        console.groupEnd();
-
         window.onNaverMapAuthError = function() {
           setAuthError(true);
         };
 
-        if (window.naver && window.naver.maps) {
-          setMapLoaded(true);
-          return;
-        }
+        let intervalId = null;
+        let attempts = 0;
 
-        const existingScript = document.querySelector(`script[src*="oapi.map.naver.com"]`);
-        if (existingScript) {
+        const checkNaverMap = () => {
+          attempts++;
           if (window.naver && window.naver.maps) {
             setMapLoaded(true);
-          } else {
-            existingScript.addEventListener("load", () => setMapLoaded(true));
-            existingScript.addEventListener("error", () => setAuthError(true));
-            setTimeout(() => {
-              if (window.naver && window.naver.maps) setMapLoaded(true);
-            }, 500);
+            if (intervalId) clearInterval(intervalId);
+          } else if (attempts > 50) {
+            if (intervalId) clearInterval(intervalId);
           }
-          return;
+        };
+
+        if (window.naver && window.naver.maps) {
+          setMapLoaded(true);
+        } else {
+          intervalId = setInterval(checkNaverMap, 100);
         }
 
-        const script = document.createElement("script");
-        script.src = scriptUrl;
-        script.async = true;
-        script.onload = () => setMapLoaded(true);
-        script.onerror = () => setAuthError(true);
-        document.head.appendChild(script);
+        return () => {
+          if (intervalId) clearInterval(intervalId);
+        };
       }, [clientId]);
 
       useEffect(() => {
