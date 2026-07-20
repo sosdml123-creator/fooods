@@ -3823,6 +3823,16 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         resolve: null
       });
 
+      const hasShownAutoLoginModalRef = useRef(false);
+
+      // 앱 최초 진입 시 비로그인 상태이면 회원가입/로그인 모달창 자동 팝업
+      useEffect(() => {
+        if (!appInitializing && !isLoggedIn && !hasShownAutoLoginModalRef.current) {
+          hasShownAutoLoginModalRef.current = true;
+          setLoginOpen(true);
+        }
+      }, [appInitializing, isLoggedIn]);
+
       // 운영 전환을 위한 1회성 로컬 캐시(IndexedDB 및 localStorage) 강제 클렌징
       useEffect(() => {
         const hasCleaned = localStorage.getItem("prod_cleansing_done_v2");
