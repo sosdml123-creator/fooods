@@ -22,7 +22,16 @@
   <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=m16cxm6bi2"></script>
   <script>
     window.navermap_authFailure = function() {
-      console.warn("네이버 지도 API 인증 실패: Web 서비스 URL을 NCP 콘솔에 등록해야 합니다.");
+      console.error("🚨 [Naver Maps Auth Error 200] 네이버 지도 API 인증 실패 (Authentication Failed)");
+      console.error("📍 [Diagnostic Info] location.href:", window.location.href);
+      console.error("🌐 [Diagnostic Info] navigator.userAgent:", navigator.userAgent);
+      console.error("🔑 [Diagnostic Info] Client ID:", "m16cxm6bi2");
+      console.error("📜 [Diagnostic Info] maps.js URL:", "https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=m16cxm6bi2");
+      console.error("❓ [Diagnostic Info] window.naver:", !!window.naver, "| window.naver.maps:", !!(window.naver && window.naver.maps));
+      console.error("💡 [원인 가이드] NCP 콘솔(https://console.ncloud.com) -> Application -> Web 서비스 URL에 'https://www.myplating.kr' 및 'https://myplating.kr' 등록 필요");
+      if (window.onNaverMapAuthError) {
+        window.onNaverMapAuthError();
+      }
     };
   </script>
   
@@ -86,7 +95,7 @@
       lastTouchEnd = now;
     }, false);
   </script>
-  <script type="module" crossorigin src="/assets/js/index-wu2Gx7fB.js"></script>
+  <script type="module" crossorigin src="/assets/js/index-DYsnfBpC.js"></script>
   <link rel="modulepreload" crossorigin href="/assets/js/vendor-react-DiEw8YRT.js">
   <link rel="modulepreload" crossorigin href="/assets/js/vendor-firebase-CM1Bb-cX.js">
   <link rel="stylesheet" crossorigin href="/assets/css/index-BvGlPC_j.css">

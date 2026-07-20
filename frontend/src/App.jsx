@@ -2734,8 +2734,17 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       const clientId = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || "m16cxm6bi2";
 
       useEffect(() => {
-        window.navermap_authFailure = function() {
-          console.warn("네이버 지도 API 인증 실패: Web 서비스 URL을 NCP 콘솔에 등록해야 합니다.");
+        const scriptUrl = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${clientId}`;
+
+        console.group("🗺️ [Naver Map SDK Diagnostics]");
+        console.log("📍 location.href:", window.location.href);
+        console.log("🌐 userAgent:", navigator.userAgent);
+        console.log("🔑 Active Client ID:", clientId);
+        console.log("📜 Script URL:", scriptUrl);
+        console.log("🔍 window.naver:", !!window.naver, "| window.naver.maps:", !!(window.naver && window.naver.maps));
+        console.groupEnd();
+
+        window.onNaverMapAuthError = function() {
           setAuthError(true);
         };
 
@@ -2744,8 +2753,22 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           return;
         }
 
+        const existingScript = document.querySelector(`script[src*="oapi.map.naver.com"]`);
+        if (existingScript) {
+          if (window.naver && window.naver.maps) {
+            setMapLoaded(true);
+          } else {
+            existingScript.addEventListener("load", () => setMapLoaded(true));
+            existingScript.addEventListener("error", () => setAuthError(true));
+            setTimeout(() => {
+              if (window.naver && window.naver.maps) setMapLoaded(true);
+            }, 500);
+          }
+          return;
+        }
+
         const script = document.createElement("script");
-        script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${clientId}`;
+        script.src = scriptUrl;
         script.async = true;
         script.onload = () => setMapLoaded(true);
         script.onerror = () => setAuthError(true);
