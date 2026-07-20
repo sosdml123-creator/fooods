@@ -20,6 +20,11 @@
   
   <!-- 네이버 지도 Open API SDK (Client ID: m16cxm6bi2) -->
   <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=m16cxm6bi2"></script>
+  <script>
+    window.navermap_authFailure = function() {
+      console.warn("네이버 지도 API 인증 실패: Web 서비스 URL을 NCP 콘솔에 등록해야 합니다.");
+    };
+  </script>
   
   <!-- Tailwind CSS Local -->
   <script src="/tailwindcss.js"></script>

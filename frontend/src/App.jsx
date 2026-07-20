@@ -2730,9 +2730,15 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
     function NaverMapView({ posts, onPostClick }) {
       const mapRef = useRef(null);
       const [mapLoaded, setMapLoaded] = useState(false);
+      const [authError, setAuthError] = useState(false);
       const clientId = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || "m16cxm6bi2";
 
       useEffect(() => {
+        window.navermap_authFailure = function() {
+          console.warn("네이버 지도 API 인증 실패: Web 서비스 URL을 NCP 콘솔에 등록해야 합니다.");
+          setAuthError(true);
+        };
+
         if (window.naver && window.naver.maps) {
           setMapLoaded(true);
           return;
@@ -2742,6 +2748,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${clientId}`;
         script.async = true;
         script.onload = () => setMapLoaded(true);
+        script.onerror = () => setAuthError(true);
         document.head.appendChild(script);
       }, [clientId]);
 
@@ -2795,25 +2802,22 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           </div>
 
           <div className="w-full h-72 bg-zinc-900 relative overflow-hidden flex items-center justify-center">
-            {clientId && (
-              <div ref={mapRef} className="w-full h-full"></div>
-            )}
-
-            {(!clientId || !mapLoaded) && (
-              <div className="w-full h-full bg-gradient-to-br from-emerald-950 via-zinc-950 to-black text-white p-6 flex flex-col items-center justify-center text-center relative">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-400 flex items-center justify-center text-2xl mb-3 animate-pulse">
-                  <i className="fa-solid fa-map-location-dot"></i>
+            {authError ? (
+              <div className="w-full h-full bg-gradient-to-br from-zinc-950 via-rose-950/50 to-black text-white p-6 flex flex-col items-center justify-center text-center relative">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-400/30 text-amber-400 flex items-center justify-center text-2xl mb-2 animate-bounce">
+                  <i className="fa-solid fa-triangle-exclamation"></i>
                 </div>
-                <h3 className="text-base font-extrabold mb-1">네이버 지도 API 연동 완료</h3>
+                <h3 className="text-base font-extrabold mb-1 text-amber-300">네이버 지도 API 도메인 승인 필요</h3>
                 <p className="text-xs text-zinc-300 max-w-xs leading-relaxed mb-3">
-                  네이버 클라우드 플랫폼에서 발급받은 <br/>
-                  <strong className="text-emerald-400 font-bold">Client ID</strong> 환경변수를 등록하면 지도가 렌더링됩니다.
+                  NCP 콘솔의 <strong className="text-white">Web 서비스 URL</strong>에 현재 웹 도메인을 등록해 주세요!
                 </p>
-                <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-xl px-3 py-1.5 text-[11px] text-zinc-200 flex items-center gap-1.5 font-mono">
-                  <i className="fa-solid fa-code text-emerald-400"></i>
-                  VITE_NAVER_MAP_CLIENT_ID
+                <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-xl px-3 py-1.5 text-[11px] text-amber-200 flex items-center gap-1.5 font-mono">
+                  <i className="fa-solid fa-globe text-amber-400"></i>
+                  {typeof window !== 'undefined' ? window.location.origin : 'https://www.myplating.kr'}
                 </div>
               </div>
+            ) : (
+              <div ref={mapRef} className="w-full h-full"></div>
             )}
           </div>
 
