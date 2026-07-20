@@ -2729,6 +2729,8 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
     function NaverMapView({ posts, onPostClick }) {
       const mapRef = useRef(null);
+      const mapInstanceRef = useRef(null);
+      const markersRef = useRef([]);
       const [mapLoaded, setMapLoaded] = useState(false);
       const [authError, setAuthError] = useState(false);
       const clientId = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || "u35nq8hdr1";
@@ -2773,33 +2775,47 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       }, [clientId]);
 
       useEffect(() => {
-        if (mapLoaded && mapRef.current && window.naver && window.naver.maps) {
+        if (!mapLoaded || !mapRef.current || !window.naver || !window.naver.maps) return;
+
+        // 지도는 최초 1회만 초기화하여 GPU 타일 캔버스 유지 (매번 재생성 방지!)
+        if (!mapInstanceRef.current) {
           const mapOptions = {
             center: new window.naver.maps.LatLng(37.5665, 126.9780),
             zoom: 13,
             zoomControl: true,
             zoomControlOptions: {
               position: window.naver.maps.Position.TOP_RIGHT
-            }
+            },
+            tileTransition: true,       // 타일 간 부드러운 페이드 전환
+            inertialPan: true,          // 손가락 미끄러짐 관성 스크롤
+            inertialPanDuration: 400,    // 부드러운 감속 가속도
+            useStyleMap: true           // GPU 하드웨어 가속 타일 맵
           };
-          const map = new window.naver.maps.Map(mapRef.current, mapOptions);
-
-          posts.forEach(post => {
-            if (post.links && Array.isArray(post.links)) {
-              const mapLink = post.links.find(l => l.url && (l.url.includes("naver") || l.url.includes("map")));
-              if (mapLink) {
-                const marker = new window.naver.maps.Marker({
-                  position: new window.naver.maps.LatLng(37.5665 + (Math.random() - 0.5) * 0.04, 126.9780 + (Math.random() - 0.5) * 0.04),
-                  map: map,
-                  title: post.title
-                });
-                window.naver.maps.Event.addListener(marker, 'click', () => {
-                  if (onPostClick) onPostClick(post.id);
-                });
-              }
-            }
-          });
+          mapInstanceRef.current = new window.naver.maps.Map(mapRef.current, mapOptions);
         }
+
+        const map = mapInstanceRef.current;
+
+        // 마커 객체만 업데이트
+        markersRef.current.forEach(m => m.setMap(null));
+        markersRef.current = [];
+
+        posts.forEach(post => {
+          if (post.links && Array.isArray(post.links)) {
+            const mapLink = post.links.find(l => l.url && (l.url.includes("naver") || l.url.includes("map")));
+            if (mapLink) {
+              const marker = new window.naver.maps.Marker({
+                position: new window.naver.maps.LatLng(37.5665 + (Math.random() - 0.5) * 0.04, 126.9780 + (Math.random() - 0.5) * 0.04),
+                map: map,
+                title: post.title
+              });
+              window.naver.maps.Event.addListener(marker, 'click', () => {
+                if (onPostClick) onPostClick(post.id);
+              });
+              markersRef.current.push(marker);
+            }
+          }
+        });
       }, [mapLoaded, posts]);
 
       const mapPosts = posts.filter(post => 
@@ -2837,7 +2853,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                 </div>
               </div>
             ) : (
-              <div ref={mapRef} className="w-full h-full"></div>
+              <div ref={mapRef} className="w-full h-full" style={{ touchAction: 'pan-x pan-y', willChange: 'transform', transform: 'translateZ(0)' }}></div>
             )}
           </div>
 
