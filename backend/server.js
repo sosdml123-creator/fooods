@@ -208,6 +208,31 @@ app.get(["/api/link-meta", "/api/v1/link-meta"], async (req, res) => {
   }
 });
 
+// 네이버 지도 REST API (Geocoding - 주소 및 위치 검색 프록시)
+app.get(["/api/naver-geocode", "/api/v1/naver-geocode"], async (req, res) => {
+  const query = req.query.query;
+  if (!query) return res.status(400).json({ success: false, message: "검색어가 필요합니다." });
+
+  const clientId = process.env.NAVER_CLIENT_ID || "m16cxm6bi2";
+  const clientSecret = process.env.NAVER_CLIENT_SECRET || "";
+
+  try {
+    const response = await axios.get("https://maps.apigw.ntruss.com/map-geocode/v2/geocode", {
+      params: { query },
+      headers: {
+        "x-ncp-apigw-api-key-id": clientId,
+        "x-ncp-apigw-api-key": clientSecret
+      }
+    });
+    return res.json({ success: true, data: response.data });
+  } catch (err) {
+    return res.status(err.response?.status || 500).json({
+      success: false,
+      message: err.response?.data?.message || "네이버 지오코딩 실패"
+    });
+  }
+});
+
 // 리다이렉트 추적 및 OG / JSON-LD / 가격 스마트 파서 헬퍼
 async function fetchDeepLinkMeta(initialUrl) {
   let finalHtml = "";
