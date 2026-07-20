@@ -2156,83 +2156,108 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           }
         });
       }, [links]);
-      // Cloudflare R2 업로드 (압축 및 백엔드 프록시 처리)
+      // 안드로이드 모바일 웹뷰 OOM 튕김 방지용 경량화 캔버스 압축기
+      const compressImageMobile = (file) => {
+        return new Promise((resolve) => {
+          // 2MB 이하 소형 파일은 즉시 반환하여 캔버스 자원 소비 차단
+          if (file.size < 2 * 1024 * 1024) {
+            return resolve(file);
+          }
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+              const canvas = document.createElement("canvas");
+              let width = img.width;
+              let height = img.height;
+              const maxDim = 1024; // 안드로이드 웹뷰 안전 최대 해상도 1024px
+              if (width > maxDim || height > maxDim) {
+                if (width > height) {
+                  height = Math.round((height * maxDim) / width);
+                  width = maxDim;
+                } else {
+                  width = Math.round((width * maxDim) / height);
+                  height = maxDim;
+                }
+              }
+              canvas.width = width;
+              canvas.height = height;
+              const ctx = canvas.getContext("2d");
+              ctx.drawImage(img, 0, 0, width, height);
+              canvas.toBlob(
+                (blob) => {
+                  if (blob) {
+                    resolve(new File([blob], file.name || "photo.jpg", { type: "image/jpeg" }));
+                  } else {
+                    resolve(file);
+                  }
+                },
+                "image/jpeg",
+                0.75
+              );
+            };
+            img.onerror = () => resolve(file);
+            img.src = e.target.result;
+          };
+          reader.onerror = () => resolve(file);
+          reader.readAsDataURL(file);
+        });
+      };
+
+      // Cloudflare R2 업로드 (안드로이드 모바일 튕김 방지)
       async function handlePhoto(e) {
-        console.log("[UPLOAD STEP 1] handlePhoto started. Target files:", e.target.files);
+        if (!e.target.files || e.target.files.length === 0) return;
+        
         let files = [];
         try {
           files = Array.from(e.target.files).slice(0, 10);
         } catch (filesErr) {
-          console.error("[UPLOAD STEP 1.1] Error parsing files array:", filesErr);
-          alert("파일 목록을 가져오는 중 오류가 발생했습니다.");
+          console.error("Error parsing files:", filesErr);
           return;
         }
         
-        if (files.length === 0) {
-          console.log("[UPLOAD STEP 1.2] No files selected.");
-          return;
-        }
+        // 안드로이드 웹뷰 인텐트 상태 초기화 (동일 파일 다시 선택 및 OS 인텐트 찌꺼기 방지)
+        const targetInput = e.target;
         
         setLoading(true);
-        console.log("[UPLOAD STEP 2] Parsing complete. Files count:", files.length);
 
         const uploadedUrls = [];
-        const options = {
-          maxSizeMB: 1, // 최대 용량 제한 1MB
-          maxWidthOrHeight: 1200, // 최대 해상도 1200px
-          useWebWorker: false, // Android WebView WebWorker crash 방지
-          initialQuality: 0.8 // 품질 80%
-        };
 
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
-          console.log(`[UPLOAD STEP 3] Processing file [${i + 1}/${files.length}]: ${file.name}, Size: ${file.size} bytes`);
-          
           let fileToUpload = file;
           try {
-            console.log(`[UPLOAD STEP 4] Compressing file: ${file.name}`);
-            const compressedBlob = await imageCompression(file, options);
-            fileToUpload = compressedBlob;
-            console.log(`[UPLOAD STEP 4.1] Compression successful. New size: ${compressedBlob.size} bytes`);
+            fileToUpload = await compressImageMobile(file);
           } catch (compressErr) {
-            console.error(`[UPLOAD STEP 4.2] Compression failed for ${file.name}. Uploading original file. Error:`, compressErr);
-            fileToUpload = file; // 압축 실패 시 원본 파일 그대로 업로드하여 앱 크래시 방지
+            console.warn("Mobile compression fallback to raw file:", compressErr);
+            fileToUpload = file;
           }
 
           try {
-            console.log(`[UPLOAD STEP 5] Creating FormData for ${file.name}`);
             const formData = new FormData();
-            // new File() 생성자를 사용하지 않고, blob 객체 그대로 append하며 파일명을 세 번째 인자로 추가하여 Android 호환성 극대화
-            formData.append("file", fileToUpload, file.name);
+            formData.append("file", fileToUpload, file.name || `photo_${Date.now()}.jpg`);
 
-            console.log(`[UPLOAD STEP 6] Sending POST request to /api/v1/upload for ${file.name}`);
             const response = await fetch("/api/v1/upload", {
               method: "POST",
               body: formData
             });
 
-            console.log(`[UPLOAD STEP 7] Received response for ${file.name}. Status: ${response.status}`);
             const res = await response.json();
-            console.log(`[UPLOAD STEP 8] Parsed JSON response for ${file.name}:`, res);
-            
             if (res.success && res.url) {
               uploadedUrls.push(res.url);
-              console.log(`[UPLOAD STEP 9] Upload success:`, res.url);
-            } else {
-              throw new Error(res.message || "서버 응답 실패");
             }
           } catch (uploadErr) {
-            console.error(`[UPLOAD STEP 10] Upload API request failed for ${file.name}:`, uploadErr);
-            alert(`사진 업로드 중 오류가 발생했습니다: ${uploadErr.message || uploadErr}`);
+            console.error("Upload API request failed:", uploadErr);
           }
         }
 
-        console.log("[UPLOAD STEP 11] All files processed. Uploaded URLs:", uploadedUrls);
         if (uploadedUrls.length > 0) {
           setImages(prev => [...prev, ...uploadedUrls]);
         }
+
+        // 인텐트 찌꺼기 남지 않게 input value 리셋
+        try { targetInput.value = ""; } catch(err) {}
         setLoading(false);
-        console.log("[UPLOAD STEP 12] handlePhoto finished.");
       }
 
       function extractHashtags(text) {
@@ -2317,9 +2342,13 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                 {images.length < 10 && (
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       console.log("[UI] Photo add button clicked");
-                      fileInputRef.current.click();
+                      if (fileInputRef.current) {
+                        fileInputRef.current.click();
+                      }
                     }}
                     className="w-16 h-16 flex flex-col items-center justify-center border border-dashed border-zinc-300 rounded text-zinc-400 bg-zinc-50 flex-shrink-0"
                     style={{ cursor: "pointer", fontSize: "20px" }}
