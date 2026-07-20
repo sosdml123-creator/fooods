@@ -6,7 +6,7 @@ import { Send, Clock, User, AlertTriangle, ShieldCheck, History } from "lucide-r
 // API URL: 개발환경은 localhost, 프로덕션은 실제 서버
 const API_BASE = typeof window !== "undefined" && window.location.hostname === "localhost"
   ? "http://localhost:4000"
-  : "https://www.myplating.kr";
+  : "https://myplating.kr";
 
 export default function Push() {
   const [history, setHistory] = useState([]);

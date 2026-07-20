@@ -2836,7 +2836,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                 </p>
                 <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-xl px-3 py-1.5 text-[11px] text-amber-200 flex items-center gap-1.5 font-mono">
                   <i className="fa-solid fa-globe text-amber-400"></i>
-                  {typeof window !== 'undefined' ? window.location.origin : 'https://www.myplating.kr'}
+                  {typeof window !== 'undefined' ? window.location.origin : 'https://myplating.kr'}
                 </div>
               </div>
             ) : (

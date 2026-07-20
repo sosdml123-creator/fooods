@@ -19,16 +19,9 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
   <!-- 네이버 지도 Open API SDK (Client ID: m16cxm6bi2) -->
-  <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=m16cxm6bi2"></script>
+  <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=m16cxm6bi2" async defer></script>
   <script>
     window.navermap_authFailure = function() {
-      console.error("🚨 [Naver Maps Auth Error 200] 네이버 지도 API 인증 실패 (Authentication Failed)");
-      console.error("📍 [Diagnostic Info] location.href:", window.location.href);
-      console.error("🌐 [Diagnostic Info] navigator.userAgent:", navigator.userAgent);
-      console.error("🔑 [Diagnostic Info] Client ID:", "m16cxm6bi2");
-      console.error("📜 [Diagnostic Info] maps.js URL:", "https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=m16cxm6bi2");
-      console.error("❓ [Diagnostic Info] window.naver:", !!window.naver, "| window.naver.maps:", !!(window.naver && window.naver.maps));
-      console.error("💡 [원인 가이드] NCP 콘솔(https://console.ncloud.com) -> Application -> Web 서비스 URL에 'https://www.myplating.kr' 및 'https://myplating.kr' 등록 필요");
       if (window.onNaverMapAuthError) {
         window.onNaverMapAuthError();
       }
