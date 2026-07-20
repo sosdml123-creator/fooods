@@ -5976,6 +5976,18 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             )}
           </main>
 
+          {/* 홈 화면 우측 하단 플로팅 글쓰기 버튼 */}
+          {activeTab === 'home' && (
+            <button 
+              className="community-fab"
+              style={{ position: "fixed", bottom: "80px", right: "20px", zIndex: 50 }}
+              onClick={handleWriteClick}
+              aria-label="글쓰기"
+            >
+              <i className="fa-solid fa-pen text-sm"></i>
+            </button>
+          )}
+
           <nav className="bottom-nav">
             <button className={`bottom-nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
               <i className="fa-solid fa-house"></i>
@@ -5984,10 +5996,6 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             <button className={`bottom-nav-item ${activeTab === 'search' ? 'active' : ''}`} onClick={() => setActiveTab('search')}>
               <i className="fa-solid fa-magnifying-glass"></i>
               <span>검색</span>
-            </button>
-            <button className="bottom-nav-item" onClick={handleWriteClick}>
-              <i className="fa-solid fa-square-plus"></i>
-              <span>글쓰기</span>
             </button>
             <button className={`bottom-nav-item ${(activeTab === 'community' || activeTab === 'community_detail') ? 'active' : ''}`} onClick={() => { setActiveTab('community'); setActiveComPostId(null); }}>
               <i className="fa-solid fa-comments"></i>
