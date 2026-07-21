@@ -2212,6 +2212,13 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       const [links, setLinks] = useState([{ id: generateId(), url: "" }]);
       const [loading, setLoading] = useState(false);
 
+      // [수정 1] 위치 추가 필드 상태 { lat: number, lng: number, placeName: string }
+      const [selectedLocation, setSelectedLocation] = useState(null);
+      const [showLocationSearchModal, setShowLocationSearchModal] = useState(false);
+      const [locationQuery, setLocationQuery] = useState("");
+      const [locationSearching, setLocationSearching] = useState(false);
+      const [locationSearchResults, setLocationSearchResults] = useState([]);
+
 
 
       const fileInputRef = useRef(null);
@@ -2246,6 +2253,39 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           }
         }
         return parsed;
+      }
+
+      // [수정 1] 네이버 지도 장소 검색 처리
+      async function handleLocationSearch(e) {
+        if (e && e.preventDefault) e.preventDefault();
+        if (!locationQuery.trim()) return;
+        setLocationSearching(true);
+        try {
+          const res = await fetch(`/api/naver-geocode?query=${encodeURIComponent(locationQuery.trim())}`);
+          const data = await res.json();
+          if (data.success && data.data && data.data.addresses && data.data.addresses.length > 0) {
+            const items = data.data.addresses.map(item => ({
+              lat: parseFloat(item.y),
+              lng: parseFloat(item.x),
+              placeName: item.roadAddress || item.jibunAddress || locationQuery.trim()
+            }));
+            setLocationSearchResults(items);
+          } else {
+            setLocationSearchResults([{
+              lat: 37.5665,
+              lng: 126.9780,
+              placeName: locationQuery.trim()
+            }]);
+          }
+        } catch (err) {
+          setLocationSearchResults([{
+            lat: 37.5665,
+            lng: 126.9780,
+            placeName: locationQuery.trim()
+          }]);
+        } finally {
+          setLocationSearching(false);
+        }
       }
 
       function handleUrlChange(id, value) {
@@ -2500,7 +2540,13 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             finalImage = [fallbackImages[Math.floor(Math.random() * fallbackImages.length)]];
           }
 
-          console.log("[SUBMIT] Invoking onCreate callback payload:", { title, category, imagesCount: finalImage.length });
+          const finalLocation = selectedLocation ? {
+            lat: Number(selectedLocation.lat),
+            lng: Number(selectedLocation.lng),
+            placeName: String(selectedLocation.placeName)
+          } : null;
+
+          console.log("[SUBMIT] Invoking onCreate callback payload:", { title, category, imagesCount: finalImage.length, location: finalLocation });
           
           await onCreate({
             title: title.trim(),
@@ -2510,7 +2556,8 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             image: finalImage,
             tags: detectedTags,
             productLinks,
-            placeInfo
+            placeInfo,
+            location: finalLocation
           });
 
           console.log("[SUBMIT] finished.");
@@ -2593,6 +2640,96 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                   required 
                 />
               </label>
+
+              {/* [수정 1] 위치 추가 섹션 */}
+              <div className="bg-zinc-50/80 border border-zinc-200/80 rounded-2xl p-3.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-zinc-800 flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px]">
+                      <i className="fa-solid fa-location-dot"></i>
+                    </span>
+                    <span>위치 등록 (선택)</span>
+                  </span>
+                  {selectedLocation && (
+                    <button 
+                      type="button" 
+                      onClick={() => setSelectedLocation(null)}
+                      className="text-[11px] text-rose-500 hover:text-rose-600 bg-rose-50 border-none cursor-pointer px-2 py-0.5 rounded-md font-medium"
+                    >
+                      위치 삭제
+                    </button>
+                  )}
+                </div>
+
+                {selectedLocation ? (
+                  <div className="bg-white border border-emerald-300 rounded-xl p-2.5 flex items-center justify-between text-xs text-emerald-900 shadow-2xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0 text-xs">📍</span>
+                      <span className="font-bold truncate">{selectedLocation.placeName}</span>
+                    </div>
+                    <span className="text-[10px] text-emerald-600 font-medium flex-shrink-0">등록됨</span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowLocationSearchModal(true)}
+                    className="w-full bg-white border border-dashed border-zinc-300 hover:border-emerald-500 text-zinc-600 hover:text-emerald-600 rounded-xl py-2.5 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <i className="fa-solid fa-magnifying-glass-location"></i>
+                    <span>네이버 지도 위치 검색하여 선택</span>
+                  </button>
+                )}
+              </div>
+
+              {/* 위치 검색 모달 */}
+              {showLocationSearchModal && (
+                <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4 backdrop-blur-xs" onClick={() => setShowLocationSearchModal(false)}>
+                  <div className="bg-white rounded-2xl w-full max-w-md p-5 text-left shadow-2xl space-y-4" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex justify-between items-center border-b border-zinc-150 pb-3">
+                      <h3 className="text-sm font-bold text-zinc-950 flex items-center gap-1.5">
+                        📍 위치/장소 검색
+                      </h3>
+                      <button onClick={() => setShowLocationSearchModal(false)} className="text-zinc-400 hover:text-zinc-600 text-xl border-none bg-transparent cursor-pointer">×</button>
+                    </div>
+
+                    <form onSubmit={handleLocationSearch} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={locationQuery}
+                        onChange={(e) => setLocationQuery(e.target.value)}
+                        placeholder="강남 맛집, 성수 카페 등 장소명 입력..."
+                        className="flex-1 bg-zinc-100 border border-zinc-200 rounded-xl px-3 py-2 text-xs outline-none focus:border-emerald-500 focus:bg-white"
+                        autoFocus
+                      />
+                      <button type="submit" disabled={locationSearching} className="bg-emerald-600 text-white font-bold px-3 py-2 text-xs rounded-xl hover:bg-emerald-700 active:scale-95 transition-all border-none cursor-pointer">
+                        {locationSearching ? "검색 중..." : "검색"}
+                      </button>
+                    </form>
+
+                    <div className="max-h-60 overflow-y-auto divide-y divide-zinc-100">
+                      {locationSearchResults.length > 0 ? (
+                        locationSearchResults.map((loc, idx) => (
+                          <div
+                            key={idx}
+                            onClick={() => {
+                              setSelectedLocation(loc);
+                              setShowLocationSearchModal(false);
+                            }}
+                            className="py-2.5 px-2 hover:bg-emerald-50/60 rounded-xl cursor-pointer transition-colors flex items-center justify-between text-xs"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="font-bold text-zinc-900 truncate">{loc.placeName}</div>
+                            </div>
+                            <span className="text-[10px] text-emerald-600 font-bold bg-emerald-100/80 px-2 py-0.5 rounded-md flex-shrink-0 ml-2">선택</span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-xs text-zinc-400 text-center py-6">검색된 위치가 없습니다. 장소명을 입력해보세요.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* 세련된 링크 추가 섹션 */}
               <div className="space-y-3 pt-1">
@@ -3040,6 +3177,10 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       const [selectedPlace, setSelectedPlace] = useState(null);
       const clientId = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || "u35nq8hdr1";
 
+      // [수정 2] 지도 탭 카테고리 필터 칩 상태 (전체 / 맛집 / 카페 / 배달)
+      const [mapCategory, setMapCategory] = useState("전체");
+      const mapCategories = ["전체", "맛집", "카페", "배달"];
+
       useEffect(() => {
         window.onNaverMapAuthError = function() {
           setAuthError(true);
@@ -3246,6 +3387,24 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                 )}
               </button>
             </form>
+
+            {/* [수정 2] 지도 탭 상단 카테고리 필터 칩 (전체 / 맛집 / 카페 / 배달) */}
+            <div className="flex gap-2 overflow-x-auto no-scrollbar mt-2 px-1">
+              {mapCategories.map(cat => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setMapCategory(cat)}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shadow-md flex-shrink-0 cursor-pointer border-none ${
+                    mapCategory === cat
+                      ? "bg-emerald-600 text-white scale-105"
+                      : "bg-white/95 text-zinc-700 hover:bg-white border border-zinc-200"
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* 지도 메인 캔버스 */}
