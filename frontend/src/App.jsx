@@ -432,10 +432,43 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
     // --- 3. 하위 컴포넌트 선언 ---
 
     function LegacyAdBanner() {
+      useEffect(() => {
+        try {
+          (window.adsbygoogle = window.adsbygoogle || []).push({});
+        } catch (e) {
+          console.log("[AdSense] Ad push check:", e);
+        }
+      }, []);
+
       return (
-        <div className="ad-banner cursor-pointer" onClick={() => alert("구글 애드센스 광고가 송출되는 구역입니다.")}>
-          <div className="text-xs font-semibold text-zinc-950">🍳 요리할 때 필수! 감성 타이머 특가 할인 중</div>
-          <div className="text-[10px] text-zinc-400">sponsored by Plating Partner</div>
+        <div 
+          className="ad-banner cursor-pointer my-2 p-3 bg-gradient-to-r from-amber-50/90 via-orange-50/90 to-amber-50/90 border border-amber-200/80 rounded-2xl shadow-xs transition-all hover:shadow-sm" 
+          onClick={() => alert("구글 애드센스 광고가 송출되는 구역입니다.")}
+        >
+          <div className="text-[10px] font-bold text-amber-600 tracking-wider mb-0.5 flex items-center justify-between">
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+              ADVERTISEMENT · GOOGLE ADSENSE
+            </span>
+            <span className="text-[9px] text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded font-medium">광고 구역</span>
+          </div>
+          <div className="text-xs font-bold text-zinc-900 mb-0.5 flex items-center justify-between">
+            <span>🍳 요리할 때 필수! 감성 타이머 & 주방 특가</span>
+            <i className="fa-solid fa-chevron-right text-[10px] text-zinc-400"></i>
+          </div>
+          <div className="text-[10px] text-zinc-500">
+            sponsored by Google Ads & Plating Partner
+          </div>
+          
+          {/* 구글 애드센스 / 애드몹 실제 광고 송출 구역 */}
+          <div className="mt-2 text-center overflow-hidden">
+            <ins className="adsbygoogle"
+                 style={{ display: "block" }}
+                 data-ad-client="ca-pub-3878859120989916"
+                 data-ad-slot="9384771667"
+                 data-ad-format="auto"
+                 data-full-width-responsive="true"></ins>
+          </div>
         </div>
       );
     }
