@@ -2439,58 +2439,83 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                 />
               </label>
 
-              <div className="link-editor-list">
-                <div className="text-xs font-bold text-zinc-500 mb-2">
-                  <i className="fa-solid fa-cart-shopping mr-1"></i> 소개된 재료/도구/지도 링크 추가 (네이버지도, 쇼핑몰 등)
+              {/* 세련된 링크 추가 섹션 */}
+              <div className="space-y-3 pt-1">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-bold text-zinc-800 flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px]">
+                      <i className="fa-solid fa-link"></i>
+                    </span>
+                    <span>추천 상품 & 지도 장소 링크</span>
+                  </div>
+                  <span className="text-[10px] text-zinc-400 font-normal">네이버지도, 쇼핑몰 등 URL 복사</span>
                 </div>
+
                 {links.map((link, idx) => (
-                  <div className="link-editor" key={link.id}>
-                    <label className="mb-1.5">
-                      링크 URL #{idx + 1}
-                      <input 
-                        type="text" 
-                        value={link.url} 
-                        onChange={(e) => handleUrlChange(link.id, e.target.value)} 
-                        placeholder="https://... 링크 주소 입력 (네이버지도 복사글 전체 붙여넣기 가능)" 
-                      />
-                    </label>
+                  <div className="bg-zinc-50/80 border border-zinc-200/80 rounded-2xl p-3.5 space-y-2.5 shadow-xs transition-all" key={link.id}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-zinc-600 flex items-center gap-1">
+                        <span className="w-4 h-4 rounded-full bg-zinc-200 text-zinc-600 text-[9px] flex items-center justify-center">{idx + 1}</span>
+                        링크 입력
+                      </span>
+                      {links.length > 1 && (
+                        <button 
+                          className="text-rose-500 hover:text-rose-600 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors border-none cursor-pointer" 
+                          type="button" 
+                          onClick={() => setLinks(links.filter(item => item.id !== link.id))}
+                        >
+                          <i className="fa-solid fa-trash-can mr-1"></i>삭제
+                        </button>
+                      )}
+                    </div>
+
+                    <input 
+                      type="text" 
+                      value={link.url} 
+                      onChange={(e) => handleUrlChange(link.id, e.target.value)} 
+                      placeholder="https://... 주소를 붙여넣어 보세요" 
+                      className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 text-xs text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                    />
+
                     {link.url && (
-                      <div className="mt-2 p-2 bg-zinc-50 border border-zinc-150 rounded-lg flex items-center gap-3">
+                      <div className="bg-white border border-zinc-200/80 rounded-xl p-2.5 flex items-center gap-3 shadow-2xs">
                         {linkPreviews[link.id]?.loading ? (
-                          <div className="text-zinc-400 text-[10px] py-1 px-2 flex items-center gap-2">
-                            <i className="fa-solid fa-spinner fa-spin"></i> 링크 정보를 불러오는 중...
+                          <div className="text-zinc-400 text-[11px] py-1 px-2 flex items-center gap-2">
+                            <i className="fa-solid fa-spinner fa-spin text-emerald-500"></i> 메타 정보를 불러오는 중...
                           </div>
                         ) : linkPreviews[link.id] ? (
                           <>
                             <img 
                               src={linkPreviews[link.id].image} 
                               alt="" 
-                              className="w-12 h-12 object-cover rounded-md border border-zinc-200"
+                              className="w-12 h-12 object-cover rounded-lg border border-zinc-150 flex-shrink-0"
                             />
                             <div className="min-w-0 flex-1">
                               <div className="text-xs font-bold text-zinc-900 truncate">
                                 {linkPreviews[link.id].title}
                               </div>
-                              <div className="text-[10px] text-zinc-400 truncate">
-                                {linkPreviews[link.id].host} · {link.url}
+                              <div className="text-[10px] text-emerald-600 font-medium truncate mt-0.5">
+                                <i className="fa-solid fa-earth-americas mr-1"></i>{linkPreviews[link.id].host}
                               </div>
                             </div>
                           </>
                         ) : null}
                       </div>
                     )}
-                    <div className="flex justify-between items-center mt-2">
-                      <span className="text-[10px] text-zinc-400">네이버 지도 등 장소명과 매칭되어 자동 노출됩니다.</span>
-                      <button className="secondary px-2 py-1 text-[11px] rounded" type="button" onClick={() => setLinks(links.filter(item => item.id !== link.id))}>삭제</button>
-                    </div>
                   </div>
                 ))}
+
+                <button 
+                  className="w-full border border-dashed border-emerald-300 hover:border-emerald-500 text-emerald-600 bg-emerald-50/50 hover:bg-emerald-50 rounded-xl py-3 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer" 
+                  type="button" 
+                  onClick={() => setLinks([...links, { id: generateId(), url: "" }])}
+                >
+                  <i className="fa-solid fa-plus"></i>
+                  <span>상품 / 지도 장소 링크 추가하기</span>
+                </button>
               </div>
 
-              <button className="secondary full border border-dashed text-xs" type="button" onClick={() => setLinks([...links, { id: generateId(), url: "" }])}>
-                + 구매 상품 / 지도 장소 링크 추가
-              </button>
-              <button className="primary full mt-4 text-xs font-bold" type="button" onClick={submit} disabled={loading}>
+              <button className="primary full mt-5 text-xs font-bold py-3.5 rounded-xl shadow-md active:scale-98 transition-transform" type="button" onClick={submit} disabled={loading}>
                 {loading ? "사진 최적화 및 등록 중..." : "글 등록 및 수익 모델 연동"}
               </button>
             </div>
