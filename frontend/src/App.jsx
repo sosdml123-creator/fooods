@@ -2041,6 +2041,15 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
     // 최대 10개 및 총 용량 20MB 제한 (초과 시 자동 압축 지원) 글쓰기 시트
     function WriteSheet({ onClose, onCreate, initialImages = [] }) {
+      console.log("[WRITE] mounted");
+
+      useEffect(() => {
+        console.log("[WRITE] component effect initialized");
+        return () => {
+          console.log("[WRITE] unmounted");
+        };
+      }, []);
+
       const [title, setTitle] = useState("");
       const [body, setBody] = useState("");
       const [images, setImages] = useState(initialImages); // 이미지 주소 배열 관리
@@ -2206,12 +2215,12 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
       // Cloudflare R2 업로드 (안드로이드 모바일 튕김 방지)
       async function handlePhoto(e) {
-        console.log("[WRITE STEP 2] File input onChange triggered. Event files:", e.target.files);
+        console.log("[HANDLE_PHOTO] started. File input onChange triggered. Event files:", e.target.files);
         if (typeof window !== "undefined" && window.isSelectingPhotosRef) {
           window.isSelectingPhotosRef.current = true;
         }
         if (!e.target.files || e.target.files.length === 0) {
-          console.log("[WRITE STEP 2.1] No files selected.");
+          console.log("[HANDLE_PHOTO] finished (No files selected)");
           setTimeout(() => {
             if (typeof window !== "undefined" && window.isSelectingPhotosRef) {
               window.isSelectingPhotosRef.current = false;
@@ -2274,7 +2283,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
         try { targetInput.value = ""; } catch(err) {}
         setLoading(false);
-        console.log("[WRITE STEP 4] handlePhoto finished. Uploaded URLs:", uploadedUrls);
+        console.log("[HANDLE_PHOTO] finished. Uploaded URLs:", uploadedUrls);
 
         setTimeout(() => {
           if (typeof window !== "undefined" && window.isSelectingPhotosRef) {
@@ -2291,7 +2300,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
       async function submit(e) {
         if (e && e.preventDefault) e.preventDefault();
-        console.log("[WRITE STEP 6] submit() started.");
+        console.log("[SUBMIT] started.");
 
         if (!title.trim()) {
           alert("포스팅 제목을 입력해 주세요.");
@@ -2336,7 +2345,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             finalImage = [fallbackImages[Math.floor(Math.random() * fallbackImages.length)]];
           }
 
-          console.log("[WRITE STEP 7] Invoking onCreate callback with payload:", { title, category, imagesCount: finalImage.length });
+          console.log("[SUBMIT] Invoking onCreate callback payload:", { title, category, imagesCount: finalImage.length });
           
           await onCreate({
             title: title.trim(),
@@ -2349,9 +2358,9 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             placeInfo
           });
 
-          console.log("[WRITE STEP 8] onCreate completed successfully.");
+          console.log("[SUBMIT] finished.");
         } catch (err) {
-          console.error("[WRITE STEP ERROR] submit() failed with error:", err);
+          console.error("[SUBMIT ERROR] submit() failed with error:", err);
           alert(`포스팅 작성 중 오류가 발생했습니다: ${err.message || err}`);
         } finally {
           setLoading(false);
@@ -4224,6 +4233,14 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
     // --- 4. 메인 App 컴포넌트 선언 ---
 
     function App() {
+      console.log("[APP] mounted");
+
+      useEffect(() => {
+        console.log("[APP] component effect initialized");
+        return () => {
+          console.log("[APP] unmounted");
+        };
+      }, []);
       // 모바일 안드로이드 WebView 전역 예외 캡처 및 로깅 (요구사항 4번 반영)
       useEffect(() => {
         const handleGlobalError = (message, source, lineno, colno, error) => {
