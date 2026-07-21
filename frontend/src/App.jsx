@@ -6576,12 +6576,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                     setLoginOpen(true);
                     return;
                   }
-                  if (window.flutter_inappwebview) {
-                    isSelectingPhotos.current = true;
-                    window.flutter_inappwebview.callHandler('openCustomGallery', { type: 'community' });
-                  } else {
-                    setActiveTab("community_write");
-                  }
+                  setActiveTab("community_write");
                 }}
                 onLikePost={handleLikeCommunityPost}
                 onScrapPost={handleScrapCommunityPost}
