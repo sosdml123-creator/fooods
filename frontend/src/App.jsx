@@ -2206,10 +2206,12 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
       // Cloudflare R2 업로드 (안드로이드 모바일 튕김 방지)
       async function handlePhoto(e) {
+        console.log("[WRITE STEP 2] File input onChange triggered. Event files:", e.target.files);
         if (typeof window !== "undefined" && window.isSelectingPhotosRef) {
           window.isSelectingPhotosRef.current = true;
         }
         if (!e.target.files || e.target.files.length === 0) {
+          console.log("[WRITE STEP 2.1] No files selected.");
           setTimeout(() => {
             if (typeof window !== "undefined" && window.isSelectingPhotosRef) {
               window.isSelectingPhotosRef.current = false;
@@ -2222,24 +2224,24 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         try {
           files = Array.from(e.target.files).slice(0, 10);
         } catch (filesErr) {
-          console.error("Error parsing files:", filesErr);
+          console.error("[WRITE STEP ERROR] Error parsing files array:", filesErr);
+          alert("사진 파일을 파싱하는 중 오류가 발생했습니다.");
           return;
         }
         
-        // 안드로이드 웹뷰 인텐트 상태 초기화 (동일 파일 다시 선택 및 OS 인텐트 찌꺼기 방지)
+        console.log(`[WRITE STEP 3] handlePhoto started. Total files count: ${files.length}`);
         const targetInput = e.target;
-        
         setLoading(true);
-
         const uploadedUrls = [];
 
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
+          console.log(`[WRITE STEP 3.1] Processing file [${i+1}/${files.length}]: ${file.name}, size: ${file.size} bytes`);
           let fileToUpload = file;
           try {
             fileToUpload = await compressImageMobile(file);
           } catch (compressErr) {
-            console.warn("Mobile compression fallback to raw file:", compressErr);
+            console.warn("[WRITE STEP 3.2] Mobile compression failed, fallback to raw file:", compressErr);
             fileToUpload = file;
           }
 
@@ -2255,9 +2257,14 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             const res = await response.json();
             if (res.success && res.url) {
               uploadedUrls.push(res.url);
+              console.log(`[WRITE STEP 3.3] Upload success: ${res.url}`);
+            } else {
+              console.error(`[WRITE STEP 3.4] Upload API error response:`, res);
+              alert(`사진 업로드 실패: ${res.message || "서버 응답 오류"}`);
             }
           } catch (uploadErr) {
-            console.error("Upload API request failed:", uploadErr);
+            console.error(`[WRITE STEP ERROR] Upload fetch failed for ${file.name}:`, uploadErr);
+            alert(`사진 업로드 중 네트워크 오류가 발생했습니다.`);
           }
         }
 
@@ -2265,9 +2272,9 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           setImages(prev => [...prev, ...uploadedUrls]);
         }
 
-        // 인텐트 찌꺼기 남지 않게 input value 리셋
         try { targetInput.value = ""; } catch(err) {}
         setLoading(false);
+        console.log("[WRITE STEP 4] handlePhoto finished. Uploaded URLs:", uploadedUrls);
 
         setTimeout(() => {
           if (typeof window !== "undefined" && window.isSelectingPhotosRef) {
@@ -2283,54 +2290,72 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       }
 
       async function submit(e) {
-        e.preventDefault();
-        if (!title.trim() || !body.trim()) return;
-        setLoading(true);
+        if (e && e.preventDefault) e.preventDefault();
+        console.log("[WRITE STEP 6] submit() started.");
 
-        const productLinks = links.map(l => {
-          const preview = linkPreviews[l.id];
-          if (preview && !preview.loading) {
-            return {
-              id: generateId(),
-              url: l.url.trim(),
-              title: preview.title || l.parsedName || "상세 링크",
-              image: preview.image || "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
-              host: preview.host || new URL(l.url.trim()).hostname.replace("www.", "")
-            };
-          } else {
-            let host = "link";
-            try { host = new URL(l.url.trim()).hostname.replace("www.", ""); } catch(e) {}
-            return {
-              id: generateId(),
-              url: l.url.trim(),
-              title: l.parsedName || "상세 링크",
-              image: "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
-              host
-            };
-          }
-        }).filter(l => l.url !== "");
-
-        const detectedTags = extractHashtags(body);
-
-        let placeInfo = null;
-
-        setLoading(false);
-        
-        let finalImage = images;
-        if (images.length === 0) {
-          finalImage = [fallbackImages[Math.floor(Math.random() * fallbackImages.length)]];
+        if (!title.trim()) {
+          alert("포스팅 제목을 입력해 주세요.");
+          return;
+        }
+        if (!body.trim()) {
+          alert("이야기/레시피 내용을 입력해 주세요.");
+          return;
         }
 
-        onCreate({
-          title: title.trim(),
-          body: body.trim(),
-          category,
-          mediaType: "image",
-          image: finalImage,
-          tags: detectedTags,
-          productLinks,
-          placeInfo
-        });
+        try {
+          setLoading(true);
+
+          const productLinks = links.map(l => {
+            const preview = linkPreviews[l.id];
+            if (preview && !preview.loading) {
+              return {
+                id: generateId(),
+                url: l.url.trim(),
+                title: preview.title || l.parsedName || "상세 링크",
+                image: preview.image || "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+                host: preview.host || new URL(l.url.trim()).hostname.replace("www.", "")
+              };
+            } else {
+              let host = "link";
+              try { host = new URL(l.url.trim()).hostname.replace("www.", ""); } catch(err) {}
+              return {
+                id: generateId(),
+                url: l.url.trim(),
+                title: l.parsedName || "상세 링크",
+                image: "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+                host
+              };
+            }
+          }).filter(l => l.url !== "");
+
+          const detectedTags = extractHashtags(body);
+          let placeInfo = null;
+
+          let finalImage = images;
+          if (images.length === 0) {
+            finalImage = [fallbackImages[Math.floor(Math.random() * fallbackImages.length)]];
+          }
+
+          console.log("[WRITE STEP 7] Invoking onCreate callback with payload:", { title, category, imagesCount: finalImage.length });
+          
+          await onCreate({
+            title: title.trim(),
+            body: body.trim(),
+            category,
+            mediaType: "image",
+            image: finalImage,
+            tags: detectedTags,
+            productLinks,
+            placeInfo
+          });
+
+          console.log("[WRITE STEP 8] onCreate completed successfully.");
+        } catch (err) {
+          console.error("[WRITE STEP ERROR] submit() failed with error:", err);
+          alert(`포스팅 작성 중 오류가 발생했습니다: ${err.message || err}`);
+        } finally {
+          setLoading(false);
+        }
       }
 
       return (
@@ -4199,6 +4224,23 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
     // --- 4. 메인 App 컴포넌트 선언 ---
 
     function App() {
+      // 모바일 안드로이드 WebView 전역 예외 캡처 및 로깅 (요구사항 4번 반영)
+      useEffect(() => {
+        const handleGlobalError = (message, source, lineno, colno, error) => {
+          console.error("[GLOBAL ERROR]", { message, source, lineno, colno, error });
+        };
+        const handleUnhandledRejection = (event) => {
+          console.error("[GLOBAL UNHANDLED REJECTION]", event.reason);
+        };
+
+        window.onerror = handleGlobalError;
+        window.onunhandledrejection = handleUnhandledRejection;
+        return () => {
+          window.onerror = null;
+          window.onunhandledrejection = null;
+        };
+      }, []);
+
       // 닉네임 중복 체크 후 플레이터_랜덤6자리 생성하는 함수
       async function generateUniqueNickname() {
         let attempts = 0;
