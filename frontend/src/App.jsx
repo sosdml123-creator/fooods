@@ -473,6 +473,48 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       );
     }
 
+    // AdMob 네이티브 / 배너 광고 Placeholder (요구사항 2, 3, 7번)
+    function AdMobPlaceholder({ type = "native", position = "feed", index = 0 }) {
+      const [adFailed, setAdFailed] = useState(false);
+
+      useEffect(() => {
+        if (typeof window !== "undefined" && window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+          window.flutter_inappwebview.callHandler('showAd', {
+            type,
+            position,
+            index
+          }).catch(err => {
+            console.log("[AdMob Bridge] showAd call error:", err);
+          });
+        }
+        
+        try {
+          (window.adsbygoogle = window.adsbygoogle || []).push({});
+        } catch (e) {}
+      }, [type, position, index]);
+
+      if (adFailed) return null;
+
+      return (
+        <div className="my-3 p-3 bg-gradient-to-r from-amber-50/70 via-orange-50/70 to-amber-50/70 border border-amber-200/80 rounded-2xl text-center overflow-hidden shadow-2xs">
+          <div className="text-[10px] font-bold text-amber-600 tracking-wider mb-1 flex items-center justify-between">
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+              SPONSORED AD · ADMOB
+            </span>
+            <span className="text-[9px] text-amber-700 bg-amber-100/90 px-1.5 py-0.5 rounded font-medium">광고 영역</span>
+          </div>
+          
+          <ins className="adsbygoogle"
+               style={{ display: "block" }}
+               data-ad-client="ca-pub-3878859120989916"
+               data-ad-slot="9384771667"
+               data-ad-format="auto"
+               data-full-width-responsive="true"></ins>
+        </div>
+      );
+    }
+
     function ProductPreview({ link, creator }) {
       return (
         <a className="product-preview" href={link.url} target="_blank" rel="noopener noreferrer">
@@ -572,6 +614,21 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
     // 내가 쓴 글 수정/삭제 옵션 및 이미지 카레셀 상세 렌더링을 내장한 디테일 시트 모달 (댓글 수정/삭제 지원)
     function DetailModal({ postId, posts, onClose, onLike, onScrap, onComment, onEditComment, onDeleteComment, onTagClick, onAuthorClick, onDeletePost, onEditPost, currentUserName, currentUserRole }) {
       const post = posts.find(p => p.id === postId);
+
+      useEffect(() => {
+        if (typeof window !== "undefined" && window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+          window.flutter_inappwebview.callHandler('showAd', {
+            type: 'banner',
+            position: 'detail'
+          }).catch(err => {});
+        }
+        return () => {
+          if (typeof window !== "undefined" && window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+            window.flutter_inappwebview.callHandler('hideAd', {}).catch(err => {});
+          }
+        };
+      }, []);
+
       if (!post) return null;
 
       const [commentText, setCommentText] = useState("");
@@ -1115,6 +1172,21 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
     // 에타 스타일 커뮤니티 상세 페이지 (댓글 수정/삭제 CRUD, 공감 토글)
     function LegacyCommunityDetailView({ activeComPostId, communityPosts, onBack, onLikePost, onDeletePost, onEditPost, onAddComment, onEditComment, onDeleteComment, onScrapPost, currentUserName, currentUserRole, onAuthorClick }) {
       const post = communityPosts.find(p => p.id === activeComPostId);
+
+      useEffect(() => {
+        if (typeof window !== "undefined" && window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+          window.flutter_inappwebview.callHandler('showAd', {
+            type: 'banner',
+            position: 'detail'
+          }).catch(err => {});
+        }
+        return () => {
+          if (typeof window !== "undefined" && window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+            window.flutter_inappwebview.callHandler('hideAd', {}).catch(err => {});
+          }
+        };
+      }, []);
+
       if (!post) return (
         <div className="p-4 text-center">
           <p className="text-xs text-zinc-400">존재하지 않는 게시글입니다.</p>
@@ -6300,14 +6372,18 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                     <button className="secondary px-4 py-2 text-xs rounded-full font-bold" onClick={() => setSelectedCategory("전체")}>추천 피드 보러가기</button>
                   </div>
                 ) : filteredPosts.length > 0 ? (
-                  filteredPosts.map(post => (
-                    <PostCard 
-                      key={post.id} 
-                      post={post} 
-                      onLike={() => handleLike(post.id)}
-                      onCardClick={() => handleRecipePostClick(post.id)}
-                      onAuthorClick={() => handleAuthorClick(post.author)}
-                    />
+                  filteredPosts.map((post, idx) => (
+                    <React.Fragment key={post.id}>
+                      <PostCard 
+                        post={post} 
+                        onLike={() => handleLike(post.id)}
+                        onCardClick={() => handleRecipePostClick(post.id)}
+                        onAuthorClick={() => handleAuthorClick(post.author)}
+                      />
+                      {(idx + 1) % 5 === 0 && (
+                        <AdMobPlaceholder type="native" position="feed" index={idx + 1} />
+                      )}
+                    </React.Fragment>
                   ))
                 ) : (
                   <div className="text-center py-20 text-zinc-400 text-sm" style={{ columnSpan: "all" }}>등록된 글이 없습니다.</div>
