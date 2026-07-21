@@ -3005,7 +3005,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           <div className="w-full max-w-sm flex flex-col items-center my-auto text-center">
             {/* 브랜드 로고 (공식 포크 로고 적용) */}
             <div className="flex flex-col items-center justify-center mb-8">
-              <img src="/logo.svg" alt="PLAYTING Logo" className="w-16 h-16 rounded-2xl shadow-xl mb-3" />
+              <img src="/logo.png" alt="PLAYTING Logo" className="w-16 h-16 rounded-2xl shadow-xl mb-3 object-cover" />
               <h1 className="text-2xl font-black tracking-tight text-zinc-950">플레이팅</h1>
             </div>
 
@@ -6658,7 +6658,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       if (appInitializing) {
         return (
           <div className="flex flex-col items-center justify-center min-h-screen bg-white text-zinc-900 px-6 select-none">
-            <img src="/logo.svg" alt="PLAYTING Logo" className="w-16 h-16 rounded-2xl shadow-xl mb-3" />
+            <img src="/logo.png" alt="PLAYTING Logo" className="w-16 h-16 rounded-2xl shadow-xl mb-3 object-cover" />
             <h1 className="text-2xl font-black text-zinc-950 tracking-tight mb-6">플레이팅</h1>
             <div className="w-6 h-6 border-2 border-zinc-200 border-t-zinc-950 rounded-full animate-spin"></div>
           </div>

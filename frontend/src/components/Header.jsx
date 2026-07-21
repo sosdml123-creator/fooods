@@ -8,7 +8,7 @@ function Header({ activeTab, setActiveTab, setSelectedCategory }) {
   return (
     <header className="app-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
       <h1 className="cursor-pointer flex items-center gap-2" onClick={() => { setActiveTab("home"); setSelectedCategory("전체"); }}>
-        <img src="/logo.svg" alt="PLAYTING Logo" className="w-7 h-7 rounded-lg shadow-sm" />
+        <img src="/logo.png" alt="PLAYTING Logo" className="w-7 h-7 rounded-lg shadow-sm object-cover" />
         <span>PLAYTING</span>
       </h1>
       <div className="flex items-center gap-1.5" style={{ marginLeft: "auto", display: "flex", gap: "8px", alignItems: "center" }}>
