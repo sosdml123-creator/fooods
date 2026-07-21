@@ -2379,21 +2379,24 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
               </div>
               <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handlePhoto} className="hidden" />
 
-              <label>
-                카테고리 선택
-                <select value={category} onChange={(e) => setCategory(e.target.value)}>
+              <label className="block text-xs font-bold text-zinc-700 flex flex-col gap-1 mb-2">
+                <span>카테고리 선택</span>
+                <select className="w-full border border-zinc-200 rounded-xl p-2.5 text-xs bg-white font-normal outline-none focus:border-emerald-500" value={category} onChange={(e) => setCategory(e.target.value)}>
                   {categories.filter(c => c !== "전체" && c !== "팔로잉").map(c => (
                     <option key={c}>{c}</option>
                   ))}
                 </select>
               </label>
-              <label>
-                포스팅 제목 <span className="text-[10px] text-zinc-400 font-normal">({title.length}/40자)</span>
-                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="제목을 입력해 주세요" maxLength={40} required />
+
+              <label className="block text-xs font-bold text-zinc-700 flex flex-col gap-1 mb-2">
+                <span>포스팅 제목 <span className="text-[10px] text-zinc-400 font-normal">({title.length}/40자)</span></span>
+                <input className="w-full border border-zinc-200 rounded-xl p-2.5 text-xs font-normal outline-none focus:border-emerald-500" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="제목을 입력해 주세요" maxLength={40} required />
               </label>
-              <label>
-                이야기 / 레시피 내용 <span className="text-[10px] text-zinc-400 font-normal">({body.length}/1000자)</span>
+
+              <label className="block text-xs font-bold text-zinc-700 flex flex-col gap-1 mb-2">
+                <span>이야기 / 레시피 내용 <span className="text-[10px] text-zinc-400 font-normal">({body.length}/1000자)</span></span>
                 <textarea 
+                  className="w-full border border-zinc-200 rounded-xl p-2.5 text-xs font-normal h-32 resize-none outline-none focus:border-emerald-500"
                   value={body} 
                   onChange={(e) => setBody(e.target.value)} 
                   placeholder="이야기나 레시피를 적어보세요. 내용 내의 #해시태그는 자동으로 하이라이트됩니다." 
@@ -4223,6 +4226,11 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       const [reportTarget, setReportTarget] = useState({ postId: "", commentId: "" });
 
       const getInitialTab = () => {
+        try {
+          const savedWriteOpen = sessionStorage.getItem("fooods_write_open");
+          const savedTab = sessionStorage.getItem("fooods_active_tab");
+          if (savedWriteOpen === "true" && savedTab) return savedTab;
+        } catch (e) {}
         const path = window.location.pathname;
         if (path.includes("privacy")) return "privacy";
         if (path.includes("terms")) return "terms";
@@ -4233,10 +4241,11 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       const [activeTab, setActiveTab] = useState(getInitialTab);
 
       useEffect(() => {
+        try { sessionStorage.setItem("fooods_active_tab", activeTab); } catch(e) {}
         const handleLocationChange = () => setActiveTab(getInitialTab());
         window.addEventListener("popstate", handleLocationChange);
         return () => window.removeEventListener("popstate", handleLocationChange);
-      }, []);
+      }, [activeTab]);
 
       const [selectedCategory, setSelectedCategory] = useState("전체");
       const [searchQuery, setSearchQuery] = useState("");
@@ -4244,7 +4253,19 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       const [searchUsersResult, setSearchUsersResult] = useState([]);
       const [searchMode, setSearchMode] = useState("posts"); // "posts" | "users"
       const [isSearching, setIsSearching] = useState(false);
-      const [writeOpen, setWriteOpen] = useState(false);
+
+      const getInitialWriteOpen = () => {
+        try {
+          return sessionStorage.getItem("fooods_write_open") === "true";
+        } catch (e) {
+          return false;
+        }
+      };
+      const [writeOpen, setWriteOpen] = useState(getInitialWriteOpen);
+
+      useEffect(() => {
+        try { sessionStorage.setItem("fooods_write_open", writeOpen ? "true" : "false"); } catch(e) {}
+      }, [writeOpen]);
       const [loginOpen, setLoginOpen] = useState(false);
       const [isLoggedIn, setIsLoggedIn] = useState(false);
       const [appInitializing, setAppInitializing] = useState(true);
@@ -5339,6 +5360,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         db.collection("posts").add(newPost)
           .then((docRef) => {
             console.log("[Firestore] Post added with ID:", docRef.id);
+            try { sessionStorage.removeItem("fooods_write_open"); } catch(e) {}
             setWriteOpen(false);
             setActiveTab("home");
           })
