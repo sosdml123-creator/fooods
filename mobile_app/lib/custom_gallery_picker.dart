@@ -211,7 +211,7 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
       debugPrint('[UPLOAD STEP 4] Creating multipart request for: $key');
       final request = http.MultipartRequest(
         'POST',
-        Uri.parse('https://www.myplating.kr/api/v1/upload'),
+        Uri.parse('https://myplating.kr/api/v1/upload'),
       );
       
       debugPrint('[UPLOAD STEP 5] Appending file to multipart files list: ${fileToUpload.path}');
@@ -220,7 +220,7 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
         onTimeout: () => throw TimeoutException('파일을 멀티파트 데이터로 변환하는 데 실패했습니다.'),
       ));
 
-      debugPrint('[UPLOAD STEP 6] Sending HTTP POST request to https://www.myplating.kr/api/v1/upload');
+      debugPrint('[UPLOAD STEP 6] Sending HTTP POST request to https://myplating.kr/api/v1/upload');
       final streamedResponse = await request.send().timeout(
         const Duration(seconds: 45),
         onTimeout: () => throw TimeoutException('서버 연결 및 데이터 전송 시간이 초과되었습니다.'),
