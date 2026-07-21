@@ -1,5 +1,51 @@
 import React, { useState, useEffect } from 'react';
 
+// 커뮤니티 이용 규칙 모달
+function CommunityRulesModal({ isOpen, onClose }) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4 backdrop-blur-xs" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-md max-h-[80vh] overflow-y-auto p-5 text-left shadow-2xl space-y-4" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-center border-b border-zinc-150 pb-3">
+          <h3 className="text-sm font-bold text-zinc-950 flex items-center gap-1.5">
+            🛡️ 플레이팅 커뮤니티 이용 규칙
+          </h3>
+          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 text-xl font-medium border-none bg-transparent cursor-pointer">×</button>
+        </div>
+        
+        <div className="space-y-3.5 text-xs text-zinc-700 leading-relaxed">
+          <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3">
+            <strong className="text-amber-900 block mb-1">1. 음란 및 음란물 금지</strong>
+            <p className="text-amber-800 text-[11px]">성적 수치심을 유발하거나 음란한 표현, 이미지, 음란 웹사이트 링크를 게시하는 행위는 엄격히 금지됩니다. 위반 시 계정이 즉시 영구 정지될 수 있습니다.</p>
+          </div>
+          
+          <div className="bg-zinc-50 border border-zinc-200/80 rounded-xl p-3">
+            <strong className="text-zinc-900 block mb-1">2. 욕설 및 인신공격, 명예훼손 금지</strong>
+            <p className="text-zinc-600 text-[11px]">특정 유저나 타인을 지칭하여 비방하거나, 욕설을 사용해 인격을 모독하거나, 명예를 훼손하는 부정적 게시글은 사전 예고 없이 즉시 삭제됩니다.</p>
+          </div>
+
+          <div className="bg-zinc-50 border border-zinc-200/80 rounded-xl p-3">
+            <strong className="text-zinc-900 block mb-1">3. 상업적 홍보 및 스팸 금지</strong>
+            <p className="text-zinc-600 text-[11px]">무단 홍보성 게시글, 도배글, 불법 거래 및 무분별한 링크 도배는 자동 시스템 및 관리자에 의해 즉각 파기됩니다.</p>
+          </div>
+
+          <div className="bg-zinc-50 border border-zinc-200/80 rounded-xl p-3">
+            <strong className="text-zinc-900 block mb-1">4. 건전한 맛집 & 홈쿡 문화 형성</strong>
+            <p className="text-zinc-600 text-[11px]">서로를 존중하고 가치 있는 요리와 맛집 정보를 공유하는 따뜻한 클린 커뮤니티를 만들어 주세요.</p>
+          </div>
+        </div>
+
+        <button 
+          onClick={onClose} 
+          className="w-full bg-zinc-900 text-white font-bold py-3 text-xs rounded-xl hover:bg-black active:scale-98 transition-all cursor-pointer border-none"
+        >
+          동의하고 확인했습니다
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // 커뮤니티 자유 게시글 리스트 뷰
 export function CommunityView({ 
   communityPosts, 
@@ -7,8 +53,7 @@ export function CommunityView({
   onOpenCommunityWrite, 
   onLikePost, 
   onScrapPost, 
-  onAuthorClick,
-  CommunityRulesModal
+  onAuthorClick
 }) {
   const [comCategory, setComCategory] = useState("🔥 인기");
   const [showSearch, setShowSearch] = useState(false);
@@ -537,52 +582,6 @@ export function CommunityDetailView({
           />
           <button type="submit">등록</button>
         </form>
-      </div>
-    </div>
-  );
-}
-
-// 커뮤니티 이용 규칙 모달
-function CommunityRulesModal({ isOpen, onClose }) {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4 backdrop-blur-xs" onClick={onClose}>
-      <div className="bg-white rounded-2xl w-full max-w-md max-h-[80vh] overflow-y-auto p-5 text-left shadow-2xl space-y-4" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-between items-center border-b border-zinc-150 pb-3">
-          <h3 className="text-sm font-bold text-zinc-950 flex items-center gap-1.5">
-            🛡️ 플레이팅 커뮤니티 이용 규칙
-          </h3>
-          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 text-xl font-medium border-none bg-transparent cursor-pointer">×</button>
-        </div>
-        
-        <div className="space-y-3.5 text-xs text-zinc-700 leading-relaxed">
-          <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3">
-            <strong className="text-amber-900 block mb-1">1. 음란 및 음란물 금지</strong>
-            <p className="text-amber-800 text-[11px]">성적 수치심을 유발하거나 음란한 표현, 이미지, 음란 웹사이트 링크를 게시하는 행위는 엄격히 금지됩니다. 위반 시 계정이 즉시 영구 정지될 수 있습니다.</p>
-          </div>
-          
-          <div className="bg-zinc-50 border border-zinc-200/80 rounded-xl p-3">
-            <strong className="text-zinc-900 block mb-1">2. 욕설 및 인신공격, 명예훼손 금지</strong>
-            <p className="text-zinc-600 text-[11px]">특정 유저나 타인을 지칭하여 비방하거나, 욕설을 사용해 인격을 모독하거나, 명예를 훼손하는 부정적 게시글은 사전 예고 없이 즉시 삭제됩니다.</p>
-          </div>
-
-          <div className="bg-zinc-50 border border-zinc-200/80 rounded-xl p-3">
-            <strong className="text-zinc-900 block mb-1">3. 상업적 홍보 및 스팸 금지</strong>
-            <p className="text-zinc-600 text-[11px]">무단 홍보성 게시글, 도배글, 불법 거래 및 무분별한 링크 도배는 자동 시스템 및 관리자에 의해 즉각 파기됩니다.</p>
-          </div>
-
-          <div className="bg-zinc-50 border border-zinc-200/80 rounded-xl p-3">
-            <strong className="text-zinc-900 block mb-1">4. 건전한 맛집 & 홈쿡 문화 형성</strong>
-            <p className="text-zinc-600 text-[11px]">서로를 존중하고 가치 있는 요리와 맛집 정보를 공유하는 따뜻한 클린 커뮤니티를 만들어 주세요.</p>
-          </div>
-        </div>
-
-        <button 
-          onClick={onClose} 
-          className="w-full bg-zinc-900 text-white font-bold py-3 text-xs rounded-xl hover:bg-black active:scale-98 transition-all cursor-pointer border-none"
-        >
-          동의하고 확인했습니다
-        </button>
       </div>
     </div>
   );
