@@ -3166,6 +3166,179 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       );
     }
 
+    // 네이버 지도 마커 클러스터링 유틸리티 클래스 (MarkerClustering)
+    class Cluster {
+      constructor(map) {
+        this._map = map;
+        this._markers = [];
+        this._clusterMarker = null;
+      }
+
+      addMarker(marker) {
+        this._markers.push(marker);
+      }
+
+      getCenter() {
+        if (this._markers.length === 0) return null;
+        let latSum = 0;
+        let lngSum = 0;
+        this._markers.forEach(m => {
+          const pos = m.getPosition();
+          latSum += pos.lat();
+          lngSum += pos.lng();
+        });
+        return new window.naver.maps.LatLng(latSum / this._markers.length, lngSum / this._markers.length);
+      }
+
+      render() {
+        if (this._markers.length === 1) {
+          this._markers[0].setMap(this._map);
+          return;
+        }
+
+        this._markers.forEach(m => m.setMap(null));
+        const center = this.getCenter();
+        const count = this._markers.length;
+
+        const contentHtml = `
+          <div style="
+            width: 38px;
+            height: 38px;
+            background: #059669;
+            border: 2.5px solid #ffffff;
+            border-radius: 50%;
+            color: #ffffff;
+            font-weight: 800;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 25px -5px rgba(5, 150, 105, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            transition: transform 0.2s ease;
+          ">
+            ${count}
+          </div>
+        `;
+
+        this._clusterMarker = new window.naver.maps.Marker({
+          position: center,
+          map: this._map,
+          icon: {
+            content: contentHtml,
+            anchor: new window.naver.maps.Point(19, 19)
+          }
+        });
+
+        window.naver.maps.Event.addListener(this._clusterMarker, 'click', () => {
+          const currentZoom = this._map.getZoom();
+          this._map.setZoom(currentZoom + 2, true);
+          this._map.setCenter(center);
+        });
+      }
+
+      destroy() {
+        if (this._clusterMarker) {
+          this._clusterMarker.setMap(null);
+          this._clusterMarker = null;
+        }
+      }
+    }
+
+    class MarkerClustering {
+      constructor(options) {
+        this._map = options.map;
+        this._markers = options.markers || [];
+        this._gridSize = options.gridSize || 70;
+        this._clusters = [];
+        this._listeners = [];
+
+        this._bindEvents();
+        this.update();
+      }
+
+      setMap(map) {
+        this._map = map;
+        this.update();
+      }
+
+      setMarkers(markers) {
+        this._markers = markers;
+        this.update();
+      }
+
+      _bindEvents() {
+        if (!this._map || !window.naver || !window.naver.maps) return;
+        const map = this._map;
+        const listener1 = window.naver.maps.Event.addListener(map, 'zoom_changed', () => this.update());
+        const listener2 = window.naver.maps.Event.addListener(map, 'dragend', () => this.update());
+        this._listeners = [listener1, listener2];
+      }
+
+      clear() {
+        this._clusters.forEach(cluster => cluster.destroy());
+        this._clusters = [];
+      }
+
+      update() {
+        this.clear();
+        if (!this._map || !this._markers || this._markers.length === 0) return;
+
+        const bounds = this._map.getBounds();
+        const zoom = this._map.getZoom();
+
+        if (zoom >= 17) {
+          this._markers.forEach(m => m.setMap(this._map));
+          return;
+        }
+
+        const visibleMarkers = this._markers.filter(m => {
+          const pos = m.getPosition();
+          return bounds ? bounds.hasLatLng(pos) : true;
+        });
+
+        const clusters = [];
+        visibleMarkers.forEach(marker => {
+          let added = false;
+          for (let i = 0; i < clusters.length; i++) {
+            const cluster = clusters[i];
+            const center = cluster.getCenter();
+            const mPos = marker.getPosition();
+            const distance = this._getDistance(center, mPos);
+            if (distance < this._gridSize) {
+              cluster.addMarker(marker);
+              added = true;
+              break;
+            }
+          }
+          if (!added) {
+            const newCluster = new Cluster(this._map);
+            newCluster.addMarker(marker);
+            clusters.push(newCluster);
+          }
+        });
+
+        clusters.forEach(c => c.render());
+        this._clusters = clusters;
+      }
+
+      _getDistance(p1, p2) {
+        if (!this._map || !p1 || !p2) return 9999;
+        const proj = this._map.getProjection();
+        if (!proj) return 9999;
+        const pt1 = proj.fromCoordToOffset(p1);
+        const pt2 = proj.fromCoordToOffset(p2);
+        return Math.sqrt(Math.pow(pt1.x - pt2.x, 2) + Math.pow(pt1.y - pt2.y, 2));
+      }
+
+      destroy() {
+        this.clear();
+        if (window.naver && window.naver.maps) {
+          this._listeners.forEach(l => window.naver.maps.Event.removeListener(l));
+        }
+      }
+    }
+
     function NaverMapView({ posts, onPostClick }) {
       const mapRef = useRef(null);
       const mapInstanceRef = useRef(null);
@@ -3220,6 +3393,8 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         };
       }, [clientId]);
 
+      const clustererRef = useRef(null);
+
       useEffect(() => {
         if (!mapLoaded || !mapRef.current || !window.naver || !window.naver.maps) return;
 
@@ -3240,35 +3415,91 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
         const map = mapInstanceRef.current;
 
+        // 기존 마커 및 클러스터 정리
+        if (clustererRef.current) {
+          clustererRef.current.destroy();
+          clustererRef.current = null;
+        }
         markersRef.current.forEach(m => m.setMap(null));
         markersRef.current = [];
 
-        posts.forEach(post => {
-          if (post.links && Array.isArray(post.links)) {
-            const mapLink = post.links.find(l => l.url && (l.url.includes("naver") || l.url.includes("map")));
-            if (mapLink) {
-              const marker = new window.naver.maps.Marker({
-                position: new window.naver.maps.LatLng(37.5665 + (Math.random() - 0.5) * 0.04, 126.9780 + (Math.random() - 0.5) * 0.04),
-                map: map,
-                title: post.title
-              });
-              window.naver.maps.Event.addListener(marker, 'click', () => {
-                setSelectedPlace({
-                  name: post.title || "추천 장소",
-                  category: post.category || "맛집",
-                  address: "서울 중구 세종대로 110 (명동/시청)",
-                  hours: "매일 11:30 - 22:00 (브레이크타임 15:00-17:00)",
-                  phone: "02-771-2300",
-                  menus: ["시그니처 플래터 (2인)", "셰프 추천 커스텀 메뉴"],
-                  mapUrl: mapLink.url,
-                  postId: post.id
-                });
-              });
-              markersRef.current.push(marker);
-            }
+        // [1] & [3] Firestore location 필드가 존재하는 게시글 조회 + mapCategory 필터링
+        const validPosts = (posts || []).filter(post => {
+          if (!post) return false;
+          // location 존재 및 lat/lng 좌표 유효성 검사 (null 체크)
+          const hasLocation = post.location && typeof post.location.lat === 'number' && typeof post.location.lng === 'number';
+          if (!hasLocation) return false;
+          
+          // 카테고리 필터 연동 (전체 / 맛집 / 카페 / 배달)
+          if (mapCategory !== "전체" && post.category !== mapCategory) {
+            return false;
           }
+          return true;
         });
-      }, [mapLoaded, posts]);
+
+        const createdMarkers = validPosts.map(post => {
+          const lat = Number(post.location.lat);
+          const lng = Number(post.location.lng);
+          const placeTitle = post.location.placeName || post.title || "등록 장소";
+
+          const marker = new window.naver.maps.Marker({
+            position: new window.naver.maps.LatLng(lat, lng),
+            title: placeTitle,
+            icon: {
+              content: `
+                <div style="
+                  display: flex;
+                  align-items: center;
+                  gap: 5px;
+                  background: #ffffff;
+                  border: 1.5px solid #059669;
+                  padding: 5px 10px;
+                  border-radius: 9999px;
+                  box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+                  cursor: pointer;
+                  font-size: 11px;
+                  font-weight: 700;
+                  color: #111827;
+                  white-space: nowrap;
+                ">
+                  <span style="color:#059669; font-size:12px;">📍</span>
+                  <span>${placeTitle}</span>
+                </div>
+              `,
+              anchor: new window.naver.maps.Point(20, 15)
+            }
+          });
+
+          window.naver.maps.Event.addListener(marker, 'click', () => {
+            setSelectedPlace({
+              name: placeTitle,
+              category: post.category || "맛집",
+              address: post.location.placeName || "선택한 장소",
+              hours: "플레이팅 사용자 추천 장소",
+              phone: "네이버 지도 연동",
+              menus: [post.title || "추천 게시글"],
+              mapUrl: `https://map.naver.com/v5/search/${encodeURIComponent(placeTitle)}`,
+              postId: post.id
+            });
+            if (onPostClick) {
+              onPostClick(post.id);
+            }
+          });
+
+          return marker;
+        });
+
+        markersRef.current = createdMarkers;
+
+        // [2] MarkerClustering 라이브러리 연동
+        if (createdMarkers.length > 0) {
+          clustererRef.current = new MarkerClustering({
+            map: map,
+            markers: createdMarkers,
+            gridSize: 70
+          });
+        }
+      }, [mapLoaded, posts, mapCategory]);
 
       const handleSearch = async (e) => {
         if (e) e.preventDefault();
