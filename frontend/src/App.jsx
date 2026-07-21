@@ -2206,7 +2206,17 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
       // Cloudflare R2 업로드 (안드로이드 모바일 튕김 방지)
       async function handlePhoto(e) {
-        if (!e.target.files || e.target.files.length === 0) return;
+        if (typeof window !== "undefined" && window.isSelectingPhotosRef) {
+          window.isSelectingPhotosRef.current = true;
+        }
+        if (!e.target.files || e.target.files.length === 0) {
+          setTimeout(() => {
+            if (typeof window !== "undefined" && window.isSelectingPhotosRef) {
+              window.isSelectingPhotosRef.current = false;
+            }
+          }, 1500);
+          return;
+        }
         
         let files = [];
         try {
@@ -2258,6 +2268,12 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         // 인텐트 찌꺼기 남지 않게 input value 리셋
         try { targetInput.value = ""; } catch(err) {}
         setLoading(false);
+
+        setTimeout(() => {
+          if (typeof window !== "undefined" && window.isSelectingPhotosRef) {
+            window.isSelectingPhotosRef.current = false;
+          }
+        }, 2000);
       }
 
       function extractHashtags(text) {
@@ -4436,13 +4452,12 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         if (dbLoaded) {
           if (isInitialMount.current) {
             isInitialMount.current = false;
-            // 최초 상태 저장
+            // 최초 상태 저장 (탭 상태만 푸시)
             window.history.replaceState({
               activeTab,
               activePostId,
               activeComPostId,
-              activeUser,
-              writeOpen
+              activeUser
             }, "");
             return;
           }
@@ -4453,27 +4468,26 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             return;
           }
 
-          // 상태가 변경되었을 때 pushState 실행
+          // 상태가 변경되었을 때 pushState 실행 (writeOpen을 히스토리 스택에서 분리)
           window.history.pushState({
             activeTab,
             activePostId,
             activeComPostId,
-            activeUser,
-            writeOpen
+            activeUser
           }, "");
         }
-      }, [activeTab, activePostId, activeComPostId, activeUser, writeOpen, dbLoaded]);
+      }, [activeTab, activePostId, activeComPostId, activeUser, dbLoaded]);
 
       useEffect(() => {
         window.isSelectingPhotosRef = isSelectingPhotos;
         const handlePopState = (event) => {
           if (isSelectingPhotos.current) {
             console.log("[Navigation] popstate ignored because app is currently returning from native gallery.");
-            setTimeout(() => { isSelectingPhotos.current = false; }, 1200);
+            setTimeout(() => { isSelectingPhotos.current = false; }, 2000);
             return;
           }
           if (writeOpen) {
-            console.log("[Navigation] popstate ignored because write sheet is open.");
+            console.log("[Navigation] popstate ignored because write sheet is active.");
             return;
           }
           if (event.state) {
@@ -4483,7 +4497,6 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             if (state.activePostId !== undefined) setActivePostId(state.activePostId);
             if (state.activeComPostId !== undefined) setActiveComPostId(state.activeComPostId);
             if (state.activeUser !== undefined) setActiveUser(state.activeUser);
-            if (state.writeOpen !== undefined) setWriteOpen(state.writeOpen);
           }
         };
 
