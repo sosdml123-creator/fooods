@@ -3354,6 +3354,10 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       const [mapCategory, setMapCategory] = useState("전체");
       const mapCategories = ["전체", "맛집", "카페", "배달"];
 
+      // [수정 1] 마커 터치 시 슬라이드업 바텀 시트 상태 및 터치 감지
+      const [selectedMapPost, setSelectedMapPost] = useState(null);
+      const touchStartY = useRef(0);
+
       useEffect(() => {
         window.onNaverMapAuthError = function() {
           setAuthError(true);
@@ -3471,19 +3475,8 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           });
 
           window.naver.maps.Event.addListener(marker, 'click', () => {
-            setSelectedPlace({
-              name: placeTitle,
-              category: post.category || "맛집",
-              address: post.location.placeName || "선택한 장소",
-              hours: "플레이팅 사용자 추천 장소",
-              phone: "네이버 지도 연동",
-              menus: [post.title || "추천 게시글"],
-              mapUrl: `https://map.naver.com/v5/search/${encodeURIComponent(placeTitle)}`,
-              postId: post.id
-            });
-            if (onPostClick) {
-              onPostClick(post.id);
-            }
+            // [수정 1] 클릭 시 상세로 직행하지 않고 슬라이드업 바텀 시트를 띄웁니다.
+            setSelectedMapPost(post);
           });
 
           return marker;
@@ -3499,6 +3492,31 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             gridSize: 70
           });
         }
+
+        // [수정 4] 지도 빈 영역을 클릭하면 바텀 시트가 닫힙니다.
+        const mapClick = window.naver.maps.Event.addListener(map, 'click', () => {
+          setSelectedMapPost(null);
+        });
+
+        // [수정 4] 아래로 스와이프 시 닫히도록 터치 제스처 핸들러 추가
+        const handleTouchStart = (e) => {
+          if (e.touches && e.touches[0]) {
+            touchStartY.current = e.touches[0].clientY;
+          }
+        };
+
+        const handleTouchEnd = (e) => {
+          if (e.changedTouches && e.changedTouches[0]) {
+            const deltaY = e.changedTouches[0].clientY - touchStartY.current;
+            if (deltaY > 60) { // 60px 이상 아래로 내렸을 때 시트를 닫습니다.
+              setSelectedMapPost(null);
+            }
+          }
+        };
+
+        return () => {
+          window.naver.maps.Event.removeListener(mapClick);
+        };
       }, [mapLoaded, posts, mapCategory]);
 
       const handleSearch = async (e) => {
@@ -3651,6 +3669,80 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             </div>
           ) : (
             <div ref={mapRef} className="w-full h-full" style={{ touchAction: 'none', webkitUserSelect: 'none', userSelect: 'none', willChange: 'transform', transform: 'translateZ(0)' }}></div>
+          )}
+
+          {/* [수정 1, 2, 3, 4] 마커 탭 시 슬라이드업 바텀 시트 */}
+          {selectedMapPost && (
+            <div 
+              className="absolute bottom-4 left-4 right-4 z-30 animate-in slide-in-from-bottom duration-300"
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+            >
+              <div 
+                className="bg-white/95 backdrop-blur-md rounded-3xl p-4 shadow-2xl border border-zinc-200 text-zinc-900 relative cursor-pointer active:scale-[0.99] transition-all"
+                onClick={() => {
+                  if (onPostClick) {
+                    onPostClick(selectedMapPost.id);
+                  }
+                }}
+              >
+                {/* 상단 스와이프 안내 데코레이션 바 */}
+                <div className="w-12 h-1.5 bg-zinc-300 rounded-full mx-auto mb-3" />
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedMapPost(null);
+                  }}
+                  className="absolute top-3.5 right-3.5 w-7 h-7 rounded-full bg-zinc-100 text-zinc-500 hover:bg-zinc-200 flex items-center justify-center text-xs transition-colors border-none cursor-pointer"
+                >
+                  <i className="fa-solid fa-xmark"></i>
+                </button>
+
+                <div className="flex gap-4">
+                  {/* 대표 이미지 미리보기 */}
+                  <div className="w-20 h-20 rounded-2xl overflow-hidden bg-zinc-100 flex-shrink-0 border border-zinc-150 shadow-xs">
+                    <img 
+                      src={(selectedMapPost.image && selectedMapPost.image[0]) || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200"} 
+                      alt="" 
+                      className="w-full h-full object-cover" 
+                      onError={(e) => {
+                        e.target.src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200";
+                      }}
+                    />
+                  </div>
+
+                  {/* 게시글 정보 미리보기 */}
+                  <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+                    <div>
+                      <div className="text-[10px] text-emerald-600 font-bold tracking-wider mb-1 flex items-center gap-1">
+                        <span>📍</span>
+                        <span className="truncate">{selectedMapPost.location?.placeName || "추천 장소"}</span>
+                      </div>
+                      <h4 className="text-sm font-bold text-zinc-950 truncate tracking-tight mb-0.5">
+                        {selectedMapPost.title}
+                      </h4>
+                      <span className="text-[11px] text-zinc-500 font-medium">
+                        by {selectedMapPost.author}
+                      </span>
+                    </div>
+
+                    {/* 좋아요 & 댓글 수 */}
+                    <div className="flex items-center gap-3.5 text-xs text-zinc-500 font-semibold mt-1">
+                      <span className="flex items-center gap-1.5 bg-rose-50 text-rose-600 px-2 py-0.5 rounded-lg border border-rose-100/50">
+                        <i className="fa-solid fa-heart text-[10px]"></i>
+                        <span>{selectedMapPost.likeCount || 0}</span>
+                      </span>
+                      <span className="flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-lg border border-emerald-100/50">
+                        <i className="fa-solid fa-comment text-[10px]"></i>
+                        <span>{selectedMapPost.comments?.length || 0}</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
 
           {/* 선택된 음식점 상세 정보 바텀시트 카드 */}
