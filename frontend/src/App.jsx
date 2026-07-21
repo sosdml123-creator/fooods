@@ -473,30 +473,80 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       );
     }
 
-    // AdMob 네이티브 / 배너 광고 Placeholder (요구사항 2, 3, 7번)
+    // AdMob 네이티브 / 배너 광고 Placeholder ([수정 1], [수정 2] 반영)
     function AdMobPlaceholder({ type = "native", position = "feed", index = 0 }) {
       const [adFailed, setAdFailed] = useState(false);
+      const containerRef = useRef(null);
 
       useEffect(() => {
-        if (typeof window !== "undefined" && window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-          window.flutter_inappwebview.callHandler('showAd', {
-            type,
-            position,
-            index
-          }).catch(err => {
-            console.log("[AdMob Bridge] showAd call error:", err);
-          });
+        // [수정 2] Flutter에서 광고 실패 시 전역 콜백 수신
+        const handleAdFailed = (failedPos, failedIdx) => {
+          if (failedPos === position && (failedIdx === index || failedIdx === undefined)) {
+            console.log(`[AdMob Bridge] Ad load failed for ${position}:${index}. Collapsing placeholder.`);
+            setAdFailed(true);
+          }
+        };
+
+        if (typeof window !== "undefined") {
+          window.onAdLoadFailed = handleAdFailed;
         }
-        
+
+        // [수정 1] IntersectionObserver로 뷰포트 진입 1회, 이탈 1회 감지
+        const element = containerRef.current;
+        if (!element) return;
+
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => {
+            if (typeof window === "undefined" || !window.flutter_inappwebview || !window.flutter_inappwebview.callHandler) {
+              return;
+            }
+
+            const rect = entry.boundingClientRect;
+            if (entry.isIntersecting) {
+              // 진입 시: showAd 1회 호출 (좌표 스냅샷 전달)
+              window.flutter_inappwebview.callHandler('showAd', {
+                type,
+                position,
+                index,
+                top: rect.top,
+                left: rect.left,
+                width: rect.width,
+                height: rect.height
+              }).catch(err => console.log("[AdMob Bridge] showAd error:", err));
+            } else {
+              // 이탈 시: hideAd 1회 호출
+              window.flutter_inappwebview.callHandler('hideAd', {
+                position,
+                index
+              }).catch(err => console.log("[AdMob Bridge] hideAd error:", err));
+            }
+          });
+        }, { threshold: 0.3 });
+
+        observer.observe(element);
+
         try {
           (window.adsbygoogle = window.adsbygoogle || []).push({});
         } catch (e) {}
+
+        return () => {
+          observer.disconnect();
+          if (typeof window !== "undefined" && window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+            window.flutter_inappwebview.callHandler('hideAd', { position, index }).catch(() => {});
+          }
+        };
       }, [type, position, index]);
 
-      if (adFailed) return null;
+      if (adFailed) {
+        // [수정 2] 실패 시 CSS height 0, margin 0으로 설정하여 레이아웃 깨짐 방지
+        return <div style={{ height: 0, margin: 0, padding: 0, overflow: "hidden", display: "none" }} />;
+      }
 
       return (
-        <div className="my-3 p-3 bg-gradient-to-r from-amber-50/70 via-orange-50/70 to-amber-50/70 border border-amber-200/80 rounded-2xl text-center overflow-hidden shadow-2xs">
+        <div 
+          ref={containerRef}
+          className="my-3 p-3 bg-gradient-to-r from-amber-50/70 via-orange-50/70 to-amber-50/70 border border-amber-200/80 rounded-2xl text-center overflow-hidden shadow-2xs transition-all duration-300"
+        >
           <div className="text-[10px] font-bold text-amber-600 tracking-wider mb-1 flex items-center justify-between">
             <span className="flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
@@ -507,8 +557,8 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
           
           <ins className="adsbygoogle"
                style={{ display: "block" }}
-               data-ad-client="ca-pub-3878859120989916"
-               data-ad-slot="9384771667"
+               data-ad-client="ca-pub-3940256099942544"
+               data-ad-slot="6300978111"
                data-ad-format="auto"
                data-full-width-responsive="true"></ins>
         </div>

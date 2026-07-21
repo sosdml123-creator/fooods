@@ -98,15 +98,24 @@ class _WebViewScreenState extends State<WebViewScreen> {
   bool _isLoadingWeb = true;
   bool _hasError = false;
 
-  // Google AdMob 관리 변수 (요구사항 1, 6, 8, 10 반영)
+  // Google AdMob 관리 변수 ([수정 2], [수정 3], [수정 4] 반영)
   BannerAd? _bannerAd;
   bool _isBannerAdLoaded = false;
-  final String _adUnitId = 'ca-app-pub-3878859120989916/9384771667';
 
-  void _loadBottomBannerAd() {
+  // [수정 3] Google 공식 테스트 ID 설정 (Android/iOS)
+  String get _bannerAdUnitId {
+    if (Platform.isAndroid) {
+      return 'ca-app-pub-3940256099942544/6300978111'; // Android 테스트 배너 ID
+    } else if (Platform.isIOS) {
+      return 'ca-app-pub-3940256099942544/2934735716'; // iOS 테스트 배너 ID
+    }
+    return 'ca-app-pub-3940256099942544/6300978111';
+  }
+
+  void _loadBottomBannerAd({String position = 'detail', int index = 0}) {
     if (_bannerAd != null) return;
     _bannerAd = BannerAd(
-      adUnitId: _adUnitId,
+      adUnitId: _bannerAdUnitId,
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(
@@ -126,6 +135,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
               _isBannerAdLoaded = false;
               _bannerAd = null;
             });
+            // [수정 2] 광고 로드 실패 시 React 전역 콜백 window.onAdLoadFailed 호출
+            _webViewController?.evaluateJavascript(
+              source: 'if(window.onAdLoadFailed) window.onAdLoadFailed("$position", $index);'
+            );
           }
         },
       ),
@@ -275,10 +288,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
                     final Map<String, dynamic> data = Map<String, dynamic>.from(args[0]);
                     final String type = data['type'] ?? 'banner';
                     final String position = data['position'] ?? 'bottom';
+                    final int index = data['index'] ?? 0;
                     
-                    if (position == 'detail' || position == 'bottom' || type == 'banner') {
-                      _loadBottomBannerAd();
-                    }
+                    _loadBottomBannerAd(position: position, index: index);
                   } else {
                     _loadBottomBannerAd();
                   }
@@ -297,7 +309,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
               // 네이티브 광고 로딩용 JS 핸들러 등록
               controller.addJavaScriptHandler(
-                handlerName: 'loadNativeAd',
                 handlerName: 'loadNativeAd',
                 callback: (args) async {
                   try {
