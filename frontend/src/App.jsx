@@ -1047,43 +1047,70 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       if (!isOpen) return null;
       return (
         <div className="sheet-backdrop" onClick={onClose} style={{ zIndex: 1100 }}>
-          <div className="sheet text-left" onClick={(e) => e.stopPropagation()} style={{ maxHeight: "80vh", overflowY: "auto", padding: "20px" }}>
+          <div className="sheet text-left" onClick={(e) => e.stopPropagation()} style={{ maxHeight: "85vh", overflowY: "auto", padding: "20px" }}>
             <div className="flex justify-between items-center border-b border-zinc-100 pb-3 mb-4">
-              <h3 className="text-sm font-bold text-zinc-950 flex items-center gap-1.5">
-                🛡️ 플레이팅 커뮤니티 이용 규칙
-              </h3>
-              <button onClick={onClose} className="text-zinc-400 text-xl font-normal">×</button>
+              <div>
+                <h3 className="text-sm font-extrabold text-zinc-950 flex items-center gap-1.5">
+                  🛡️ 플레이팅 커뮤니티 가이드라인 & 이용 규칙
+                </h3>
+                <p className="text-[10px] text-zinc-400 font-medium mt-0.5">안전하고 클린한 푸드 커뮤니티 조성을 위한 약속</p>
+              </div>
+              <button onClick={onClose} className="text-zinc-400 text-xl font-normal hover:text-zinc-900 transition-colors">×</button>
             </div>
             
             <div className="flex flex-col gap-4 text-xs text-zinc-700 leading-relaxed">
-              <div>
-                <strong className="text-zinc-950 block mb-1">1. 음란 및 음란물 금지</strong>
-                <p>성적 수치심을 유발하거나 음란한 표현, 이미지, 음란 웹사이트 링크를 게시하는 행위는 엄격히 금지됩니다. 위반 시 계정이 즉시 영구 정지될 수 있습니다.</p>
+              <div className="bg-orange-50/60 border border-orange-100 p-2.5 rounded-xl text-[11px] text-orange-950 font-medium">
+                💡 플레이팅 커뮤니티는 요리와 맛집, 푸드 문화를 사랑하는 모든 유저들이 서로를 존중하며 따뜻하게 소통하는 공간입니다. 아래 수칙을 반드시 준수해 주세요.
+              </div>
+
+              <div className="border-b border-zinc-100 pb-3">
+                <strong className="text-zinc-950 text-xs font-bold block mb-1 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span> 1. 음란, 성희롱 및 불법 콘텐츠 엄금 (Zero Tolerance)
+                </strong>
+                <p className="text-zinc-600 text-[11px]">
+                  성적 수치심을 유발하는 음란 표현, 성희롱 성격의 언행, 성인 웹사이트 및 불법 링크 게시 행위는 엄격히 금지됩니다. 위반 시 사전 경고 없이 **게시물 즉시 삭제 및 계정 영구 정지** 처리가 적용됩니다.
+                </p>
               </div>
               
-              <div>
-                <strong className="text-zinc-950 block mb-1">2. 욕설 및 인신공격, 명예훼손 금지</strong>
-                <p>특정 유저나 타인을 지칭하여 비방하거나, 욕설을 사용해 인격을 모독하거나, 사실 유무와 관계없이 명예를 훼손하는 부정적 게시글은 사전 조치 없이 삭제됩니다.</p>
+              <div className="border-b border-zinc-100 pb-3">
+                <strong className="text-zinc-950 text-xs font-bold block mb-1 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span> 2. 욕설, 인신공격, 차별 및 명예훼손 금지
+                </strong>
+                <p className="text-zinc-600 text-[11px]">
+                  특정 유저, 타인 또는 특정 식당/업장을 겨냥하여 비방하거나, 욕설을 사용해 인격을 모독하고, 근거 없는 허위사실을 유포하여 명예를 훼손하는 부정적 게시글은 즉시 삭제됩니다.
+                </p>
+              </div>
+
+              <div className="border-b border-zinc-100 pb-3">
+                <strong className="text-zinc-950 text-xs font-bold block mb-1 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> 3. 상업적 광고 도배, 스팸 및 불법 거래 금지
+                </strong>
+                <p className="text-zinc-600 text-[11px]">
+                  앱 서비스 및 임직원을 사칭한 부적절한 홍보, 무차별적인 도배성 중복 게시글, 현금/포인트 편법 거래, 단순 매장 홍보용 스팸글은 업로드가 불가능합니다.
+                </p>
+              </div>
+
+              <div className="border-b border-zinc-100 pb-3">
+                <strong className="text-zinc-950 text-xs font-bold block mb-1 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 4. 타인의 저작권 및 개인정보 보호
+                </strong>
+                <p className="text-zinc-600 text-[11px]">
+                  인터넷 블로그, 타인의 SNS 사진 및 레시피를 무단 도용하거나 사전 동의 없이 타인의 초상권 및 개인정보(연락처, 사진 등)를 노출하는 게시글은 저작권 및 개인정보 보호법에 의해 금지됩니다.
+                </p>
               </div>
 
               <div>
-                <strong className="text-zinc-950 block mb-1">3. 상업적 홍보 및 스팸 금지</strong>
-                <p>맛집 할인쿠폰을 포함하여 앱 내부 기능을 사칭한 부적절한 광고 홍보, 무차별적인 도배성 게시글, 상업성 거래 글은 절대 업로드할 수 없습니다.</p>
-              </div>
-
-              <div>
-                <strong className="text-zinc-950 block mb-1">4. 타인의 권리 및 저작권 침해 금지</strong>
-                <p>인터넷 블로그나 타인의 SNS 사진 및 레시피를 무단 복제하여 마치 본인의 게시글인 것처럼 게시하는 도용 행위를 금지하며, 초상권 및 저작권을 존중해 주세요.</p>
-              </div>
-
-              <div>
-                <strong className="text-zinc-950 block mb-1">5. 깨끗하고 안전한 커뮤니티 문화 조성</strong>
-                <p>위 위반 사항에 해당하는 게시글은 관리자(Admin) 권한으로 상시 모니터링을 통해 **즉시 삭제** 조치되며, 누적 신고 시 서비스 이용이 영구 정지될 수 있습니다.</p>
+                <strong className="text-zinc-950 text-xs font-bold block mb-1 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> 5. 24시간 모니터링 및 위반자 제재 방침
+                </strong>
+                <p className="text-zinc-600 text-[11px]">
+                  플레이팅 모니터링 시스템 및 신고 접수를 통해 규정 위반이 확인되면 **즉시 블라인드 처리**되며, 누적 횟수에 따라 커뮤니티 쓰기 제한(7일/30일) 및 계정 영구 이용 정지 조치가 시행됩니다.
+                </p>
               </div>
             </div>
             
-            <button className="primary w-full py-2.5 rounded-lg text-xs font-bold mt-6" onClick={onClose}>
-              확인했습니다
+            <button className="primary w-full py-2.5 rounded-xl text-xs font-bold mt-6 shadow-xs active:scale-[0.98] transition-transform" onClick={onClose}>
+              위 이용 규칙 동의 및 확인
             </button>
           </div>
         </div>
