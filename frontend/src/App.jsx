@@ -6665,15 +6665,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
         );
       }
 
-      // 2. 로그인 안 되어 있으면 회원가입/로그인 해야만 앱으로 진입할 수 있는 전면 Auth Gate 노출
-      if (!isLoggedIn) {
-        return (
-          <LandingAuthGate 
-            onLogin={handleLogin}
-            onRegister={handleRegister}
-          />
-        );
-      }
+
 
       if (["privacy", "terms", "delete-account", "landing"].includes(activeTab)) {
         const renderStaticContent = () => {
@@ -6842,6 +6834,16 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
               {renderStaticContent()}
             </div>
           </div>
+        );
+      }
+
+      // 2. 로그인 안 되어 있으면 회원가입/로그인 해야만 앱으로 진입할 수 있는 전면 Auth Gate 노출
+      if (!isLoggedIn) {
+        return (
+          <LandingAuthGate 
+            onLogin={handleLogin}
+            onRegister={handleRegister}
+          />
         );
       }
 

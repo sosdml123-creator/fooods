@@ -69,12 +69,12 @@ Write-Host "2. Running flutter clean..."
 Set-Location "d:\food\mobile_app"
 & "$sdkDir\flutter\bin\flutter.bat" clean
 
-# 3. Android API 35 settings configuration
-Write-Host "3. Updating build.gradle for compileSdk/targetSdk 35..."
+# 3. Android API 36 settings configuration
+Write-Host "3. Updating build.gradle for compileSdk/targetSdk 36..."
 $gradlePath = "d:\food\mobile_app\android\app\build.gradle"
 $gradleContent = [System.IO.File]::ReadAllText($gradlePath)
-$gradleContent = $gradleContent -replace 'compileSdk\s*=?\s*flutter\.compileSdkVersion', 'compileSdk = 35'
-$gradleContent = $gradleContent -replace 'targetSdk\s*=?\s*flutter\.targetSdkVersion', 'targetSdk = 35'
+$gradleContent = $gradleContent -replace 'compileSdk\s*=?\s*\d+', 'compileSdk = 36'
+$gradleContent = $gradleContent -replace 'targetSdk\s*=?\s*\d+', 'targetSdk = 36'
 [System.IO.File]::WriteAllText($gradlePath, $gradleContent)
 
 # 4. Upgrade Gradle and Kotlin versions
@@ -86,8 +86,8 @@ $wrapperContent = $wrapperContent.Replace("gradle-7.6.3-all.zip", "gradle-8.4-al
 
 $settingsPath = "d:\food\mobile_app\android\settings.gradle"
 $settingsContent = [System.IO.File]::ReadAllText($settingsPath)
-$settingsContent = $settingsContent -replace 'id "com.android.application" version "[^"]+"', 'id "com.android.application" version "8.1.0"'
-$settingsContent = $settingsContent -replace 'id "org.jetbrains.kotlin.android" version "[^"]+"', 'id "org.jetbrains.kotlin.android" version "2.1.0"'
+$settingsContent = $settingsContent -replace 'id "com.android.application" version "[^"]+"', 'id "com.android.application" version "8.3.0"'
+$settingsContent = $settingsContent -replace 'id "org.jetbrains.kotlin.android" version "[^"]+"', 'id "org.jetbrains.kotlin.android" version "2.3.0"'
 [System.IO.File]::WriteAllText($settingsPath, $settingsContent)
 
 # 5. Pub get and launcher/splash generation
