@@ -102,25 +102,33 @@ class _WebViewScreenState extends State<WebViewScreen> {
   BannerAd? _bannerAd;
   bool _isBannerAdLoaded = false;
 
-  // [수정 3] Google 공식 테스트 ID 설정 (Android/iOS)
-  String get _bannerAdUnitId {
+  // Google AdMob 상단/하단 배너 ID (실제 광고 ID 및 테스트 ID Fallback)
+  String get _realBannerAdUnitId {
+    if (Platform.isAndroid) {
+      return 'ca-app-pub-3878859120989916/2421488045'; // 상단 배너 실제 ID
+    }
+    return 'ca-app-pub-3878859120989916/2421488045';
+  }
+
+  String get _testBannerAdUnitId {
     if (Platform.isAndroid) {
       return 'ca-app-pub-3940256099942544/6300978111'; // Android 테스트 배너 ID
-    } else if (Platform.isIOS) {
-      return 'ca-app-pub-3940256099942544/2934735716'; // iOS 테스트 배너 ID
     }
     return 'ca-app-pub-3940256099942544/6300978111';
   }
 
-  void _loadBottomBannerAd({String position = 'detail', int index = 0}) {
+  void _loadBottomBannerAd({String position = 'top', int index = 0, bool useTestFallback = false}) {
     if (_bannerAd != null) return;
+    
+    final String adUnitIdToUse = useTestFallback ? _testBannerAdUnitId : _realBannerAdUnitId;
+
     _bannerAd = BannerAd(
-      adUnitId: _bannerAdUnitId,
+      adUnitId: adUnitIdToUse,
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(
         onAdLoaded: (ad) {
-          debugPrint('[AdMob Bridge] Banner ad loaded successfully.');
+          debugPrint('[AdMob Bridge] Banner ad loaded successfully ($adUnitIdToUse).');
           if (mounted) {
             setState(() {
               _isBannerAdLoaded = true;
@@ -128,17 +136,21 @@ class _WebViewScreenState extends State<WebViewScreen> {
           }
         },
         onAdFailedToLoad: (ad, error) {
-          debugPrint('[AdMob Bridge] Banner ad failed to load: $error');
+          debugPrint('[AdMob Bridge] Banner ad failed to load ($adUnitIdToUse): $error');
           ad.dispose();
+          _bannerAd = null;
           if (mounted) {
             setState(() {
               _isBannerAdLoaded = false;
-              _bannerAd = null;
             });
-            // [수정 2] 광고 로드 실패 시 React 전역 콜백 window.onAdLoadFailed 호출
-            _webViewController?.evaluateJavascript(
-              source: 'if(window.onAdLoadFailed) window.onAdLoadFailed("$position", $index);'
-            );
+            if (!useTestFallback) {
+              // 실광고 실패 시 테스트 광고 단위로 즉시 Fallback 시도 (No Fill 차단)
+              _loadBottomBannerAd(position: position, index: index, useTestFallback: true);
+            } else {
+              _webViewController?.evaluateJavascript(
+                source: 'if(window.onAdLoadFailed) window.onAdLoadFailed("$position", $index);'
+              );
+            }
           }
         },
       ),
