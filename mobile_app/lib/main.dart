@@ -180,9 +180,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
     super.initState();
     _requestPermissions();
     
-    // 앱 시작 시 상단 구글 AdMob 배너 광고 (ca-app-pub-3878859120989916/2421488045) 자동 로드
-    _loadBottomBannerAd(position: 'top');
-
     // 20초 타임아웃 폴백: 네트워크 지연 등으로 웹앱 준비 신호가 안 오면 로딩을 걷어냅니다.
     Future.delayed(const Duration(seconds: 20), () {
       if (mounted && _isLoadingWeb) {
@@ -219,22 +216,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
       child: Scaffold(
         backgroundColor: Colors.white,
         body: SafeArea(
-          child: Column(
+          child: Stack(
             children: [
-              // ── 1. 구글 모바일 광고 SDK (AdMob) 상단 배너 위젯 (ID: ca-app-pub-3878859120989916/2421488045) ──
-              if (_isBannerAdLoaded && _bannerAd != null)
-                Container(
-                  color: Colors.white,
-                  width: double.infinity,
-                  height: _bannerAd!.size.height.toDouble(),
-                  alignment: Alignment.center,
-                  child: AdWidget(ad: _bannerAd!),
-                ),
-              // ── 2. 메인 웹뷰 메인 영역 ──
-              Expanded(
-                child: Stack(
-                  children: [
-                    InAppWebView(
+              InAppWebView(
                 initialUrlRequest: URLRequest(url: WebUri(_targetUrl)),
                 initialSettings: InAppWebViewSettings(
                   useShouldOverrideUrlLoading: true,
