@@ -71,6 +71,15 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
   List<AssetEntity> _assets = [];
   final List<SelectedPhoto> _selectedPhotos = [];
   
+  List<AssetPathEntity> _albums = [];
+  AssetPathEntity? _currentAlbum;
+  int _totalAssetCount = 0;
+  int _currentPage = 0;
+  final int _pageSize = 80;
+  bool _hasMore = true;
+  bool _isLoadingMore = false;
+  final ScrollController _scrollController = ScrollController();
+
   // 백그라운드 선업로드(Pre-uploading)를 위한 맵핑 객체들
   final Map<String, String> _uploadedUrls = {}; 
   final Map<String, Future<void>> _uploadFutures = {};
@@ -82,7 +91,21 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _requestPermissionAndLoadPhotos();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 300) {
+      _loadMoreAssets();
+    }
   }
 
   Future<void> _requestPermissionAndLoadPhotos() async {
@@ -99,22 +122,26 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
     }
 
     if (isAuthorized) {
-      // 앨범 목록 조회 - hasAll:true로 전체 사진 앨범 우선 조회
+      // 앨범 목록 전체 조회 (전체 사진 및 폴더별 앨범 모두 로드)
       final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
         type: RequestType.image,
         hasAll: true,
-        onlyAll: true, // "전체" 앨범만 조회해 빠르게 로딩
       );
       
       if (albums.isNotEmpty) {
-        // 최근 사진 200장을 비동기로 빠르게 로드
-        final List<AssetEntity> assets = await albums[0].getAssetListRange(
-          start: 0,
-          end: 200,
+        _albums = albums;
+        _currentAlbum = albums[0];
+        _totalAssetCount = await _currentAlbum!.assetCountAsync;
+        
+        final List<AssetEntity> assets = await _currentAlbum!.getAssetListPaged(
+          page: 0,
+          size: _pageSize,
         );
         if (mounted) {
           setState(() {
             _assets = assets;
+            _currentPage = 0;
+            _hasMore = assets.length < _totalAssetCount;
             _isLoading = false;
           });
         }
@@ -150,6 +177,126 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
         );
       }
     }
+  }
+
+  Future<void> _loadMoreAssets() async {
+    if (_isLoadingMore || !_hasMore || _currentAlbum == null) return;
+    _isLoadingMore = true;
+
+    final nextPage = _currentPage + 1;
+    final List<AssetEntity> newAssets = await _currentAlbum!.getAssetListPaged(
+      page: nextPage,
+      size: _pageSize,
+    );
+
+    if (mounted) {
+      setState(() {
+        _currentPage = nextPage;
+        _assets.addAll(newAssets);
+        _hasMore = _assets.length < _totalAssetCount;
+        _isLoadingMore = false;
+      });
+    }
+  }
+
+  Future<void> _selectAlbum(AssetPathEntity album) async {
+    if (_currentAlbum?.id == album.id) return;
+    setState(() {
+      _currentAlbum = album;
+      _isLoading = true;
+      _assets = [];
+      _currentPage = 0;
+      _hasMore = true;
+    });
+
+    _totalAssetCount = await album.assetCountAsync;
+    final List<AssetEntity> assets = await album.getAssetListPaged(
+      page: 0,
+      size: _pageSize,
+    );
+
+    if (mounted) {
+      setState(() {
+        _assets = assets;
+        _hasMore = assets.length < _totalAssetCount;
+        _isLoading = false;
+      });
+    }
+    _preCacheThumbnails(assets.take(20).toList());
+  }
+
+  void _showAlbumPicker() {
+    if (_albums.isEmpty) return;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF18181C),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.all(12),
+                child: Text(
+                  '앨범 선택',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const Divider(color: Colors.white12, height: 1),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: _albums.length,
+                  itemBuilder: (context, index) {
+                    final album = _albums[index];
+                    final isSelected = album.id == _currentAlbum?.id;
+                    return FutureBuilder<int>(
+                      future: album.assetCountAsync,
+                      builder: (context, snapshot) {
+                        final count = snapshot.data ?? 0;
+                        return ListTile(
+                          title: Text(
+                            album.name,
+                            style: TextStyle(
+                              color: isSelected ? Colors.blue[400] : Colors.white,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            ),
+                          ),
+                          subtitle: Text(
+                            '$count장',
+                            style: const TextStyle(color: Colors.white54, fontSize: 12),
+                          ),
+                          trailing: isSelected ? Icon(Icons.check, color: Colors.blue[400]) : null,
+                          onTap: () {
+                            Navigator.pop(context);
+                            _selectAlbum(album);
+                          },
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   /// 상위 N장 썸네일을 백그라운드에서 순차적으로 사전 캐싱
@@ -392,20 +539,24 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
           icon: const Icon(Icons.close, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '최근 항목',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
+        title: GestureDetector(
+          onTap: _showAlbumPicker,
+          behavior: HitTestBehavior.opaque,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _currentAlbum?.name ?? '최근 항목',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            SizedBox(width: 4),
-            Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 18),
-          ],
+              const SizedBox(width: 4),
+              const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 18),
+            ],
+          ),
         ),
         centerTitle: true,
         actions: [
@@ -439,6 +590,7 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Colors.white24))
           : GridView.builder(
+              controller: _scrollController,
               padding: const EdgeInsets.all(1),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 4,

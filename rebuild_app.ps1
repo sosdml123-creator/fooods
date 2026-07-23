@@ -81,12 +81,13 @@ $gradleContent = $gradleContent -replace 'targetSdk\s*=?\s*\d+', 'targetSdk = 36
 Write-Host "4. Upgrading Gradle Wrapper and Kotlin versions..."
 $wrapperPath = "d:\food\mobile_app\android\gradle\wrapper\gradle-wrapper.properties"
 $wrapperContent = [System.IO.File]::ReadAllText($wrapperPath)
-$wrapperContent = $wrapperContent.Replace("gradle-7.6.3-all.zip", "gradle-8.4-all.zip")
+$wrapperContent = $wrapperContent.Replace("gradle-7.6.3-all.zip", "gradle-8.7-all.zip")
+$wrapperContent = $wrapperContent.Replace("gradle-8.4-all.zip", "gradle-8.7-all.zip")
 [System.IO.File]::WriteAllText($wrapperPath, $wrapperContent)
 
 $settingsPath = "d:\food\mobile_app\android\settings.gradle"
 $settingsContent = [System.IO.File]::ReadAllText($settingsPath)
-$settingsContent = $settingsContent -replace 'id "com.android.application" version "[^"]+"', 'id "com.android.application" version "8.3.0"'
+$settingsContent = $settingsContent -replace 'id "com.android.application" version "[^"]+"', 'id "com.android.application" version "8.5.1"'
 $settingsContent = $settingsContent -replace 'id "org.jetbrains.kotlin.android" version "[^"]+"', 'id "org.jetbrains.kotlin.android" version "2.3.0"'
 [System.IO.File]::WriteAllText($settingsPath, $settingsContent)
 
