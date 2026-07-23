@@ -69,27 +69,27 @@
     },
     {
       "source": "/privacy",
-      "destination": "/privacy.html"
+      "destination": "/api/index.js"
     },
     {
       "source": "/privacy.html",
-      "destination": "/privacy.html"
+      "destination": "/api/index.js"
     },
     {
       "source": "/terms",
-      "destination": "/terms.html"
+      "destination": "/api/index.js"
     },
     {
       "source": "/terms.html",
-      "destination": "/terms.html"
+      "destination": "/api/index.js"
     },
     {
       "source": "/landing",
-      "destination": "/landing.html"
+      "destination": "/api/index.js"
     },
     {
       "source": "/landing.html",
-      "destination": "/landing.html"
+      "destination": "/api/index.js"
     },
     {
       "source": "/((?!api|health|admin|app-ads|robots|privacy|terms|landing).*)",
