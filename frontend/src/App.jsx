@@ -17,6 +17,43 @@ import { getDeviceFingerprint } from './utils/fingerprint';
 // API URL 설정 (개발/배포 환경변수 연동)
 const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "");
 
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("Uncaught error caught by ErrorBoundary:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-white px-6 text-center">
+          <i className="fa-solid fa-triangle-exclamation text-amber-500 text-4xl mb-4"></i>
+          <h2 className="text-base font-bold text-zinc-900 mb-2">서비스 이용 중 일시적 오류가 발생했습니다</h2>
+          <p className="text-xs text-zinc-500 mb-6">잠시 후 다시 시도해 주세요.</p>
+          <button 
+            className="px-5 py-2.5 bg-zinc-900 text-white rounded-full text-xs font-bold shadow-md active:scale-95"
+            onClick={() => {
+              this.setState({ hasError: false });
+              window.location.reload();
+            }}
+          >
+            새로고침
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 
 
 
@@ -270,21 +307,30 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
     // ── 2.2 상품/장소 링크 미리보기 및 자가치유(Self-healing) 카드 컴포넌트 ──
     function ProductLinkItemCard({ link }) {
-      const isNaverMap = link.url && (link.url.includes("naver.me") || link.url.includes("map.naver") || link.url.includes("place.naver") || (link.url.includes("naver") && link.url.includes("map")) || link.host === "네이버 지도");
+      if (!link) return null;
+
+      const linkObj = typeof link === 'string' 
+        ? { url: link, title: "상세 추천 링크", image: "", host: "" } 
+        : link;
+
+      const linkUrl = linkObj.url || (typeof link === 'string' ? link : "");
+      if (!linkUrl) return null;
+
+      const isNaverMap = linkUrl.includes("naver.me") || linkUrl.includes("map.naver") || linkUrl.includes("place.naver") || (linkUrl.includes("naver") && linkUrl.includes("map")) || linkObj.host === "네이버 지도";
 
       const defaultImage = isNaverMap 
         ? "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=400"
-        : (link.url && link.url.includes("coupang") 
+        : (linkUrl.includes("coupang") 
           ? "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&q=80&w=400"
           : "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400");
 
       const [data, setData] = useState({
-        title: link.title || (isNaverMap ? "네이버 지도 맛집 장소" : "상세 추천 링크"),
-        image: link.image || defaultImage,
-        description: link.description || (isNaverMap ? "네이버 지도로 매장 정보 및 위치 보기" : ""),
-        price: link.price || "",
-        host: link.host || (isNaverMap ? "네이버 지도" : (link.url && link.url.includes("coupang") ? "쿠팡" : "외부 링크")),
-        url: link.url
+        title: linkObj.title || (isNaverMap ? "네이버 지도 맛집 장소" : "상세 추천 링크"),
+        image: linkObj.image || defaultImage,
+        description: linkObj.description || (isNaverMap ? "네이버 지도로 매장 정보 및 위치 보기" : ""),
+        price: linkObj.price || "",
+        host: linkObj.host || (isNaverMap ? "네이버 지도" : (linkUrl.includes("coupang") ? "쿠팡" : "외부 링크")),
+        url: linkUrl
       });
 
       const [imgSrc, setImgSrc] = useState(data.image);
@@ -294,13 +340,13 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       }, [data.image]);
 
       useEffect(() => {
-        const isBadTitle = !link.title || link.title.includes("Deeplink Redirect") || link.title === "상세 링크" || link.title === "Deeplink";
-        if (isBadTitle || !link.image || !link.description) {
-          if (link.url && link.url.startsWith("http")) {
-            fetch(`/api/link-meta?url=${encodeURIComponent(link.url)}`)
+        const isBadTitle = !linkObj.title || linkObj.title.includes("Deeplink Redirect") || linkObj.title === "상세 링크" || linkObj.title === "Deeplink";
+        if (isBadTitle || !linkObj.image || !linkObj.description) {
+          if (linkUrl && linkUrl.startsWith("http")) {
+            fetch(`/api/link-meta?url=${encodeURIComponent(linkUrl)}`)
               .then(res => res.json())
               .then(res => {
-                if (res.success && res.title && !res.title.includes("Deeplink Redirect")) {
+                if (res && res.success && res.title && !res.title.includes("Deeplink Redirect")) {
                   setData(prev => ({
                     ...prev,
                     title: res.title || prev.title,
@@ -314,7 +360,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
               .catch(err => console.error("Self-healing link meta error:", err));
           }
         }
-      }, [link.url, link.title, link.image]);
+      }, [linkUrl, linkObj.title, linkObj.image]);
 
       const isMap = isNaverMap || data.host === "네이버 지도";
 
@@ -483,65 +529,71 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
       const [nativeAdData, setNativeAdData] = useState(null);
 
       useEffect(() => {
-        // [수정 2] Flutter에서 광고 실패 시 전역 콜백 수신
-        const handleAdFailed = (failedPos, failedIdx) => {
-          if (failedPos === position && (failedIdx === index || failedIdx === undefined)) {
-            setAdFailed(true);
+        try {
+          const handleAdFailed = (failedPos, failedIdx) => {
+            if (failedPos === position && (failedIdx === index || failedIdx === undefined)) {
+              setAdFailed(true);
+            }
+          };
+
+          if (typeof window !== "undefined") {
+            window.onAdLoadFailed = handleAdFailed;
           }
-        };
 
-        if (typeof window !== "undefined") {
-          window.onAdLoadFailed = handleAdFailed;
-        }
-
-        // 앱 웹뷰 환경일 경우 네이티브 AdMob 데이터 수신 시도
-        if (typeof window !== "undefined" && window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-          window.flutter_inappwebview.callHandler('loadNativeAd')
-            .then(res => {
-              if (res && res.headline) {
-                setNativeAdData(res);
-              }
-            })
-            .catch(err => console.log("[AdMob Bridge] loadNativeAd error:", err));
-        }
-
-        const element = containerRef.current;
-        if (!element) return;
-
-        const observer = new IntersectionObserver((entries) => {
-          entries.forEach((entry) => {
-            if (typeof window === "undefined" || !window.flutter_inappwebview || !window.flutter_inappwebview.callHandler) {
-              return;
-            }
-
-            const rect = entry.boundingClientRect;
-            if (entry.isIntersecting) {
-              window.flutter_inappwebview.callHandler('showAd', {
-                type,
-                position,
-                index,
-                top: rect.top,
-                left: rect.left,
-                width: rect.width,
-                height: rect.height
-              }).catch(() => {});
-            } else {
-              window.flutter_inappwebview.callHandler('hideAd', {
-                position,
-                index
-              }).catch(() => {});
-            }
-          });
-        }, { threshold: 0.3 });
-
-        observer.observe(element);
-
-        return () => {
-          observer.disconnect();
           if (typeof window !== "undefined" && window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-            window.flutter_inappwebview.callHandler('hideAd', { position, index }).catch(() => {});
+            window.flutter_inappwebview.callHandler('loadNativeAd')
+              .then(res => {
+                if (res && res.headline) {
+                  setNativeAdData(res);
+                }
+              })
+              .catch(err => console.log("[AdMob Bridge] loadNativeAd error:", err));
           }
-        };
+
+          const element = containerRef.current;
+          if (!element || typeof IntersectionObserver === "undefined") return;
+
+          const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+              try {
+                if (typeof window === "undefined" || !window.flutter_inappwebview || !window.flutter_inappwebview.callHandler) {
+                  return;
+                }
+
+                const rect = entry.boundingClientRect;
+                if (entry.isIntersecting) {
+                  window.flutter_inappwebview.callHandler('showAd', {
+                    type,
+                    position,
+                    index,
+                    top: rect.top,
+                    left: rect.left,
+                    width: rect.width,
+                    height: rect.height
+                  }).catch(() => {});
+                } else {
+                  window.flutter_inappwebview.callHandler('hideAd', {
+                    position,
+                    index
+                  }).catch(() => {});
+                }
+              } catch (e) {}
+            });
+          }, { threshold: 0.3 });
+
+          observer.observe(element);
+
+          return () => {
+            try {
+              observer.disconnect();
+              if (typeof window !== "undefined" && window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+                window.flutter_inappwebview.callHandler('hideAd', { position, index }).catch(() => {});
+              }
+            } catch (e) {}
+          };
+        } catch (err) {
+          console.error("AdMobPlaceholder error:", err);
+        }
       }, [type, position, index]);
 
       if (adFailed) {
@@ -1984,7 +2036,7 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                       <img src={Array.isArray(post.image) ? post.image[0] : post.image} alt="" />
                       <div className="min-w-0 flex-1">
                         <strong className="truncate block">{post.title}</strong>
-                        <span>{post.category} · 링크 {post.productLinks.length}개</span>
+                        <span>{post.category}{(post.productLinks && post.productLinks.length > 0) ? ` · 링크 ${post.productLinks.length}개` : ''}</span>
                       </div>
                     </div>
                   ))
@@ -7362,6 +7414,10 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
     }
 
     const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
+    root.render(
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    );
   
 export default App;
