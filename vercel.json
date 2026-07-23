@@ -100,7 +100,7 @@
       "destination": "/api/index.js"
     },
     {
-      "source": "/((?!api|health|admin|app-ads|robots|privacy|terms|landing).*)",
+      "source": "/((?!assets|api|health|admin|app-ads|robots|privacy|terms|landing).*)",
       "destination": "/index.html"
     }
   ]
