@@ -233,6 +233,8 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
             return {
               title: res.title,
               image: res.image,
+              description: res.description || "",
+              price: res.price || "",
               host: res.host
             };
           }
@@ -243,23 +245,24 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 
       let host = "link";
       let fallbackTitle = "상세 링크";
-      let fallbackImg = "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400";
+      let fallbackImg = "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&q=80&w=400";
       
       try {
         const parsedUrl = new URL(url);
         host = parsedUrl.hostname.replace("www.", "");
         if (host.includes("coupang")) {
-          fallbackTitle = "쿠팡 추천 상품 정보";
-          fallbackImg = "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&q=80&w=400";
+          fallbackTitle = "쿠팡 추천 상품";
+          fallbackImg = "https://images.unsplash.com/photo-1586880244406-556ebe35f282?auto=format&fit=crop&q=80&w=400";
         } else if (host.includes("naver") || host.includes("map")) {
-          fallbackTitle = "네이버 장소 / 상품 정보";
-          fallbackImg = "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400";
+          fallbackTitle = "네이버 장소 / 맛집 정보";
+          fallbackImg = "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=400";
         }
       } catch (e) {}
 
       return {
         title: fallbackTitle,
         image: fallbackImg,
+        description: "",
         price: "",
         host: host
       };
@@ -2342,7 +2345,9 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                 loading: false,
                 url: link.url,
                 title: meta && meta.title && meta.title !== "상세 링크" ? meta.title : (link.parsedName || "상세 링크"),
-                image: meta ? meta.image : "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+                image: meta ? meta.image : "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&q=80&w=400",
+                description: meta ? meta.description : "",
+                price: meta ? meta.price : "",
                 host: meta ? meta.host : new URL(link.url).hostname.replace("www.", "")
               }
             }));
@@ -2353,7 +2358,9 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                 loading: false,
                 url: link.url,
                 title: link.parsedName || "상세 링크",
-                image: "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+                image: "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&q=80&w=400",
+                description: "",
+                price: "",
                 host: new URL(link.url).hostname.replace("www.", "")
               }
             }));
@@ -2516,7 +2523,9 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                 id: generateId(),
                 url: l.url.trim(),
                 title: preview.title || l.parsedName || "상세 링크",
-                image: preview.image || "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+                image: preview.image || "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&q=80&w=400",
+                description: preview.description || "",
+                price: preview.price || "",
                 host: preview.host || new URL(l.url.trim()).hostname.replace("www.", "")
               };
             } else {
@@ -2526,7 +2535,9 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
                 id: generateId(),
                 url: l.url.trim(),
                 title: l.parsedName || "상세 링크",
-                image: "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400",
+                image: "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&q=80&w=400",
+                description: "",
+                price: "",
                 host
               };
             }
