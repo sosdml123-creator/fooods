@@ -565,6 +565,9 @@ app.get("*all", (req, res, next) => {
   }
   
   const indexPath = path.join(wwwPath, "index.html");
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
   res.sendFile(indexPath, (err) => {
     if (err) {
       console.error(`[Plating SPA Error] Failed to send index.html: ${err.message}`);
