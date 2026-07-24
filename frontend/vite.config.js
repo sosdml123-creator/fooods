@@ -11,22 +11,18 @@ export default defineConfig({
     },
   },
   build: {
+    // Android WebView에서 type="module" 문제 해결: ES2015 일반 스크립트 빌드
     target: ['es2015', 'chrome60', 'safari11'],
-    outDir: '../backend/www', // Express 백엔드와 경로 정렬을 위해 backend/www 디렉토리로 출력
-    emptyOutDir: true, // 빌드 시 기존 폴더를 비우도록 설정
+    outDir: '../backend/www',
+    emptyOutDir: true,
     rollupOptions: {
       output: {
+        // module 청크 방식 대신 단일 포맷으로 묶기
+        format: 'iife',
         chunkFileNames: 'assets/js/[name].js',
         entryFileNames: 'assets/js/[name].js',
         assetFileNames: 'assets/[ext]/[name].[ext]',
-        manualChunks(id) {
-          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
-            return 'vendor-react';
-          }
-          if (id.includes('node_modules/@firebase/') || id.includes('node_modules/firebase/')) {
-            return 'vendor-firebase';
-          }
-        }
+        // IIFE에서는 manualChunks 불가, 단일 번들로 합침
       },
     },
   },

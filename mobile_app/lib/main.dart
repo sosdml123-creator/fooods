@@ -229,6 +229,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   allowUniversalAccessFromFileURLs: true,
                   useOnDownloadStart: true,
                   cacheMode: CacheMode.LOAD_NO_CACHE,
+                  // Android WebView ES Module 지원 강제 활성화
+                  mixedContentMode: MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW,
+                  domStorageEnabled: true,
+                  databaseEnabled: true,
+                  safeBrowsingEnabled: false,
+                  supportZoom: false,
+                  userAgent: "Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36",
                 ),
             onWebViewCreated: (controller) {
               _webViewController = controller;
