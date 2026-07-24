@@ -149,8 +149,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   safeBrowsingEnabled: false,
                   supportZoom: false,
                   userAgent: "Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36",
-                  // 4. 서드파티 쿠키 허용
                   thirdPartyCookiesEnabled: true,
+                  isInspectable: true,
                 ),
             onWebViewCreated: (controller) {
               _webViewController = controller;

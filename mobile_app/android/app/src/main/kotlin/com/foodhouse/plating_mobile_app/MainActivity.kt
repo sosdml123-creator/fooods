@@ -6,17 +6,10 @@ import io.flutter.plugin.common.MethodChannel
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import com.google.android.gms.ads.MobileAds
-import com.google.android.gms.ads.AdLoader
-import com.google.android.gms.ads.AdRequest
-import com.google.android.gms.ads.AdListener
-import com.google.android.gms.ads.LoadAdError
-import com.google.android.gms.ads.nativead.NativeAd
 import java.net.URISyntaxException
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.foodhouse.plating/intent"
-    private var nativeAd: NativeAd? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -24,70 +17,6 @@ class MainActivity: FlutterActivity() {
         // Enable Chrome remote web debugging
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
             android.webkit.WebView.setWebContentsDebuggingEnabled(true)
-        }
-
-        // Initialize the Google Mobile Ads SDK on a background thread.
-        Thread {
-            MobileAds.initialize(this) {}
-        }.start()
-    }
-
-    override fun onDestroy() {
-        nativeAd?.destroy()
-        super.onDestroy()
-    }
-
-    private fun loadNativeAd(callback: (Map<String, String?>?) -> Unit) {
-        Thread {
-            try {
-                val realAdUnit = "ca-app-pub-3878859120989916/9384771667"
-                val testAdUnit = "ca-app-pub-3940256099942544/2247696110"
-                
-                loadAdInternal(realAdUnit) { adData ->
-                    if (adData != null) {
-                        callback(adData)
-                    } else {
-                        // Real ad failed (typically due to No Fill during testing), try test ad unit
-                        android.util.Log.w("AdMob", "Real ad failed to load, trying test ad unit fallback...")
-                        loadAdInternal(testAdUnit, callback)
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                callback(null)
-            }
-        }.start()
-    }
-
-    private fun loadAdInternal(adUnitId: String, onResult: (Map<String, String?>?) -> Unit) {
-        runOnUiThread {
-            try {
-                val adLoader = AdLoader.Builder(this, adUnitId)
-                    .forNativeAd { ad ->
-                        nativeAd?.destroy()
-                        nativeAd = ad
-                        
-                        val adData = mapOf(
-                            "headline" to ad.headline,
-                            "body" to ad.body,
-                            "callToAction" to ad.callToAction,
-                            "advertiser" to ad.advertiser,
-                            "imageUrl" to ad.images.firstOrNull()?.uri?.toString()
-                        )
-                        onResult(adData)
-                    }
-                    .withAdListener(object : AdListener() {
-                        override fun onAdFailedToLoad(adError: LoadAdError) {
-                            android.util.Log.e("AdMob", "Ad failed to load (unit: $adUnitId): ${adError.code} - ${adError.message}")
-                            onResult(null)
-                        }
-                    })
-                    .build()
-                adLoader.loadAd(AdRequest.Builder().build())
-            } catch (e: Exception) {
-                e.printStackTrace()
-                onResult(null)
-            }
         }
     }
 
@@ -103,31 +32,11 @@ class MainActivity: FlutterActivity() {
                     result.error("BAD_ARGS", "URL is null", null)
                 }
             } else if (call.method == "loadNativeAd") {
-                loadNativeAd { adData ->
-                    runOnUiThread {
-                        result.success(adData)
-                    }
-                }
+                // AdMob 제거 완료: 빈 데이터 응답
+                result.success(null)
             } else if (call.method == "performAdClick") {
-                runOnUiThread {
-                    try {
-                        nativeAd?.let { ad ->
-                            // WebView에서 광고 클릭 시 네이티브 AdMob SDK에 클릭 이벤트를 강제로 전달
-                            val fakeView = android.view.View(this@MainActivity)
-                            val adView = com.google.android.gms.ads.nativead.NativeAdView(this@MainActivity)
-                            adView.addView(fakeView)
-                            adView.setNativeAd(ad)
-                            adView.callToActionView = fakeView
-                            fakeView.performClick()
-                            result.success(true)
-                        } ?: run {
-                            result.success(false)
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        result.error("CLICK_ERROR", e.message, null)
-                    }
-                }
+                // AdMob 제거 완료: 실패 응답
+                result.success(false)
             } else if (call.method == "getDeviceId") {
                 runOnUiThread {
                     try {
