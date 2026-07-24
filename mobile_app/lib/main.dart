@@ -87,7 +87,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   InAppWebViewController? _webViewController;
   final String _targetUrl = 'https://myplating.kr';
   static const MethodChannel _intentChannel = MethodChannel('com.foodhouse.plating/intent');
-  bool _isLoadingWeb = true;
+  bool _isLoadingWeb = false; // 앱 켜지자마자 흰 가림막 없이 즉시 웹뷰 렌더링 시작하도록 false 설정
   bool _hasError = false;
   Timer? _readyTimer; // webAppReady용 타이머
 
@@ -101,15 +101,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
   void initState() {
     super.initState();
     _requestPermissions();
-    
-    // 안전 폴백 타이머: 네트워크 지연 시에도 에러 화면 대신 로딩 스피너를 내리고 화면을 보여줍니다.
-    _readyTimer = Timer(const Duration(seconds: 12), () {
-      if (mounted && _isLoadingWeb) {
-        setState(() {
-          _isLoadingWeb = false;
-        });
-      }
-    });
   }
 
   Future<void> _requestPermissions() async {
@@ -150,7 +141,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   allowFileAccessFromFileURLs: true,
                   allowUniversalAccessFromFileURLs: true,
                   useOnDownloadStart: true,
-                  cacheMode: CacheMode.LOAD_NO_CACHE,
+                  cacheMode: CacheMode.LOAD_DEFAULT,
                   // Android WebView ES Module 지원 강제 활성화
                   mixedContentMode: MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW,
                   domStorageEnabled: true,
