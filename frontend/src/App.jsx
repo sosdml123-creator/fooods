@@ -20,11 +20,11 @@ const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "")
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, error: null };
   }
 
   static getDerivedStateFromError(error) {
-    return { hasError: true };
+    return { hasError: true, error: error };
   }
 
   componentDidCatch(error, errorInfo) {
@@ -34,14 +34,18 @@ class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-white px-6 text-center">
+        <div className="flex flex-col items-center justify-center min-h-screen bg-white px-6 text-center overflow-auto py-10">
           <i className="fa-solid fa-triangle-exclamation text-amber-500 text-4xl mb-4"></i>
           <h2 className="text-base font-bold text-zinc-900 mb-2">서비스 이용 중 일시적 오류가 발생했습니다</h2>
-          <p className="text-xs text-zinc-500 mb-6">잠시 후 다시 시도해 주세요.</p>
+          <p className="text-xs text-zinc-500 mb-4">잠시 후 다시 시도해 주세요.</p>
+          <div className="w-full text-left bg-zinc-100 p-4 rounded text-[10px] font-mono text-red-600 overflow-x-auto whitespace-pre-wrap max-h-60 mb-6">
+            <strong>Error:</strong> {this.state.error?.message || "Unknown error"}<br/>
+            <strong>Stack:</strong> {this.state.error?.stack || "No stack trace available"}
+          </div>
           <button 
             className="px-5 py-2.5 bg-zinc-900 text-white rounded-full text-xs font-bold shadow-md active:scale-95"
             onClick={() => {
-              this.setState({ hasError: false });
+              this.setState({ hasError: false, error: null });
               window.location.reload();
             }}
           >
