@@ -11,6 +11,7 @@ export default defineConfig({
     },
   },
   build: {
+    target: ['es2015', 'chrome60', 'safari11'],
     outDir: '../backend/www', // Express 백엔드와 경로 정렬을 위해 backend/www 디렉토리로 출력
     emptyOutDir: true, // 빌드 시 기존 폴더를 비우도록 설정
     rollupOptions: {

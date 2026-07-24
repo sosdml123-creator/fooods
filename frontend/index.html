@@ -10,6 +10,23 @@
   <meta name="description" content="나만의 레시피와 조리도구를 공유하고 수익을 창출하는 푸드 커뮤니티">
   <meta name="keywords" content="요리, 레시피, 주방용품, 조리도구, 음식 커뮤니티, 플레이팅">
   
+  <script>
+    // 모바일 WebView 환경 하얀 화면 방지 전역 에러 핸들러
+    window.onerror = function(msg, url, line, col, error) {
+      console.error("[Global App Error]", msg, url, line, error);
+      setTimeout(function() {
+        var root = document.getElementById("root");
+        if (root && (!root.children || root.children.length === 0)) {
+          if (!sessionStorage.getItem("_app_reloaded")) {
+            sessionStorage.setItem("_app_reloaded", "true");
+            window.location.reload();
+          }
+        }
+      }, 2500);
+      return false;
+    };
+  </script>
+  
   <!-- 구글 폰트: Noto Sans KR & Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
