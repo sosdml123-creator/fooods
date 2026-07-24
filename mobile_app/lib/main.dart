@@ -183,12 +183,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
     super.initState();
     _requestPermissions();
     
-    // 8초 타이머 시작: 8초 안에 webAppReady가 안 오면 강제로 에러 화면 표시
-    _readyTimer = Timer(const Duration(seconds: 8), () {
+    // 안전 폴백 타이머: 네트워크 지연 시에도 에러 화면 대신 로딩 스피너를 내리고 화면을 보여줍니다.
+    _readyTimer = Timer(const Duration(seconds: 12), () {
       if (mounted && _isLoadingWeb) {
         setState(() {
           _isLoadingWeb = false;
-          _hasError = true;
         });
       }
     });
@@ -489,12 +488,23 @@ class _WebViewScreenState extends State<WebViewScreen> {
               // onProgressChanged 안에서 _isLoadingWeb = false 설정 로직 제거
             },
             onReceivedError: (controller, request, error) {
-              // 메인 프레임 로딩 오류 발생 시 에러 상태로 전환 (오프라인/타임아웃 대응)
-              if (request.isForMainFrame ?? true) {
-                setState(() {
-                  _hasError = true;
-                  _isLoadingWeb = false;
-                });
+              final urlStr = request.url?.toString() ?? '';
+              debugPrint('[WebView Received Error] Code: ${error.type}, Description: ${error.description}, URL: $urlStr');
+              
+              // 메인프레임 타겟 도메인(myplating.kr)의 결정적 네트워크 물리 끊김에 대해서만 에러 화면 전환
+              if ((request.isForMainFrame ?? false) && urlStr.contains('myplating.kr')) {
+                final errTypeStr = error.type.toString();
+                if (errTypeStr.contains('HOST_LOOKUP') || 
+                    errTypeStr.contains('CONNECT') || 
+                    errTypeStr.contains('TIMEOUT') ||
+                    errTypeStr.contains('DISCONNECTED')) {
+                  if (mounted) {
+                    setState(() {
+                      _hasError = true;
+                      _isLoadingWeb = false;
+                    });
+                  }
+                }
               }
             },
           ),

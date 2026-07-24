@@ -5413,6 +5413,22 @@ class ErrorBoundary extends React.Component {
         }
       }, [activeTab, activePostId, activeComPostId, activeUser, dbLoaded]);
 
+      // Flutter WebView 호스트에 최우선 마운트 완료 신호 전송 (타임아웃 에러 차단)
+      useEffect(() => {
+        const sendReadySignal = () => {
+          if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+            window.flutter_inappwebview.callHandler('webAppReady').catch(() => {});
+          }
+        };
+        sendReadySignal();
+        if (!window.flutter_inappwebview) {
+          window.addEventListener("flutterInAppWebViewPlatformReady", sendReadySignal);
+        }
+        return () => {
+          window.removeEventListener("flutterInAppWebViewPlatformReady", sendReadySignal);
+        };
+      }, []);
+
       useEffect(() => {
         window.isSelectingPhotosRef = isSelectingPhotos;
         const handlePopState = (event) => {
