@@ -29,15 +29,29 @@ class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     console.error("Uncaught error caught by ErrorBoundary:", error, errorInfo);
+    
+    // removeChild 오류 감지 시 3초 자동 복구 새로고침
+    const errMsg = error?.message || "";
+    if (errMsg.includes("removeChild") || errMsg.includes("not a child of this node")) {
+      console.warn("[ErrorBoundary] removeChild DOM error detected. Automatically reloading in 3 seconds...");
+      setTimeout(() => {
+        window.location.reload();
+      }, 3000);
+    }
   }
 
   render() {
     if (this.state.hasError) {
+      const isRemoveChildErr = (this.state.error?.message || "").includes("removeChild") || (this.state.error?.message || "").includes("not a child of this node");
       return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-white px-6 text-center overflow-auto py-10">
           <i className="fa-solid fa-triangle-exclamation text-amber-500 text-4xl mb-4"></i>
           <h2 className="text-base font-bold text-zinc-900 mb-2">서비스 이용 중 일시적 오류가 발생했습니다</h2>
-          <p className="text-xs text-zinc-500 mb-4">잠시 후 다시 시도해 주세요.</p>
+          <p className="text-xs text-zinc-500 mb-4">
+            {isRemoveChildErr 
+              ? "DOM 충돌 오류가 감지되어 3초 후 페이지가 자동으로 새로고침됩니다." 
+              : "잠시 후 다시 시도해 주세요."}
+          </p>
           <div className="w-full text-left bg-zinc-100 p-4 rounded text-[10px] font-mono text-red-600 overflow-x-auto whitespace-pre-wrap max-h-60 mb-6">
             <strong>Error:</strong> {this.state.error?.message || "Unknown error"}<br/>
             <strong>Stack:</strong> {this.state.error?.stack || "No stack trace available"}
@@ -484,20 +498,22 @@ class ErrorBoundary extends React.Component {
 
     // --- 3. 하위 컴포넌트 선언 ---
 
-    function LegacyAdBanner() {
+    const AdBannerAdSense = React.memo(function AdBannerAdSense({ slot }) {
+      const adRef = useRef(null);
+      const pushed = useRef(false);
+
       useEffect(() => {
+        if (pushed.current) return;
+        pushed.current = true;
         try {
           (window.adsbygoogle = window.adsbygoogle || []).push({});
         } catch (e) {
-          console.log("[AdSense] Ad push check:", e);
+          console.error("[AdSense] push error:", e);
         }
       }, []);
 
       return (
-        <div 
-          className="ad-banner cursor-pointer my-2 p-3 bg-gradient-to-r from-amber-50/90 via-orange-50/90 to-amber-50/90 border border-amber-200/80 rounded-2xl shadow-xs transition-all hover:shadow-sm" 
-          onClick={() => alert("구글 애드센스 광고가 송출되는 구역입니다.")}
-        >
+        <div ref={adRef} className="ad-banner cursor-pointer my-2 p-3 bg-gradient-to-r from-amber-50/90 via-orange-50/90 to-amber-50/90 border border-amber-200/80 rounded-2xl shadow-xs transition-all hover:shadow-sm" style={{ minHeight: "100px" }}>
           <div className="text-[10px] font-bold text-amber-600 tracking-wider mb-0.5 flex items-center justify-between">
             <span className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
@@ -509,22 +525,23 @@ class ErrorBoundary extends React.Component {
             <span>🍳 요리할 때 필수! 감성 타이머 & 주방 특가</span>
             <i className="fa-solid fa-chevron-right text-[10px] text-zinc-400"></i>
           </div>
-          <div className="text-[10px] text-zinc-500">
+          <div className="text-[10px] text-zinc-500 mb-2">
             sponsored by Google Ads & Plating Partner
           </div>
           
-          {/* 구글 애드센스 / 애드몹 실제 광고 송출 구역 */}
           <div className="mt-2 text-center overflow-hidden">
-            <ins className="adsbygoogle"
-                 style={{ display: "block" }}
-                 data-ad-client="ca-pub-3878859120989916"
-                 data-ad-slot="9384771667"
-                 data-ad-format="auto"
-                 data-full-width-responsive="true"></ins>
+            <ins
+              className="adsbygoogle"
+              style={{ display: "block" }}
+              data-ad-client="ca-pub-3878859120989916"
+              data-ad-slot={slot || "9384771667"}
+              data-ad-format="auto"
+              data-full-width-responsive="true"
+            ></ins>
           </div>
         </div>
       );
-    }
+    }, () => true);
 
     // AdMob 네이티브 / 배너 광고 Placeholder ([수정 1], [수정 2] 반영)
     function AdMobPlaceholder({ type = "native", position = "feed", index = 0 }) {
@@ -3500,7 +3517,7 @@ class ErrorBoundary extends React.Component {
       }
     }
 
-    function NaverMapView({ posts, onPostClick }) {
+    const NaverMapView = React.memo(function NaverMapView({ posts, onPostClick }) {
       const mapRef = useRef(null);
       const mapInstanceRef = useRef(null);
       const markersRef = useRef([]);
@@ -3555,6 +3572,9 @@ class ErrorBoundary extends React.Component {
 
         return () => {
           if (intervalId) clearInterval(intervalId);
+          if (mapInstanceRef.current) {
+            mapInstanceRef.current = null;
+          }
         };
       }, [clientId]);
 
@@ -3676,7 +3696,17 @@ class ErrorBoundary extends React.Component {
         };
 
         return () => {
-          window.naver.maps.Event.removeListener(mapClick);
+          try {
+            window.naver.maps.Event.removeListener(mapClick);
+            markersRef.current.forEach(m => m.setMap(null));
+            markersRef.current = [];
+            if (clustererRef.current) {
+              clustererRef.current.destroy();
+              clustererRef.current = null;
+            }
+          } catch (e) {
+            console.warn("NaverMap cleanup error:", e);
+          }
         };
       }, [mapLoaded, posts, mapCategory]);
 
@@ -3988,7 +4018,7 @@ class ErrorBoundary extends React.Component {
           )}
         </div>
       );
-    }
+    });
 
     // --- 3.2. 관리자 신고 관리 센터 화면 ---
     function LegacyAdminReportsView({ onBack }) {
@@ -7269,9 +7299,9 @@ class ErrorBoundary extends React.Component {
               />
             )}
 
-            {activeTab === "map" && (
+            <div style={{ display: activeTab === "map" ? "block" : "none", height: "100%" }}>
               <NaverMapView posts={posts} onPostClick={handleRecipePostClick} />
-            )}
+            </div>
 
             {activeTab === "mypage" && (
               <MyPage 
