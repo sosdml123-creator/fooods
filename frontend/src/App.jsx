@@ -965,9 +965,9 @@ class ErrorBoundary extends React.Component {
               </div>
 
               <section className="comment-area m-0">
-                <div className="text-[10px] font-bold text-zinc-400 mb-2">댓글 ({post.comments.length})</div>
+                <div className="text-[10px] font-bold text-zinc-400 mb-2">댓글 ({(post.comments || []).length})</div>
                 <div className="flex flex-col gap-1 mb-4">
-                  {post.comments.map(c => {
+                  {(post.comments || []).map(c => {
                     const isMyComment = c.author === "나" || c.author === currentUserName;
                     return (
                       <div className="comment-item" key={c.id}>
@@ -1615,9 +1615,9 @@ class ErrorBoundary extends React.Component {
           </div>
 
           <div className="community-detail-card">
-            <span className="text-xs font-bold text-zinc-800 block mb-2">댓글 ({post.comments.length})</span>
+            <span className="text-xs font-bold text-zinc-800 block mb-2">댓글 ({(post.comments || []).length})</span>
             <div className="flex flex-col gap-1 mb-4 divide-y divide-zinc-50">
-              {post.comments.map(c => {
+              {(post.comments || []).map(c => {
                 const isMyComment = c.author === "나" || c.author === currentUserName;
                 return (
                   <div className="comment-item" key={c.id}>
