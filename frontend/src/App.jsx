@@ -24,25 +24,26 @@ class ErrorBoundary extends React.Component {
   }
 
   static getDerivedStateFromError(error) {
+    const errMsg = error?.message || "";
+    // removeChild나 insertBefore 등 DOM 노드 충돌 에러인 경우 화면 폭발 방지 및 무시
+    if (errMsg.includes("removeChild") || errMsg.includes("not a child of this node") || errMsg.includes("insertBefore")) {
+      return { hasError: false, error: null };
+    }
     return { hasError: true, error: error };
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error("Uncaught error caught by ErrorBoundary:", error, errorInfo);
-    
-    // removeChild 오류 감지 시 3초 자동 복구 새로고침
     const errMsg = error?.message || "";
-    if (errMsg.includes("removeChild") || errMsg.includes("not a child of this node")) {
-      console.warn("[ErrorBoundary] removeChild DOM error detected. Automatically reloading in 3 seconds...");
-      setTimeout(() => {
-        window.location.reload();
-      }, 3000);
+    if (errMsg.includes("removeChild") || errMsg.includes("not a child of this node") || errMsg.includes("insertBefore")) {
+      console.warn("[ErrorBoundary SafeGuard] Ignored React DOM removeChild/insertBefore mismatch error.");
+      return;
     }
+    console.error("Uncaught error caught by ErrorBoundary:", error, errorInfo);
   }
 
   render() {
     if (this.state.hasError) {
-      const isRemoveChildErr = (this.state.error?.message || "").includes("removeChild") || (this.state.error?.message || "").includes("not a child of this node");
+      const isRemoveChildErr = false;
       return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-white px-6 text-center overflow-auto py-10">
           <i className="fa-solid fa-triangle-exclamation text-amber-500 text-4xl mb-4"></i>
