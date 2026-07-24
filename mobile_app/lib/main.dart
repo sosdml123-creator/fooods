@@ -441,15 +441,29 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 action: PermissionResponseAction.GRANT,
               );
             },
+            onConsoleMessage: (controller, consoleMessage) {
+              debugPrint('[WebView Console] Level: ${consoleMessage.messageLevel}, Message: ${consoleMessage.message}');
+            },
+            onLoadStart: (controller, url) {
+              debugPrint('[WebView LoadStart] URL: ${url?.toString()}');
+            },
+            onLoadStop: (controller, url) {
+              debugPrint('[WebView LoadStop] URL: ${url?.toString()}');
+            },
+            onReceivedHttpError: (controller, request, errorResponse) {
+              debugPrint('[WebView HTTP Error] URL: ${request.url?.toString()}, StatusCode: ${errorResponse.statusCode}, ReasonPhrase: ${errorResponse.reasonPhrase}');
+            },
             shouldOverrideUrlLoading: (controller, navigationAction) async {
               var uri = navigationAction.request.url;
+              final urlStr = uri?.toString() ?? '';
+              debugPrint('[WebView OverrideUrlLoading] URL: $urlStr');
+              
               if (uri != null) {
-                final urlStr = uri.toString();
                 final scheme = uri.scheme;
 
                 // 1. 커스텀 스키마 (navermaps://, coupang://, intent:// 등) 처리
                 if (scheme != 'http' && scheme != 'https' && scheme != 'file' && scheme != 'about' && scheme != 'javascript') {
-                  debugPrint('커스텀 스키마 감지: $urlStr');
+                  debugPrint('[WebView Navigation] Custom Scheme Cancelled: $urlStr');
                   try {
                     await _intentChannel.invokeMethod('launchIntent', {'url': urlStr});
                   } catch (e) {
@@ -464,13 +478,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 final isPlayStore = urlStr.contains('play.google.com/store');
 
                 if (isNaverMap) {
-                  debugPrint('네이버 지도 링크 감지: $urlStr');
+                  debugPrint('[WebView Navigation] NaverMap Intent Cancelled: $urlStr');
                   _handleNaverMapIntent(urlStr);
                   return NavigationActionPolicy.CANCEL;
                 }
 
                 if (isCoupang || isPlayStore) {
-                  debugPrint('외부 앱 연동 링크 감지: $urlStr');
+                  debugPrint('[WebView Navigation] External App Intent Cancelled: $urlStr');
                   try {
                     await _intentChannel.invokeMethod('launchIntent', {'url': urlStr});
                   } catch (e) {
@@ -481,23 +495,19 @@ class _WebViewScreenState extends State<WebViewScreen> {
               }
               return NavigationActionPolicy.ALLOW;
             },
-            onLoadStop: (controller, url) {
-              // onLoadStop 안에서 _isLoadingWeb = false 설정 로직 제거
-            },
-            onProgressChanged: (controller, progress) {
-              // onProgressChanged 안에서 _isLoadingWeb = false 설정 로직 제거
-            },
             onReceivedError: (controller, request, error) {
               final urlStr = request.url?.toString() ?? '';
-              debugPrint('[WebView Received Error] Code: ${error.type}, Description: ${error.description}, URL: $urlStr');
+              final isMainFrame = request.isForMainFrame ?? false;
+              debugPrint('[WebView Received Error] URL: $urlStr, ErrorType: ${error.type}, Description: ${error.description}, isMainFrame: $isMainFrame');
               
-              // 메인프레임 타겟 도메인(myplating.kr)의 결정적 네트워크 물리 끊김에 대해서만 에러 화면 전환
-              if ((request.isForMainFrame ?? false) && urlStr.contains('myplating.kr')) {
+              // 오직 메인 웹페이지 HTML 본문(https://myplating.kr/)의 물리적 로딩 실패일 때만 오프라인 에러 화면으로 전환
+              if (isMainFrame && (urlStr == _targetUrl || urlStr == "$_targetUrl/" || urlStr.startsWith(_targetUrl))) {
                 final errTypeStr = error.type.toString();
                 if (errTypeStr.contains('HOST_LOOKUP') || 
                     errTypeStr.contains('CONNECT') || 
                     errTypeStr.contains('TIMEOUT') ||
-                    errTypeStr.contains('DISCONNECTED')) {
+                    errTypeStr.contains('DISCONNECTED') ||
+                    errTypeStr.contains('INTERNET_DISCONNECTED')) {
                   if (mounted) {
                     setState(() {
                       _hasError = true;

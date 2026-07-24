@@ -525,9 +525,9 @@ async function fetchDeepLinkMeta(initialUrl) {
 
 
 
-// 헬스 체크 API (Render 상태 모니터링용)
-app.get("/health", (req, res) => {
-  res.json({ status: "ok", version: "1.0.0" });
+// 헬스 체크 API (Render / Vercel / Flutter 네이티브 핑 상태 모니터링용)
+app.get(["/health", "/api/health", "/api/v1/health"], (req, res) => {
+  res.status(200).json({ status: "ok", version: "1.0.0", timestamp: new Date().toISOString() });
 });
 
 // 로그아웃 요청 처리 (GET 및 POST 모두 지원하여 404 차단)
