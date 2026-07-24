@@ -2993,14 +2993,11 @@ class ErrorBoundary extends React.Component {
       const btnCls = "w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3.5 rounded-xl text-sm transition-all shadow-md active:scale-98 disabled:opacity-50 mt-1 cursor-pointer";
 
       return (
-        <div className="min-h-screen bg-white flex flex-col justify-between items-center px-6 py-8 text-zinc-900 select-none">
-          {/* 상단 스페이서 */}
-          <div className="w-full flex justify-end"></div>
-
+        <div className="min-h-screen bg-white flex flex-col justify-center items-center px-6 py-10 text-zinc-900 select-none overflow-y-auto">
           {/* 중앙 영역 */}
-          <div className="w-full max-w-sm flex flex-col items-center my-auto text-center">
+          <div className="w-full max-w-sm flex flex-col items-center text-center my-auto py-4">
             {/* 브랜드 로고 (공식 포크 로고 적용) */}
-            <div className="flex flex-col items-center justify-center mb-8">
+            <div className="flex flex-col items-center justify-center mb-6">
               <img src="/logo.png" alt="PLAYTING Logo" className="w-16 h-16 rounded-2xl shadow-xl mb-3 object-cover" />
               <h1 className="text-2xl font-black tracking-tight text-zinc-950">플레이팅</h1>
             </div>

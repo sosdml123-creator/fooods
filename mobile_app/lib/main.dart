@@ -1,3 +1,4 @@
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -15,7 +16,9 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  // 네이티브 스플래시 로고 보존 (웹뷰 로딩 완료 후 제거)
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
   // Firebase 초기화 및 푸시 알림 설정
   try {
@@ -196,6 +199,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 callback: (args) {
                   try {
                     _readyTimer?.cancel(); // webAppReady 정상 수신 시 타이머 취소
+                    FlutterNativeSplash.remove(); // 스플래시 화면 즉시 제거
                     if (mounted && _isLoadingWeb) {
                       setState(() {
                         _isLoadingWeb = false;
@@ -280,6 +284,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
             },
             onLoadStop: (controller, url) {
               debugPrint('[WebView LoadStop] URL: ${url?.toString()}');
+              try {
+                FlutterNativeSplash.remove();
+              } catch (e) {}
             },
             onReceivedHttpError: (controller, request, errorResponse) {
               debugPrint('[WebView HTTP Error] URL: ${request.url?.toString()}, StatusCode: ${errorResponse.statusCode}, ReasonPhrase: ${errorResponse.reasonPhrase}');
