@@ -20,6 +20,12 @@ class MainActivity: FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Enable Chrome remote web debugging
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
+            android.webkit.WebView.setWebContentsDebuggingEnabled(true)
+        }
+
         // Initialize the Google Mobile Ads SDK on a background thread.
         Thread {
             MobileAds.initialize(this) {}
