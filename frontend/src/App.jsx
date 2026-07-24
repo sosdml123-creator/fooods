@@ -5722,6 +5722,9 @@ class ErrorBoundary extends React.Component {
         const checkDismissSplash = () => {
           if (sessionReady && postsReady && communityReady) {
             console.log("[App Initialization] All sessions, posts, community data & images preloaded. Dismissing splash screen.");
+            if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+              window.flutter_inappwebview.callHandler('webAppReady').catch(e => console.error(e));
+            }
             setTimeout(() => {
               setAppInitializing(false);
             }, 300);
@@ -5735,6 +5738,9 @@ class ErrorBoundary extends React.Component {
 
         // 3분 안전 타임아웃 (네트워크 지연 시 스플래시 무한 갇힘 방지)
         setTimeout(() => {
+          if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+            window.flutter_inappwebview.callHandler('webAppReady').catch(e => console.error(e));
+          }
           setAppInitializing(false);
         }, 3000);
 

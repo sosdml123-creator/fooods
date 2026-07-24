@@ -55,7 +55,9 @@ app.use(
           "kapi.kakao.com",
           "*.doubleclick.net",
           "*.googleadservices.com",
-          "*.googlesyndication.com"
+          "*.googlesyndication.com",
+          "oapi.map.naver.com",
+          "*.map.naver.net"
         ],
         scriptSrc: [
           "'self'",
@@ -67,7 +69,9 @@ app.use(
           "*.googlesyndication.com",
           "*.googleadservices.com",
           "cdn.jsdelivr.net",
-          "cdn.tailwindcss.com"
+          "cdn.tailwindcss.com",
+          "oapi.map.naver.com",
+          "openapi.map.naver.com"
         ],
         styleSrc: [
           "'self'",
@@ -85,7 +89,9 @@ app.use(
         imgSrc: [
           "'self'",
           "data:",
-          "https:"
+          "https:",
+          "*.map.naver.net",
+          "*.pstatic.net"
         ],
         frameSrc: [
           "'self'",

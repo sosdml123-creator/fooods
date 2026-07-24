@@ -7,6 +7,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
+import 'dart:async'; // readyTimer용 추가
 import 'custom_gallery_picker.dart';
 
 // Firebase 패키지 추가
@@ -97,6 +98,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   static const MethodChannel _intentChannel = MethodChannel('com.foodhouse.plating/intent');
   bool _isLoadingWeb = true;
   bool _hasError = false;
+  Timer? _readyTimer; // webAppReady용 타이머
 
   // Google AdMob 관리 변수 ([수정 2], [수정 3], [수정 4] 반영)
   BannerAd? _bannerAd;
@@ -171,6 +173,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   @override
   void dispose() {
+    _readyTimer?.cancel(); // 타이머 해제
     _disposeBottomBannerAd();
     super.dispose();
   }
@@ -180,11 +183,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
     super.initState();
     _requestPermissions();
     
-    // 8초 타임아웃 폴백: 네트워크 지연 등으로 로딩 신호가 안 오면 강제로 걷어냅니다.
-    Future.delayed(const Duration(seconds: 8), () {
+    // 8초 타이머 시작: 8초 안에 webAppReady가 안 오면 강제로 에러 화면 표시
+    _readyTimer = Timer(const Duration(seconds: 8), () {
       if (mounted && _isLoadingWeb) {
         setState(() {
           _isLoadingWeb = false;
+          _hasError = true;
         });
       }
     });
@@ -238,6 +242,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   userAgent: "Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36",
                 ),
             onWebViewCreated: (controller) {
+              // 4. 서드파티 쿠키 허용
+              CookieManager.instance().setAcceptThirdPartyCookies(controller, true);
               _webViewController = controller;
               
               // 갤러리 피커 통신용 JS 핸들러 등록
@@ -280,6 +286,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                 handlerName: 'webAppReady',
                 callback: (args) {
                   try {
+                    _readyTimer?.cancel(); // webAppReady 정상 수신 시 타이머 취소
                     if (mounted && _isLoadingWeb) {
                       setState(() {
                         _isLoadingWeb = false;
@@ -460,20 +467,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
               return NavigationActionPolicy.ALLOW;
             },
             onLoadStop: (controller, url) {
-              // 페이지 로딩 완료 시 바로 로딩 스크린 해제 (webAppReady 신호 미수신 방지)
-              if (mounted && _isLoadingWeb) {
-                setState(() {
-                  _isLoadingWeb = false;
-                });
-              }
+              // onLoadStop 안에서 _isLoadingWeb = false 설정 로직 제거
             },
             onProgressChanged: (controller, progress) {
-              // 100% 로딩 완료 시 추가 보장
-              if (progress == 100 && mounted && _isLoadingWeb) {
-                setState(() {
-                  _isLoadingWeb = false;
-                });
-              }
+              // onProgressChanged 안에서 _isLoadingWeb = false 설정 로직 제거
             },
             onReceivedError: (controller, request, error) {
               // 메인 프레임 로딩 오류 발생 시 에러 상태로 전환 (오프라인/타임아웃 대응)
