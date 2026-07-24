@@ -240,10 +240,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   safeBrowsingEnabled: false,
                   supportZoom: false,
                   userAgent: "Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36",
+                  // 4. 서드파티 쿠키 허용
+                  thirdPartyCookiesEnabled: true,
                 ),
             onWebViewCreated: (controller) {
-              // 4. 서드파티 쿠키 허용
-              CookieManager.instance().setAcceptThirdPartyCookies(controller, true);
               _webViewController = controller;
               
               // 갤러리 피커 통신용 JS 핸들러 등록
