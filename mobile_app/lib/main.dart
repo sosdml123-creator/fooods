@@ -180,8 +180,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
     super.initState();
     _requestPermissions();
     
-    // 20초 타임아웃 폴백: 네트워크 지연 등으로 웹앱 준비 신호가 안 오면 로딩을 걷어냅니다.
-    Future.delayed(const Duration(seconds: 20), () {
+    // 8초 타임아웃 폴백: 네트워크 지연 등으로 로딩 신호가 안 오면 강제로 걷어냅니다.
+    Future.delayed(const Duration(seconds: 8), () {
       if (mounted && _isLoadingWeb) {
         setState(() {
           _isLoadingWeb = false;
@@ -460,8 +460,20 @@ class _WebViewScreenState extends State<WebViewScreen> {
               return NavigationActionPolicy.ALLOW;
             },
             onLoadStop: (controller, url) {
-              // 더이상 onLoadStop 단계에서 로딩을 해제하지 않고,
-              // 웹앱 내부의 React 마운트(webAppReady) 신호를 수신했을 때 해제합니다.
+              // 페이지 로딩 완료 시 바로 로딩 스크린 해제 (webAppReady 신호 미수신 방지)
+              if (mounted && _isLoadingWeb) {
+                setState(() {
+                  _isLoadingWeb = false;
+                });
+              }
+            },
+            onProgressChanged: (controller, progress) {
+              // 100% 로딩 완료 시 추가 보장
+              if (progress == 100 && mounted && _isLoadingWeb) {
+                setState(() {
+                  _isLoadingWeb = false;
+                });
+              }
             },
             onReceivedError: (controller, request, error) {
               // 메인 프레임 로딩 오류 발생 시 에러 상태로 전환 (오프라인/타임아웃 대응)
