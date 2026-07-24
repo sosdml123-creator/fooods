@@ -551,14 +551,16 @@ class ErrorBoundary extends React.Component {
 
       useEffect(() => {
         try {
-          const handleAdFailed = (failedPos, failedIdx) => {
-            if (failedPos === position && (failedIdx === index || failedIdx === undefined)) {
-              setAdFailed(true);
-            }
-          };
-
           if (typeof window !== "undefined") {
-            window.onAdLoadFailed = handleAdFailed;
+            const previousHandler = window.onAdLoadFailed;
+            window.onAdLoadFailed = (failedPos, failedIdx) => {
+              if (typeof previousHandler === "function") {
+                try { previousHandler(failedPos, failedIdx); } catch (e) {}
+              }
+              if (failedPos === position && (failedIdx === index || failedIdx === undefined)) {
+                setAdFailed(true);
+              }
+            };
           }
 
           if (typeof window !== "undefined" && window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {

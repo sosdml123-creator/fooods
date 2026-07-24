@@ -219,6 +219,22 @@ class _WebViewScreenState extends State<WebViewScreen> {
       },
       child: Scaffold(
         backgroundColor: Colors.white,
+        bottomNavigationBar: (_isBannerAdLoaded && _bannerAd != null)
+            ? SafeArea(
+                child: Container(
+                  width: double.infinity,
+                  height: _bannerAd!.size.height.toDouble(),
+                  color: Colors.white,
+                  child: Center(
+                    child: SizedBox(
+                      width: _bannerAd!.size.width.toDouble(),
+                      height: _bannerAd!.size.height.toDouble(),
+                      child: AdWidget(ad: _bannerAd!),
+                    ),
+                  ),
+                ),
+              )
+            : null,
         body: SafeArea(
           child: Stack(
             children: [
