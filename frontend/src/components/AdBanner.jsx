@@ -2,14 +2,6 @@ import React, { useEffect } from 'react';
 
 function AdBanner() {
   useEffect(() => {
-    // 1. 하이브리드 앱 환경일 경우 Flutter Native로 상단 광고 로드 신호 전달
-    if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-      window.flutter_inappwebview.callHandler('showAd', {
-        type: 'banner',
-        position: 'top',
-        index: 0
-      }).catch(err => console.error("AdMob showAd error:", err));
-    }
   }, []);
 
   const handleClick = () => {

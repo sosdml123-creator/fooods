@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
@@ -17,14 +16,6 @@ import 'package:firebase_analytics/firebase_analytics.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Google Mobile Ads (AdMob) SDK 초기화
-  try {
-    await MobileAds.instance.initialize();
-    debugPrint("[AdMob] Google Mobile Ads SDK initialized successfully.");
-  } catch (adErr) {
-    debugPrint("[AdMob Initialization Error] $adErr");
-  }
 
   // Firebase 초기화 및 푸시 알림 설정
   try {
@@ -100,81 +91,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
   bool _hasError = false;
   Timer? _readyTimer; // webAppReady용 타이머
 
-  // Google AdMob 관리 변수 ([수정 2], [수정 3], [수정 4] 반영)
-  BannerAd? _bannerAd;
-  bool _isBannerAdLoaded = false;
-
-  // Google AdMob 상단/하단 배너 ID (실제 광고 ID 및 테스트 ID Fallback)
-  String get _realBannerAdUnitId {
-    if (Platform.isAndroid) {
-      return 'ca-app-pub-3878859120989916/2421488045'; // 상단 배너 실제 ID
-    }
-    return 'ca-app-pub-3878859120989916/2421488045';
-  }
-
-  String get _testBannerAdUnitId {
-    if (Platform.isAndroid) {
-      return 'ca-app-pub-3940256099942544/6300978111'; // Android 테스트 배너 ID
-    }
-    return 'ca-app-pub-3940256099942544/6300978111';
-  }
-
-  void _loadBottomBannerAd({String position = 'top', int index = 0, bool useTestFallback = false}) {
-    if (_bannerAd != null) return;
-    
-    final String adUnitIdToUse = useTestFallback ? _testBannerAdUnitId : _realBannerAdUnitId;
-
-    _bannerAd = BannerAd(
-      adUnitId: adUnitIdToUse,
-      size: AdSize.banner,
-      request: const AdRequest(),
-      listener: BannerAdListener(
-        onAdLoaded: (ad) {
-          debugPrint('[AdMob Bridge] Banner ad loaded successfully ($adUnitIdToUse).');
-          if (mounted) {
-            setState(() {
-              _isBannerAdLoaded = true;
-            });
-          }
-        },
-        onAdFailedToLoad: (ad, error) {
-          debugPrint('[AdMob Bridge] Banner ad failed to load ($adUnitIdToUse): $error');
-          ad.dispose();
-          _bannerAd = null;
-          if (mounted) {
-            setState(() {
-              _isBannerAdLoaded = false;
-            });
-            if (!useTestFallback) {
-              // 실광고 실패 시 테스트 광고 단위로 즉시 Fallback 시도 (No Fill 차단)
-              _loadBottomBannerAd(position: position, index: index, useTestFallback: true);
-            } else {
-              _webViewController?.evaluateJavascript(
-                source: 'if(window.onAdLoadFailed) window.onAdLoadFailed("$position", $index);'
-              );
-            }
-          }
-        },
-      ),
-    )..load();
-  }
-
-  void _disposeBottomBannerAd() {
-    if (_bannerAd != null) {
-      _bannerAd!.dispose();
-      _bannerAd = null;
-      if (mounted) {
-        setState(() {
-          _isBannerAdLoaded = false;
-        });
-      }
-    }
-  }
-
   @override
   void dispose() {
     _readyTimer?.cancel(); // 타이머 해제
-    _disposeBottomBannerAd();
     super.dispose();
   }
 
@@ -218,22 +137,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
       },
       child: Scaffold(
         backgroundColor: Colors.white,
-        bottomNavigationBar: (_isBannerAdLoaded && _bannerAd != null)
-            ? SafeArea(
-                child: Container(
-                  width: double.infinity,
-                  height: _bannerAd!.size.height.toDouble(),
-                  color: Colors.white,
-                  child: Center(
-                    child: SizedBox(
-                      width: _bannerAd!.size.width.toDouble(),
-                      height: _bannerAd!.size.height.toDouble(),
-                      child: AdWidget(ad: _bannerAd!),
-                    ),
-                  ),
-                ),
-              )
-            : null,
         body: SafeArea(
           child: Stack(
             children: [
@@ -311,69 +214,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
                     debugPrint('[webAppReady Error] $e');
                   }
                   return {'success': true};
-                },
-              );
-
-              // 요구사항 3번: AdMob 광고 제어 JS 핸들러 (showAd / hideAd)
-              controller.addJavaScriptHandler(
-                handlerName: 'showAd',
-                callback: (args) async {
-                  try {
-                    debugPrint('[AdMob Bridge] showAd called with args: $args');
-                    if (args.isNotEmpty && args[0] is Map) {
-                      final Map<String, dynamic> data = Map<String, dynamic>.from(args[0]);
-                      final String position = data['position']?.toString() ?? 'bottom';
-                      final int index = (data['index'] is num) ? (data['index'] as num).toInt() : 0;
-                      
-                      _loadBottomBannerAd(position: position, index: index);
-                    } else {
-                      _loadBottomBannerAd();
-                    }
-                  } catch (e) {
-                    debugPrint('[AdMob Bridge Error] showAd exception: $e');
-                  }
-                  return {'success': true};
-                },
-              );
-
-              controller.addJavaScriptHandler(
-                handlerName: 'hideAd',
-                callback: (args) async {
-                  try {
-                    debugPrint('[AdMob Bridge] hideAd called');
-                    _disposeBottomBannerAd();
-                  } catch (e) {
-                    debugPrint('[AdMob Bridge Error] hideAd exception: $e');
-                  }
-                  return {'success': true};
-                },
-              );
-
-              // 네이티브 광고 로딩용 JS 핸들러 등록
-              controller.addJavaScriptHandler(
-                handlerName: 'loadNativeAd',
-                callback: (args) async {
-                  try {
-                    final adData = await _intentChannel.invokeMethod('loadNativeAd');
-                    return adData;
-                  } catch (e) {
-                    debugPrint("AdMob Native Ad load error: $e");
-                    return null;
-                  }
-                },
-              );
-
-              // 네이티브 광고 클릭 처리용 JS 핸들러 등록
-              controller.addJavaScriptHandler(
-                handlerName: 'performAdClick',
-                callback: (args) async {
-                  try {
-                    final result = await _intentChannel.invokeMethod('performAdClick');
-                    return result;
-                  } catch (e) {
-                    debugPrint("AdMob Native Ad click error: $e");
-                    return false;
-                  }
                 },
               );
 

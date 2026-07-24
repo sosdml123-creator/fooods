@@ -498,217 +498,32 @@ class ErrorBoundary extends React.Component {
 
     // --- 3. 하위 컴포넌트 선언 ---
 
-    const AdBannerAdSense = React.memo(function AdBannerAdSense({ slot }) {
-      const adRef = useRef(null);
-      const pushed = useRef(false);
-
-      useEffect(() => {
-        if (pushed.current) return;
-        pushed.current = true;
-        try {
-          (window.adsbygoogle = window.adsbygoogle || []).push({});
-        } catch (e) {
-          console.error("[AdSense] push error:", e);
-        }
-      }, []);
-
+    const AdBannerAdSense = React.memo(function AdBannerAdSense() {
       return (
-        <div ref={adRef} className="ad-banner cursor-pointer my-2 p-3 bg-gradient-to-r from-amber-50/90 via-orange-50/90 to-amber-50/90 border border-amber-200/80 rounded-2xl shadow-xs transition-all hover:shadow-sm" style={{ minHeight: "100px" }}>
+        <div className="ad-banner cursor-pointer my-2 p-3 bg-gradient-to-r from-amber-50/90 via-orange-50/90 to-amber-50/90 border border-amber-200/80 rounded-2xl shadow-xs transition-all hover:shadow-sm" style={{ minHeight: "80px" }}>
           <div className="text-[10px] font-bold text-amber-600 tracking-wider mb-0.5 flex items-center justify-between">
             <span className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-              ADVERTISEMENT · GOOGLE ADSENSE
+              SPONSORED · PLATING PARTNER
             </span>
-            <span className="text-[9px] text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded font-medium">광고 구역</span>
+            <span className="text-[9px] text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded font-medium">추천 구역</span>
           </div>
           <div className="text-xs font-bold text-zinc-900 mb-0.5 flex items-center justify-between">
             <span>🍳 요리할 때 필수! 감성 타이머 & 주방 특가</span>
             <i className="fa-solid fa-chevron-right text-[10px] text-zinc-400"></i>
           </div>
-          <div className="text-[10px] text-zinc-500 mb-2">
-            sponsored by Google Ads & Plating Partner
-          </div>
-          
-          <div className="mt-2 text-center overflow-hidden">
-            <ins
-              className="adsbygoogle"
-              style={{ display: "block" }}
-              data-ad-client="ca-pub-3878859120989916"
-              data-ad-slot={slot || "9384771667"}
-              data-ad-format="auto"
-              data-full-width-responsive="true"
-            ></ins>
+          <div className="text-[10px] text-zinc-500">
+            sponsored by Plating Partner
           </div>
         </div>
       );
     }, () => true);
 
-    // AdMob 네이티브 / 배너 광고 Placeholder ([수정 1], [수정 2] 반영)
-    function AdMobPlaceholder({ type = "native", position = "feed", index = 0 }) {
-      const [adFailed, setAdFailed] = useState(false);
-      const containerRef = useRef(null);
-      const [nativeAdData, setNativeAdData] = useState(null);
-
-      useEffect(() => {
-        try {
-          if (typeof window !== "undefined") {
-            const previousHandler = window.onAdLoadFailed;
-            window.onAdLoadFailed = (failedPos, failedIdx) => {
-              if (typeof previousHandler === "function") {
-                try { previousHandler(failedPos, failedIdx); } catch (e) {}
-              }
-              if (failedPos === position && (failedIdx === index || failedIdx === undefined)) {
-                setAdFailed(true);
-              }
-            };
-          }
-
-          if (typeof window !== "undefined" && window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-            window.flutter_inappwebview.callHandler('loadNativeAd')
-              .then(res => {
-                if (res && res.headline) {
-                  setNativeAdData(res);
-                }
-              })
-              .catch(err => console.log("[AdMob Bridge] loadNativeAd error:", err));
-          }
-
-          const element = containerRef.current;
-          if (!element || typeof IntersectionObserver === "undefined") return;
-
-          const observer = new IntersectionObserver((entries) => {
-            entries.forEach((entry) => {
-              try {
-                if (typeof window === "undefined" || !window.flutter_inappwebview || !window.flutter_inappwebview.callHandler) {
-                  return;
-                }
-
-                const rect = entry.boundingClientRect;
-                if (entry.isIntersecting) {
-                  window.flutter_inappwebview.callHandler('showAd', {
-                    type,
-                    position,
-                    index,
-                    top: Math.round(rect.top || 0),
-                    left: Math.round(rect.left || 0),
-                    width: Math.round(rect.width || 0),
-                    height: Math.round(rect.height || 0)
-                  }).catch(() => {});
-                } else {
-                  window.flutter_inappwebview.callHandler('hideAd', {
-                    position,
-                    index
-                  }).catch(() => {});
-                }
-              } catch (e) {}
-            });
-          }, { threshold: 0.3 });
-
-          observer.observe(element);
-
-          return () => {
-            try {
-              observer.disconnect();
-              if (typeof window !== "undefined" && window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-                window.flutter_inappwebview.callHandler('hideAd', { position, index }).catch(() => {});
-              }
-            } catch (e) {}
-          };
-        } catch (err) {
-          console.error("AdMobPlaceholder error:", err);
-        }
-      }, [type, position, index]);
-
-      if (adFailed) {
-        return null;
-      }
-
-      // 네이티브 광고 수신 성공 시
-      if (nativeAdData) {
-        return (
-          <div 
-            ref={containerRef}
-            className="post-card cursor-pointer border border-orange-200/80 bg-orange-50/30 rounded-2xl p-3 shadow-xs hover:shadow-md transition-all my-2"
-            onClick={() => {
-              if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-                window.flutter_inappwebview.callHandler('performAdClick').catch(() => {});
-              }
-            }}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[9px] font-extrabold text-orange-600 bg-orange-100 border border-orange-200 px-1.5 py-0.5 rounded-md">
-                SPONSORED
-              </span>
-              <span className="text-[10px] font-bold text-zinc-400">
-                {nativeAdData.advertiser || "AdMob"}
-              </span>
-            </div>
-
-            {nativeAdData.imageUrl && (
-              <div className="w-full h-36 rounded-xl overflow-hidden mb-2.5 bg-zinc-100 border border-zinc-200/60">
-                <img src={nativeAdData.imageUrl} alt="" className="w-full h-full object-cover" />
-              </div>
-            )}
-
-            <h4 className="text-xs font-bold text-zinc-900 leading-snug line-clamp-2 mb-1">
-              {nativeAdData.headline}
-            </h4>
-
-            {nativeAdData.body && (
-              <p className="text-[11px] text-zinc-500 line-clamp-2 mb-2">
-                {nativeAdData.body}
-              </p>
-            )}
-
-            <button className="w-full py-1.5 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs rounded-xl shadow-xs transition-colors">
-              {nativeAdData.callToAction || "자세히 보기"}
-            </button>
-          </div>
-        );
-      }
-
-      // 웹 및 기본 가동 시 세련된 스폰서 프로모션 피드 카드
-      return (
-        <div 
-          ref={containerRef}
-          className="post-card cursor-pointer border border-orange-200/70 bg-gradient-to-br from-amber-50/80 via-orange-50/50 to-white rounded-2xl p-3 shadow-xs hover:shadow-md transition-all my-2 text-left group"
-          onClick={() => window.open("https://link.coupang.com", "_blank")}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[9px] font-extrabold text-orange-600 bg-orange-100 border border-orange-200 px-1.5 py-0.5 rounded-md">
-              SPONSORED
-            </span>
-            <span className="text-[10px] font-bold text-zinc-400">Plating Partner</span>
-          </div>
-
-          <div className="w-full h-36 rounded-xl overflow-hidden mb-2.5 bg-zinc-100 relative border border-zinc-200/60 group-hover:scale-[1.01] transition-transform duration-300">
-            <img 
-              src="https://images.unsplash.com/photo-1556910103-1c02745aae4d?auto=format&fit=crop&q=80&w=400" 
-              alt="플레이팅 추천 주방 용품" 
-              className="w-full h-full object-cover" 
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex items-end p-2.5">
-              <span className="text-white text-[11px] font-bold drop-shadow-sm">
-                🍳 요리 질을 바꿔주는 감성 주방템 컬렉션
-              </span>
-            </div>
-          </div>
-
-          <h4 className="text-xs font-bold text-zinc-900 leading-snug line-clamp-2 mb-1 group-hover:text-orange-600 transition-colors">
-            오늘 우리집 식탁을 빛내줄 추천 쿡웨어 & 감성 타이머 특가 혜택
-          </h4>
-
-          <p className="text-[11px] text-zinc-500 line-clamp-2 mb-2 font-medium">
-            플레이팅 회원 단독 특가! 맛있는 요리를 위한 필수 템을 최저가로 만나보세요.
-          </p>
-
-          <div className="w-full py-1.5 bg-orange-500 group-hover:bg-orange-600 text-white font-bold text-xs rounded-xl shadow-xs transition-colors text-center flex items-center justify-center gap-1">
-            <span>혜택 구경하러 가기</span>
-            <i className="fa-solid fa-arrow-right text-[10px]"></i>
-          </div>
-        </div>
-      );
+    function AdMobPlaceholder() {
+      return null;
     }
+
+
 
     function ProductPreview({ link, creator }) {
       return (
