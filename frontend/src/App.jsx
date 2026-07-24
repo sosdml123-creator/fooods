@@ -17,7 +17,7 @@ import { getDeviceFingerprint } from './utils/fingerprint';
 // API URL 설정 (개발/배포 환경변수 연동)
 const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "");
 
-class ErrorBoundary extends React.Component {
+export class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -7283,12 +7283,5 @@ class ErrorBoundary extends React.Component {
         </div>
       );
     }
-
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(
-      <ErrorBoundary>
-        <App />
-      </ErrorBoundary>
-    );
   
 export default App;
