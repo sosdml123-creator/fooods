@@ -3361,7 +3361,7 @@ export class ErrorBoundary extends React.Component {
 
         const checkNaverMap = () => {
           attempts++;
-          if (window.naver && window.naver.maps) {
+          if (window.naver && window.naver.maps && window.naver.maps.LatLng) {
             setMapLoaded(true);
             if (intervalId) clearInterval(intervalId);
           } else if (attempts > 50) {
@@ -3369,7 +3369,7 @@ export class ErrorBoundary extends React.Component {
           }
         };
 
-        if (window.naver && window.naver.maps) {
+        if (window.naver && window.naver.maps && window.naver.maps.LatLng) {
           setMapLoaded(true);
         } else {
           const scriptUrl = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${clientId}&submodules=geocoder`;
