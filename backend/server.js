@@ -171,6 +171,13 @@ app.get(["/landing", "/landing.html"], (req, res) => {
   res.sendFile(path.join(wwwPath, "landing.html"));
 });
 
+// 안드로이드 APK 직접 다운로드 라우트
+app.get(["/app-release.apk", "/download/apk"], (req, res) => {
+  res.setHeader("Content-Type", "application/vnd.android.package-archive");
+  res.setHeader("Content-Disposition", "attachment; filename=app-release.apk");
+  res.sendFile(path.join(wwwPath, "app-release.apk"));
+});
+
 // Google AdMob 크롤러 전용 app-ads.txt 명시적 서빙 라우트 (AdMob 크롤러 100% 검증 통과)
 app.get(["/app-ads.txt", "/app-ads", "/api/app-ads.txt"], (req, res) => {
   res.setHeader("Content-Type", "text/plain; charset=utf-8");

@@ -100,7 +100,7 @@
       "destination": "/api/index.js"
     },
     {
-      "source": "/((?!assets|api|health|admin|app-ads|robots|privacy|terms|landing).*)",
+      "source": "/((?!assets|api|health|admin|app-ads|robots|privacy|terms|landing|app-release.apk).*)",
       "destination": "/index.html"
     }
   ]
