@@ -95,29 +95,9 @@ try {
   }
 
   // ==========================================
-  // [6/6] Post-process: Remove type="module" from index.html for Android WebView compatibility
+  // [6/6] Build Complete
   // ==========================================
-  console.log('\n[6/6] 🔧 Post-processing index.html for Android WebView compatibility...');
-  
-  const htmlPaths = [
-    path.join(backendWwwDir, 'index.html'),
-    path.join(rootDistDir, 'index.html'),
-  ];
-  
-  for (const htmlPath of htmlPaths) {
-    if (fs.existsSync(htmlPath)) {
-      let html = fs.readFileSync(htmlPath, 'utf-8');
-      // type="module" 제거 → Android WebView ES Module 오류 방지
-      html = html.replace(/<script\s+type="module"\s+crossorigin\s+src="([^"]+)">/g, '<script src="$1">');
-      html = html.replace(/<script\s+type="module"\s+src="([^"]+)">/g, '<script src="$1">');
-      // modulepreload 링크 제거 → WebView 불필요한 리소스 힌트 제거
-      html = html.replace(/<link\s+rel="modulepreload"\s+crossorigin\s+href="[^"]*">/g, '');
-      fs.writeFileSync(htmlPath, html, 'utf-8');
-      console.log(`  ✅ Patched: ${htmlPath}`);
-    }
-  }
-
-  console.log('\n✨ Build Complete! Vercel project is ready to serve.\n');
+  console.log('\n[6/6] ✨ Build Complete! Vercel project is ready to serve.\n');
 
 } catch (error) {
   console.error('\n❌ Build failed with error:', error.message);

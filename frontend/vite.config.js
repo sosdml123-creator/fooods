@@ -17,12 +17,17 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       output: {
-        // module 청크 방식 대신 단일 포맷으로 묶기
-        format: 'iife',
         chunkFileNames: 'assets/js/[name].js',
         entryFileNames: 'assets/js/[name].js',
         assetFileNames: 'assets/[ext]/[name].[ext]',
-        // IIFE에서는 manualChunks 불가, 단일 번들로 합침
+        manualChunks(id) {
+          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
+            return 'vendor-react';
+          }
+          if (id.includes('node_modules/@firebase/') || id.includes('node_modules/firebase/')) {
+            return 'vendor-firebase';
+          }
+        }
       },
     },
   },
