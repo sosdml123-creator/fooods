@@ -272,12 +272,16 @@ class _WebViewScreenState extends State<WebViewScreen> {
               controller.addJavaScriptHandler(
                 handlerName: 'webAppReady',
                 callback: (args) {
-                  if (mounted && _isLoadingWeb) {
-                    setState(() {
-                      _isLoadingWeb = false;
-                    });
+                  try {
+                    if (mounted && _isLoadingWeb) {
+                      setState(() {
+                        _isLoadingWeb = false;
+                      });
+                    }
+                  } catch (e) {
+                    debugPrint('[webAppReady Error] $e');
                   }
-                  return null;
+                  return {'success': true};
                 },
               );
 
@@ -285,16 +289,19 @@ class _WebViewScreenState extends State<WebViewScreen> {
               controller.addJavaScriptHandler(
                 handlerName: 'showAd',
                 callback: (args) async {
-                  debugPrint('[AdMob Bridge] showAd called with args: $args');
-                  if (args.isNotEmpty && args[0] is Map) {
-                    final Map<String, dynamic> data = Map<String, dynamic>.from(args[0]);
-                    final String type = data['type'] ?? 'banner';
-                    final String position = data['position'] ?? 'bottom';
-                    final int index = data['index'] ?? 0;
-                    
-                    _loadBottomBannerAd(position: position, index: index);
-                  } else {
-                    _loadBottomBannerAd();
+                  try {
+                    debugPrint('[AdMob Bridge] showAd called with args: $args');
+                    if (args.isNotEmpty && args[0] is Map) {
+                      final Map<String, dynamic> data = Map<String, dynamic>.from(args[0]);
+                      final String position = data['position']?.toString() ?? 'bottom';
+                      final int index = (data['index'] is num) ? (data['index'] as num).toInt() : 0;
+                      
+                      _loadBottomBannerAd(position: position, index: index);
+                    } else {
+                      _loadBottomBannerAd();
+                    }
+                  } catch (e) {
+                    debugPrint('[AdMob Bridge Error] showAd exception: $e');
                   }
                   return {'success': true};
                 },
@@ -303,8 +310,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
               controller.addJavaScriptHandler(
                 handlerName: 'hideAd',
                 callback: (args) async {
-                  debugPrint('[AdMob Bridge] hideAd called');
-                  _disposeBottomBannerAd();
+                  try {
+                    debugPrint('[AdMob Bridge] hideAd called');
+                    _disposeBottomBannerAd();
+                  } catch (e) {
+                    debugPrint('[AdMob Bridge Error] hideAd exception: $e');
+                  }
                   return {'success': true};
                 },
               );

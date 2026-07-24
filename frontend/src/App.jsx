@@ -566,10 +566,10 @@ class ErrorBoundary extends React.Component {
                     type,
                     position,
                     index,
-                    top: rect.top,
-                    left: rect.left,
-                    width: rect.width,
-                    height: rect.height
+                    top: Math.round(rect.top || 0),
+                    left: Math.round(rect.left || 0),
+                    width: Math.round(rect.width || 0),
+                    height: Math.round(rect.height || 0)
                   }).catch(() => {});
                 } else {
                   window.flutter_inappwebview.callHandler('hideAd', {
