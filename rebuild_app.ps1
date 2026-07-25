@@ -98,13 +98,15 @@ Set-Location "d:\food\mobile_app"
 & "$sdkDir\flutter\bin\flutter.bat" pub run flutter_launcher_icons
 & "$sdkDir\flutter\bin\flutter.bat" pub run flutter_native_splash:create
 
-# 6. Build final App Bundle (AAB)
+# 6. Build final App Bundle (AAB) and APK
 Write-Host "========================================"
-Write-Host "6. Building release App Bundle (AAB) (Name: $buildName, Number: $buildNumber)..."
+Write-Host "6. Building release App Bundle (AAB) and APK (Name: $buildName, Number: $buildNumber)..."
 Write-Host "========================================"
 & "$sdkDir\flutter\bin\flutter.bat" build appbundle --release --build-name=$buildName --build-number=$buildNumber --split-debug-info=build/app/outputs/symbols
+& "$sdkDir\flutter\bin\flutter.bat" build apk --release --build-name=$buildName --build-number=$buildNumber --split-debug-info=build/app/outputs/symbols
 
 Write-Host "========================================"
-Write-Host "🎉 App Bundle build completed successfully!"
-Write-Host "Path: d:\food\mobile_app\build\app\outputs\bundle\release\app-release.aab"
+Write-Host "🎉 Build completed successfully!"
+Write-Host "App Bundle: d:\food\mobile_app\build\app\outputs\bundle\release\app-release.aab"
+Write-Host "APK: d:\food\mobile_app\build\app\outputs\flutter-apk\app-release.apk"
 Write-Host "========================================"

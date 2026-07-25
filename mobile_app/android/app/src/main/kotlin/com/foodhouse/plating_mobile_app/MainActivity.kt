@@ -6,12 +6,16 @@ import io.flutter.plugin.common.MethodChannel
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import androidx.core.view.WindowCompat
 import java.net.URISyntaxException
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.foodhouse.plating/intent"
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Android 16 edge-to-edge 강제 적용 대응:
+        // setDecorFitsSystemWindows(true) 로 기존 동작 유지(콘텐츠가 상태바/제스처 영역에 가려지지 않음)
+        WindowCompat.setDecorFitsSystemWindows(window, true)
         super.onCreate(savedInstanceState)
         
         // Enable Chrome remote web debugging

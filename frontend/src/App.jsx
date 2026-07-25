@@ -3332,7 +3332,7 @@ export class ErrorBoundary extends React.Component {
       }
     }
 
-    const NaverMapView = React.memo(function NaverMapView({ posts, onPostClick }) {
+    const NaverMapView = React.memo(function NaverMapView({ posts, onPostClick, isActive }) {
       const mapRef = useRef(null);
       const mapInstanceRef = useRef(null);
       const markersRef = useRef([]);
@@ -3392,6 +3392,21 @@ export class ErrorBoundary extends React.Component {
           }
         };
       }, [clientId]);
+
+      // 지도 탭이 활성화될 때 네이버 지도 resize 강제 트리거 (흰색 화면 방지)
+      useEffect(() => {
+        if (!isActive || !mapInstanceRef.current || !window.naver || !window.naver.maps) return;
+        // display:none → block 전환 후 지도 크기를 재계산시킵니다.
+        const tid = setTimeout(() => {
+          try {
+            window.naver.maps.Event.trigger(mapInstanceRef.current, 'resize');
+            mapInstanceRef.current.autoResize();
+          } catch (e) {
+            console.warn('Map resize trigger error:', e);
+          }
+        }, 50);
+        return () => clearTimeout(tid);
+      }, [isActive]);
 
       const clustererRef = useRef(null);
 
@@ -3604,7 +3619,7 @@ export class ErrorBoundary extends React.Component {
       };
 
       return (
-        <div className="w-full h-[calc(100vh-64px)] relative bg-zinc-900 select-none overflow-hidden">
+        <div className="w-full relative bg-zinc-900 select-none overflow-hidden" style={{ height: "100%" }}>
           {/* 상단 플로팅 음식점 검색바 */}
           <div className="absolute top-4 left-4 right-4 z-20">
             <form onSubmit={handleSearch} className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-zinc-200 p-2 flex items-center gap-2 transition-all hover:shadow-2xl">
@@ -5793,10 +5808,9 @@ export class ErrorBoundary extends React.Component {
         const user = auth.currentUser;
         if (!user) {
           setLoginOpen(true);
-        } else if (window.flutter_inappwebview) {
-          isSelectingPhotos.current = true;
-          window.flutter_inappwebview.callHandler('openCustomGallery', { type: 'recipe' });
         } else {
+          // flutter_inappwebview 환경에서 openCustomGallery 핸들러가 미등록 상태이므로
+          // 앱/웹 모두 동일하게 WriteSheet를 직접 열도록 처리
           setWriteOpen(true);
         }
       }
@@ -6923,7 +6937,7 @@ export class ErrorBoundary extends React.Component {
             </div>
           )}
 
-          <main className="flex-1 overflow-y-auto no-scrollbar">
+          <main className="flex-1 overflow-y-auto no-scrollbar" style={{ position: "relative" }}>
             {activeTab === "home" && (
               <div className="masonry-feed">
                 {selectedCategory === "팔로잉" && filteredPosts.length === 0 ? (
@@ -7130,8 +7144,16 @@ export class ErrorBoundary extends React.Component {
               />
             )}
 
-            <div style={{ display: activeTab === "map" ? "block" : "none", height: "100%" }}>
-              <NaverMapView posts={posts} onPostClick={handleRecipePostClick} />
+            <div style={{
+              display: activeTab === "map" ? "block" : "none",
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              overflow: "hidden"
+            }}>
+              <NaverMapView posts={posts} onPostClick={handleRecipePostClick} isActive={activeTab === "map"} />
             </div>
 
             {activeTab === "mypage" && (

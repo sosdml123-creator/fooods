@@ -99,23 +99,17 @@ class _WebViewScreenState extends State<WebViewScreen> {
                   javaScriptEnabled: true,
                   domStorageEnabled: true,
                   databaseEnabled: true,
-                  thirdPartyCookiesEnabled: true,
-                  cacheMode: CacheMode.LOAD_DEFAULT,
-                  mixedContentMode: MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW,
-                  allowFileAccessFromFileURLs: true,
-                  allowUniversalAccessFromFileURLs: true,
-                  allowContentAccess: true,
-                  allowFileAccess: true,
-                  isInspectable: true, // Chrome remote debugging 지원
-                  useShouldOverrideUrlLoading: true,
-                  mediaPlaybackRequiresUserGesture: false,
-                  javaScriptCanOpenWindowsAutomatically: true,
                   supportZoom: false,
-                  safeBrowsingEnabled: false,
+                  allowsInlineMediaPlayback: true,
+                  useShouldOverrideUrlLoading: true,
+                  // v6.1.x: Android에서 SUPPRESS_ERROR_PAGE 충돌 방지를 위해
+                  // 명시적으로 false 처리
+                  suppressesIncrementalRendering: false,
+                  useHybridComposition: true,
                 ),
                 onWebViewCreated: (controller) {
                   _webViewController = controller;
-                  debugPrint('[WebView Created] InAppWebViewController ready.');
+                  debugPrint('[WebView] Initialized.');
 
                   // 웹앱 준비 완료 시그널 수신 핸들러 (선택 보조)
                   controller.addJavaScriptHandler(
