@@ -2276,7 +2276,7 @@ export class ErrorBoundary extends React.Component {
         return parsed;
       }
 
-      // [수정 1] 네이버 지도 장소 검색 처리
+      // [수정 1] 네이버 지도/지역 장소 검색 처리
       async function handleLocationSearch(e, targetQuery = null) {
         if (e && e.preventDefault) e.preventDefault();
         const queryToSearch = (targetQuery !== null ? targetQuery : locationQuery).trim();
@@ -2285,6 +2285,39 @@ export class ErrorBoundary extends React.Component {
 
         setLocationSearching(true);
         try {
+          // 1단계: 상호명/가게 이름 전용 네이버 지역 검색 API 시도
+          const localRes = await fetch(`/api/naver-local-search?query=${encodeURIComponent(queryToSearch)}`);
+          const localData = await localRes.json();
+
+          if (localData.success && localData.data && localData.data.items && localData.data.items.length > 0) {
+            const items = localData.data.items.map(item => {
+              let lat = 37.5665;
+              let lng = 126.9780;
+
+              // TM128 정수 좌표를 WGS84 위경도로 변환
+              if (window.naver && window.naver.maps && window.naver.maps.TransCoord && item.mapx && item.mapy) {
+                try {
+                  const pt = new window.naver.maps.Point(parseInt(item.mapx), parseInt(item.mapy));
+                  const latLng = window.naver.maps.TransCoord.fromTM128ToLatLng(pt);
+                  lat = latLng.lat();
+                  lng = latLng.lng();
+                } catch (e) {
+                  console.warn("TransCoord conversion failed:", e);
+                }
+              }
+
+              return {
+                lat,
+                lng,
+                placeName: item.title || queryToSearch,
+                address: item.roadAddress || item.address || ""
+              };
+            });
+            setLocationSearchResults(items);
+            return;
+          }
+
+          // 2단계: 기존 도로명/지번 주소 지오코딩 API 시도
           const res = await fetch(`/api/naver-geocode?query=${encodeURIComponent(queryToSearch)}`);
           const data = await res.json();
           if (data.success && data.data && data.data.addresses && data.data.addresses.length > 0) {
@@ -2314,6 +2347,7 @@ export class ErrorBoundary extends React.Component {
           setLocationSearching(false);
         }
       }
+
 
       function handleUrlChange(id, value) {
         const parsed = parsePastedMapText(value);
@@ -3774,6 +3808,32 @@ export class ErrorBoundary extends React.Component {
 
       const fetchRealGeocodeFromBackend = async (query) => {
         try {
+          // 1단계: 상호명/가게 이름 검색 시도
+          const localRes = await fetch(`/api/naver-local-search?query=${encodeURIComponent(query)}`);
+          const localData = await localRes.json();
+
+          if (localData.success && localData.data && localData.data.items && localData.data.items.length > 0) {
+            const item = localData.data.items[0];
+            let lat = 37.5665;
+            let lng = 126.9780;
+
+            if (window.naver && window.naver.maps && window.naver.maps.TransCoord && item.mapx && item.mapy) {
+              try {
+                const pt = new window.naver.maps.Point(parseInt(item.mapx), parseInt(item.mapy));
+                const latLng = window.naver.maps.TransCoord.fromTM128ToLatLng(pt);
+                lat = latLng.lat();
+                lng = latLng.lng();
+              } catch (e) {
+                console.warn("TransCoord conversion failed:", e);
+              }
+            }
+
+            const realAddress = item.roadAddress || item.address || query;
+            applyPlaceData(lat, lng, realAddress, item.title || query);
+            return;
+          }
+
+          // 2단계: 기존 도로명/지번 주소 지오코딩 시도
           const res = await fetch(`/api/naver-geocode?query=${encodeURIComponent(query)}`);
           const data = await res.json();
           if (data.success && data.data && data.data.addresses && data.data.addresses.length > 0) {
@@ -3789,6 +3849,7 @@ export class ErrorBoundary extends React.Component {
           applyPlaceData(37.5665, 126.9780, `서울특별시 중구 세종대로 110 (${query})`, query);
         }
       };
+
 
       const applyPlaceData = (lat, lng, fullRealAddress, titleName) => {
         if (mapInstanceRef.current && window.naver && window.naver.maps) {

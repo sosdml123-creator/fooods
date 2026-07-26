@@ -254,6 +254,56 @@ app.get(["/api/naver-geocode", "/api/v1/naver-geocode"], async (req, res) => {
   }
 });
 
+// 네이버 지역 검색 (Local Search - 상호명/가게 이름 검색 프록시)
+app.get(["/api/naver-local-search", "/api/v1/naver-local-search"], async (req, res) => {
+  const query = req.query.query;
+  if (!query) return res.status(400).json({ success: false, message: "검색어가 필요합니다." });
+
+  const clientId = process.env.NAVER_SEARCH_CLIENT_ID || "_eOv9Rm5SlwkxGKU0O7f";
+  const clientSecret = process.env.NAVER_SEARCH_CLIENT_SECRET || "vGZ4rS99EJ";
+
+  try {
+    const response = await axios.get("https://openapi.naver.com/v1/search/local.json", {
+      params: {
+        query,
+        display: Math.min(parseInt(req.query.display || 5), 5),
+        sort: "random"
+      },
+      headers: {
+        "X-Naver-Client-Id": clientId,
+        "X-Naver-Client-Secret": clientSecret
+      }
+    });
+
+    const items = (response.data?.items || []).map(item => ({
+      title: item.title ? item.title.replace(/<[^>]*>/g, "") : "",
+      address: item.address || "",
+      roadAddress: item.roadAddress || "",
+      mapx: item.mapx,
+      mapy: item.mapy,
+      category: item.category || "",
+      description: item.description || "",
+      telephone: item.telephone || "",
+      link: item.link || ""
+    }));
+
+    return res.json({
+      success: true,
+      data: {
+        total: response.data?.total || 0,
+        items
+      }
+    });
+  } catch (err) {
+    console.error("[Naver Local Search Debug] Error:", err.response?.data || err.message);
+    return res.status(err.response?.status || 500).json({
+      success: false,
+      message: err.response?.data?.errorMessage || err.response?.data?.message || "네이버 지역 검색 실패"
+    });
+  }
+});
+
+
 // 리다이렉트 추적 및 OG / JSON-LD / 가격 스마트 파서 헬퍼
 async function fetchDeepLinkMeta(initialUrl) {
   console.log(`[LinkMeta Debug] Initial requested URL: ${initialUrl}`);
