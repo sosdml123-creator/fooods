@@ -52,6 +52,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   BannerAd? _bannerAd;
   bool _isBannerAdLoaded = false;
   bool _isLoggedIn = false;
+  bool _hideAdByPage = false; // 지도 탭 등 특정 페이지 광고 숨김 상태
 
   @override
   void initState() {
@@ -179,8 +180,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              // 로그인 시 최상단 1줄 구글 애드몹 배너 광고 노출
-              if (_isLoggedIn && _bannerAd != null && _isBannerAdLoaded)
+              // 로그인 시 및 지도 탭 등 광고 숨김 페이지가 아닐 때 최상단 1줄 구글 애드몹 배너 광고 노출
+              if (_isLoggedIn && !_hideAdByPage && _bannerAd != null && _isBannerAdLoaded)
                 Container(
                   color: Colors.white,
                   width: double.infinity,
@@ -229,11 +230,18 @@ class _WebViewScreenState extends State<WebViewScreen> {
                           },
                         );
 
-                        // 호환용 showAd / hideAd 핸들러
+                        // 페이지별 광고 표시/숨김 제어 핸들러
                         controller.addJavaScriptHandler(
                           handlerName: 'showAd',
                           callback: (args) {
                             debugPrint('[WebView JS Handler] showAd signal received.');
+                            if (mounted) {
+                              setState(() {
+                                _hideAdByPage = false;
+                              });
+                            } else {
+                              _hideAdByPage = false;
+                            }
                             if (_isLoggedIn) {
                               _loadBannerAd();
                             }
@@ -245,6 +253,13 @@ class _WebViewScreenState extends State<WebViewScreen> {
                           handlerName: 'hideAd',
                           callback: (args) {
                             debugPrint('[WebView JS Handler] hideAd signal received.');
+                            if (mounted) {
+                              setState(() {
+                                _hideAdByPage = true;
+                              });
+                            } else {
+                              _hideAdByPage = true;
+                            }
                             return {'success': true};
                           },
                         );

@@ -2209,8 +2209,9 @@ export class ErrorBoundary extends React.Component {
       );
     }
 
-    // 최대 10개 및 총 용량 20MB 제한 (초과 시 자동 압축 지원) 글쓰기 시트
-    function WriteSheet({ onClose, onCreate, initialImages = [] }) {
+    // 최대 10개 및 총 용량 20MB 제한 (초과 시 자동 압축 지원) 글쓰기 뷰 (전체 페이지)
+    function WriteView({ onClose, onBack, onCreate, initialImages = [] }) {
+      const handleBack = onBack || onClose;
       console.log("[WRITE] mounted");
 
       useEffect(() => {
@@ -2222,10 +2223,15 @@ export class ErrorBoundary extends React.Component {
 
       const [title, setTitle] = useState("");
       const [body, setBody] = useState("");
-      const [images, setImages] = useState(initialImages); // 이미지 주소 배열 관리
+      // 이미지: { previewUrl: string, file: File|null, uploadedUrl: string|null }
+      // initialImages는 이미 업로드된 URL 배열 (네이티브 앱 콜백)
+      const [images, setImages] = useState(() =>
+        initialImages.map(url => ({ previewUrl: url, file: null, uploadedUrl: url }))
+      );
       const [category, setCategory] = useState("레시피");
       const [links, setLinks] = useState([{ id: generateId(), url: "" }]);
       const [loading, setLoading] = useState(false);
+      const [uploadingCount, setUploadingCount] = useState(0); // 미리보기 중인 사진 수
 
       // [수정 1] 위치 추가 필드 상태 { lat: number, lng: number, placeName: string }
       const [selectedLocation, setSelectedLocation] = useState(null);
@@ -2433,14 +2439,13 @@ export class ErrorBoundary extends React.Component {
         });
       };
 
-      // Cloudflare R2 업로드 (안드로이드 모바일 튕김 방지)
-      async function handlePhoto(e) {
-        console.log("[HANDLE_PHOTO] started. File input onChange triggered. Event files:", e.target.files);
+      // [미리보기 우선] 사진 선택 즉시 로컬 ObjectURL로 미리보기 표시 - 업로드는 글 등록 시 수행
+      function handlePhoto(e) {
+        console.log("[HANDLE_PHOTO] preview mode started.");
         if (typeof window !== "undefined" && window.isSelectingPhotosRef) {
           window.isSelectingPhotosRef.current = true;
         }
         if (!e.target.files || e.target.files.length === 0) {
-          console.log("[HANDLE_PHOTO] finished (No files selected)");
           setTimeout(() => {
             if (typeof window !== "undefined" && window.isSelectingPhotosRef) {
               window.isSelectingPhotosRef.current = false;
@@ -2448,68 +2453,72 @@ export class ErrorBoundary extends React.Component {
           }, 1500);
           return;
         }
-        
+
         let files = [];
         try {
-          files = Array.from(e.target.files).slice(0, 10);
+          files = Array.from(e.target.files).slice(0, 10 - images.length);
         } catch (filesErr) {
-          console.error("[WRITE STEP ERROR] Error parsing files array:", filesErr);
-          alert("사진 파일을 파싱하는 중 오류가 발생했습니다.");
+          console.error("[HANDLE_PHOTO] Error parsing files:", filesErr);
           return;
         }
-        
-        console.log(`[WRITE STEP 3] handlePhoto started. Total files count: ${files.length}`);
-        const targetInput = e.target;
-        setLoading(true);
-        const uploadedUrls = [];
 
-        for (let i = 0; i < files.length; i++) {
-          const file = files[i];
-          console.log(`[WRITE STEP 3.1] Processing file [${i+1}/${files.length}]: ${file.name}, size: ${file.size} bytes`);
-          let fileToUpload = file;
-          try {
-            fileToUpload = await compressImageMobile(file);
-          } catch (compressErr) {
-            console.warn("[WRITE STEP 3.2] Mobile compression failed, fallback to raw file:", compressErr);
-            fileToUpload = file;
-          }
+        // 즉시 로컬 미리보기 등록 (업로드 없이)
+        const newEntries = files.map(file => ({
+          previewUrl: URL.createObjectURL(file),
+          file,
+          uploadedUrl: null // 아직 미업로드
+        }));
 
-          try {
-            const formData = new FormData();
-            formData.append("file", fileToUpload, file.name || `photo_${Date.now()}.jpg`);
+        setImages(prev => [...prev, ...newEntries]);
+        setUploadingCount(prev => prev + newEntries.length);
 
-            const response = await fetch("/api/v1/upload", {
-              method: "POST",
-              body: formData
-            });
-
-            const res = await response.json();
-            if (res.success && res.url) {
-              uploadedUrls.push(res.url);
-              console.log(`[WRITE STEP 3.3] Upload success: ${res.url}`);
-            } else {
-              console.error(`[WRITE STEP 3.4] Upload API error response:`, res);
-              alert(`사진 업로드 실패: ${res.message || "서버 응답 오류"}`);
-            }
-          } catch (uploadErr) {
-            console.error(`[WRITE STEP ERROR] Upload fetch failed for ${file.name}:`, uploadErr);
-            alert(`사진 업로드 중 네트워크 오류가 발생했습니다.`);
-          }
-        }
-
-        if (uploadedUrls.length > 0) {
-          setImages(prev => [...prev, ...uploadedUrls]);
-        }
-
-        try { targetInput.value = ""; } catch(err) {}
-        setLoading(false);
-        console.log("[HANDLE_PHOTO] finished. Uploaded URLs:", uploadedUrls);
+        try { e.target.value = ""; } catch(err) {}
 
         setTimeout(() => {
           if (typeof window !== "undefined" && window.isSelectingPhotosRef) {
             window.isSelectingPhotosRef.current = false;
           }
-        }, 2000);
+        }, 500);
+
+        console.log(`[HANDLE_PHOTO] ${newEntries.length}개 사진 로컬 미리보기 등록 완료`);
+      }
+
+      // 실제 업로드 함수 (submit 시 호출)
+      async function uploadPendingImages(imageList) {
+        const results = await Promise.all(
+          imageList.map(async (entry) => {
+            if (entry.uploadedUrl) return entry; // 이미 업로드됨
+            const file = entry.file;
+            if (!file) return entry;
+
+            let fileToUpload = file;
+            try {
+              fileToUpload = await compressImageMobile(file);
+            } catch (err) {
+              fileToUpload = file;
+            }
+
+            try {
+              const formData = new FormData();
+              formData.append("file", fileToUpload, file.name || `photo_${Date.now()}.jpg`);
+              const response = await fetch("/api/v1/upload", { method: "POST", body: formData });
+              const res = await response.json();
+              if (res.success && res.url) {
+                // ObjectURL 메모리 해제
+                if (entry.previewUrl && entry.previewUrl.startsWith("blob:")) {
+                  URL.revokeObjectURL(entry.previewUrl);
+                }
+                return { ...entry, uploadedUrl: res.url };
+              } else {
+                throw new Error(res.message || "서버 응답 오류");
+              }
+            } catch (uploadErr) {
+              console.error(`[UPLOAD] 업로드 실패: ${file.name}`, uploadErr);
+              throw uploadErr;
+            }
+          })
+        );
+        return results;
       }
 
       function extractHashtags(text) {
@@ -2572,9 +2581,23 @@ export class ErrorBoundary extends React.Component {
           const detectedTags = extractHashtags(body);
           let placeInfo = null;
 
-          let finalImage = images;
-          if (images.length === 0) {
-            finalImage = [fallbackImages[Math.floor(Math.random() * fallbackImages.length)]];
+          // 미업로드 사진들을 이 시점에 업로드
+          let uploadedImages = images;
+          if (images.some(img => !img.uploadedUrl)) {
+            console.log("[SUBMIT] 미업로드 사진 업로드 시작...");
+            try {
+              uploadedImages = await uploadPendingImages(images);
+              setImages(uploadedImages);
+            } catch (uploadErr) {
+              alert(`사진 업로드 중 오류가 발생했습니다: ${uploadErr.message || uploadErr}`);
+              setLoading(false);
+              return;
+            }
+          }
+
+          let finalImageUrls = uploadedImages.map(img => img.uploadedUrl).filter(Boolean);
+          if (finalImageUrls.length === 0) {
+            finalImageUrls = [fallbackImages[Math.floor(Math.random() * fallbackImages.length)]];
           }
 
           const finalLocation = selectedLocation ? {
@@ -2583,14 +2606,14 @@ export class ErrorBoundary extends React.Component {
             placeName: String(selectedLocation.placeName)
           } : null;
 
-          console.log("[SUBMIT] Invoking onCreate callback payload:", { title, category, imagesCount: finalImage.length, location: finalLocation });
+          console.log("[SUBMIT] Invoking onCreate callback payload:", { title, category, imagesCount: finalImageUrls.length, location: finalLocation });
           
           await onCreate({
             title: title.trim(),
             body: body.trim(),
             category,
             mediaType: "image",
-            image: finalImage,
+            image: finalImageUrls,
             tags: detectedTags,
             productLinks,
             placeInfo,
@@ -2607,20 +2630,41 @@ export class ErrorBoundary extends React.Component {
       }
 
       return (
-        <div className="sheet-backdrop" onClick={onClose}>
-          <section className="sheet" onClick={(e) => e.stopPropagation()}>
-            <header className="sheet-head">
-              <h2>새 포스팅 등록</h2>
-              <button type="button" onClick={onClose} aria-label="닫기">×</button>
-            </header>
-            <div className="sheet-form space-y-3">
+        <section className="p-4 pb-20 text-left">
+          <div className="mb-4">
+            <button className="text-zinc-500 text-xs py-1.5 active:scale-95 transition-transform cursor-pointer" onClick={handleBack}>
+              <i className="fa-solid fa-chevron-left mr-1"></i> 홈으로 가기
+            </button>
+          </div>
+
+          <div className="bg-white border border-zinc-200 rounded-xl p-4 shadow-sm">
+            <h2 className="text-sm font-bold text-zinc-950 mb-4 flex items-center gap-1.5">
+              <i className="fa-solid fa-pen text-zinc-500"></i> 새 포스팅 등록
+            </h2>
+            <div className="space-y-3">
               <div className="flex gap-2 overflow-x-auto mb-4 py-1.5 border-b border-zinc-100 items-center">
-                {images.map((img, idx) => (
+                {images.map((imgEntry, idx) => (
                   <div key={idx} className="relative w-16 h-16 flex-shrink-0">
-                    <img className="w-full h-full object-cover rounded border border-zinc-200" src={img} alt="" />
-                    <button 
-                      type="button" 
-                      onClick={() => setImages(images.filter((_, i) => i !== idx))}
+                    <img
+                      className="w-full h-full object-cover rounded border border-zinc-200"
+                      src={imgEntry.previewUrl || imgEntry.uploadedUrl || imgEntry}
+                      alt=""
+                    />
+                    {/* 미업로드 표시 */}
+                    {!imgEntry.uploadedUrl && imgEntry.file && (
+                      <div className="absolute inset-0 bg-black/20 rounded flex items-center justify-center">
+                        <span className="text-[9px] text-white font-bold bg-black/50 px-1 py-0.5 rounded">미리보기</span>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const entry = images[idx];
+                        if (entry && entry.previewUrl && entry.previewUrl.startsWith("blob:")) {
+                          URL.revokeObjectURL(entry.previewUrl);
+                        }
+                        setImages(images.filter((_, i) => i !== idx));
+                      }}
                       className="absolute -top-1.5 -right-1.5 bg-black/80 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] border-none font-bold"
                       style={{ cursor: "pointer", padding: 0 }}
                     >
@@ -2637,7 +2681,6 @@ export class ErrorBoundary extends React.Component {
                       if (typeof window !== "undefined" && window.isSelectingPhotosRef) {
                         window.isSelectingPhotosRef.current = true;
                       }
-                      console.log("[UI] Photo add button clicked");
                       if (fileInputRef.current) {
                         fileInputRef.current.click();
                       }
@@ -2954,11 +2997,16 @@ export class ErrorBoundary extends React.Component {
               </div>
 
               <button className="primary full mt-5 text-xs font-bold py-3.5 rounded-xl shadow-md active:scale-98 transition-transform" type="button" onClick={submit} disabled={loading}>
-                {loading ? "사진 최적화 및 등록 중..." : "글 등록 및 수익 모델 연동"}
+                {loading
+                  ? (images.some(img => !img.uploadedUrl && img.file)
+                      ? `사진 업로드 중... (${images.filter(img => !img.uploadedUrl && img.file).length}장)`
+                      : "등록 중...")
+                  : `글 등록 및 수익 모델 연동${images.some(img => !img.uploadedUrl && img.file) ? ` (사진 ${images.filter(img => !img.uploadedUrl && img.file).length}장 업로드 예정)` : ""}`
+                }
               </button>
             </div>
-          </section>
-        </div>
+          </div>
+        </section>
       );
     }
     function LoginModal({ onClose, onLogin, onRegister, isGate = false, defaultTab = "login" }) {
@@ -5140,6 +5188,17 @@ export class ErrorBoundary extends React.Component {
         return () => window.removeEventListener("popstate", handleLocationChange);
       }, [activeTab]);
 
+      // 탭 변경 시 네이티브 앱(Flutter WebView)으로 광고 표시/숨김 알림 (지도 탭일 때 광고 숨김)
+      useEffect(() => {
+        if (typeof window !== "undefined" && window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+          if (activeTab === "map") {
+            window.flutter_inappwebview.callHandler('hideAd', {}).catch(() => {});
+          } else if (isLoggedIn) {
+            window.flutter_inappwebview.callHandler('showAd', { type: 'banner', position: 'top' }).catch(() => {});
+          }
+        }
+      }, [activeTab, isLoggedIn]);
+
       const [selectedCategory, setSelectedCategory] = useState("전체");
       const [searchQuery, setSearchQuery] = useState("");
       const [searchPostsResult, setSearchPostsResult] = useState([]);
@@ -5248,7 +5307,7 @@ export class ErrorBoundary extends React.Component {
           
           setTimeout(() => {
             setWriteInitialImages(imagesArr);
-            setWriteOpen(true);
+            setActiveTab("write");
           }, 100);
         };
         window.openCommunityWriteWithPhotos = (urls) => {
@@ -5967,9 +6026,8 @@ export class ErrorBoundary extends React.Component {
         if (!user) {
           setLoginOpen(true);
         } else {
-          // flutter_inappwebview 환경에서 openCustomGallery 핸들러가 미등록 상태이므로
-          // 앱/웹 모두 동일하게 WriteSheet를 직접 열도록 처리
-          setWriteOpen(true);
+          // 앱/웹 모두 동일하게 full page WriteView로 이동
+          setActiveTab("write");
         }
       }
 
@@ -6292,7 +6350,6 @@ export class ErrorBoundary extends React.Component {
           .then((docRef) => {
             console.log("[Firestore] Post added with ID:", docRef.id);
             try { sessionStorage.removeItem("fooods_write_open"); } catch(e) {}
-            setWriteOpen(false);
             setActiveTab("home");
           })
           .catch((err) => {
@@ -7059,9 +7116,9 @@ export class ErrorBoundary extends React.Component {
 
       return (
         <div className="app-container" style={activeTab === "map" ? { height: "100vh", maxHeight: "100vh", overflow: "hidden", display: "flex", flexDirection: "column" } : {}}>
-          <AdBanner />
+          {activeTab !== "map" && <AdBanner />}
 
-          {activeTab !== "community" && activeTab !== "community_detail" && activeTab !== "community_write" && activeTab !== "notifications" && (
+          {activeTab !== "community" && activeTab !== "community_detail" && activeTab !== "community_write" && activeTab !== "write" && activeTab !== "notifications" && (
             <header className="app-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <h1 className="cursor-pointer" onClick={() => { setActiveTab("home"); setSelectedCategory("전체"); }}>PLAYTING</h1>
               <div className="flex items-center gap-1.5" style={{ marginLeft: "auto", display: "flex", gap: "8px", alignItems: "center" }}>
@@ -7322,6 +7379,14 @@ export class ErrorBoundary extends React.Component {
               />
             )}
 
+            {activeTab === "write" && (
+              <WriteView
+                onBack={() => { setActiveTab("home"); setWriteInitialImages([]); }}
+                onCreate={handleCreatePost}
+                initialImages={writeInitialImages}
+              />
+            )}
+
             {activeTab === "map" && (
               <div className="w-full h-full flex-1 flex flex-col min-h-0" style={{ flex: 1, width: "100%", height: "100%", minHeight: 0, overflow: "hidden" }}>
                 <NaverMapView posts={posts} onPostClick={handleRecipePostClick} isActive={true} />
@@ -7435,13 +7500,7 @@ export class ErrorBoundary extends React.Component {
             />
           )}
 
-          {writeOpen && (
-            <WriteSheet 
-              onClose={() => { setWriteOpen(false); setWriteInitialImages([]); }} 
-              onCreate={handleCreatePost} 
-              initialImages={writeInitialImages}
-            />
-          )}
+
 
           {loginOpen && (
             <LoginModal 
