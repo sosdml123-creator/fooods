@@ -2392,7 +2392,7 @@ export class ErrorBoundary extends React.Component {
         });
       }, [links]);
       // 안드로이드 모바일 웹뷰 OOM 튕김 방지용 경량화 캔버스 압축기
-      const compressImageMobile = (file) => {
+      function compressImageMobile(file) {
         return new Promise((resolve) => {
           // 2MB 이하 소형 파일은 즉시 반환하여 캔버스 자원 소비 차단
           if (file.size < 2 * 1024 * 1024) {
@@ -2437,7 +2437,7 @@ export class ErrorBoundary extends React.Component {
           reader.onerror = () => resolve(file);
           reader.readAsDataURL(file);
         });
-      };
+      }
 
       // [미리보기 우선] 사진 선택 즉시 로컬 ObjectURL로 미리보기 표시 - 업로드는 글 등록 시 수행
       function handlePhoto(e) {
