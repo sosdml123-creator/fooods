@@ -2257,32 +2257,38 @@ export class ErrorBoundary extends React.Component {
       }
 
       // [수정 1] 네이버 지도 장소 검색 처리
-      async function handleLocationSearch(e) {
+      async function handleLocationSearch(e, targetQuery = null) {
         if (e && e.preventDefault) e.preventDefault();
-        if (!locationQuery.trim()) return;
+        const queryToSearch = (targetQuery !== null ? targetQuery : locationQuery).trim();
+        if (!queryToSearch) return;
+        if (targetQuery !== null) setLocationQuery(queryToSearch);
+
         setLocationSearching(true);
         try {
-          const res = await fetch(`/api/naver-geocode?query=${encodeURIComponent(locationQuery.trim())}`);
+          const res = await fetch(`/api/naver-geocode?query=${encodeURIComponent(queryToSearch)}`);
           const data = await res.json();
           if (data.success && data.data && data.data.addresses && data.data.addresses.length > 0) {
             const items = data.data.addresses.map(item => ({
               lat: parseFloat(item.y),
               lng: parseFloat(item.x),
-              placeName: item.roadAddress || item.jibunAddress || locationQuery.trim()
+              placeName: queryToSearch,
+              address: item.roadAddress || item.jibunAddress || ""
             }));
             setLocationSearchResults(items);
           } else {
             setLocationSearchResults([{
               lat: 37.5665,
               lng: 126.9780,
-              placeName: locationQuery.trim()
+              placeName: queryToSearch,
+              address: "일반 위치 등록"
             }]);
           }
         } catch (err) {
           setLocationSearchResults([{
             lat: 37.5665,
             lng: 126.9780,
-            placeName: locationQuery.trim()
+            placeName: queryToSearch,
+            address: "일반 위치 등록"
           }]);
         } finally {
           setLocationSearching(false);
@@ -2659,89 +2665,198 @@ export class ErrorBoundary extends React.Component {
               </label>
 
               {/* [수정 1] 위치 추가 섹션 */}
-              <div className="bg-zinc-50/80 border border-zinc-200/80 rounded-2xl p-3.5 space-y-2">
+              <div className="bg-emerald-50/40 border border-emerald-100 rounded-2xl p-3.5 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-zinc-800 flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px]">
+                    <span className="w-6 h-6 rounded-lg bg-emerald-500 text-white flex items-center justify-center text-xs shadow-xs">
                       <i className="fa-solid fa-location-dot"></i>
                     </span>
-                    <span>위치 등록 (선택)</span>
+                    <span>위치 / 장소 등록</span>
+                    <span className="text-[10px] text-zinc-400 font-normal">(선택)</span>
                   </span>
                   {selectedLocation && (
-                    <button 
-                      type="button" 
-                      onClick={() => setSelectedLocation(null)}
-                      className="text-[11px] text-rose-500 hover:text-rose-600 bg-rose-50 border-none cursor-pointer px-2 py-0.5 rounded-md font-medium"
-                    >
-                      위치 삭제
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button 
+                        type="button" 
+                        onClick={() => setShowLocationSearchModal(true)}
+                        className="text-[11px] text-emerald-700 hover:text-emerald-800 bg-white border border-emerald-200 cursor-pointer px-2 py-1 rounded-lg font-semibold shadow-2xs transition-all hover:bg-emerald-50"
+                      >
+                        변경
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => setSelectedLocation(null)}
+                        className="text-[11px] text-rose-500 hover:text-rose-600 bg-rose-50 border border-rose-200/60 cursor-pointer px-2 py-1 rounded-lg font-semibold transition-all hover:bg-rose-100"
+                      >
+                        삭제
+                      </button>
+                    </div>
                   )}
                 </div>
 
                 {selectedLocation ? (
-                  <div className="bg-white border border-emerald-300 rounded-xl p-2.5 flex items-center justify-between text-xs text-emerald-900 shadow-2xs">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0 text-xs">📍</span>
-                      <span className="font-bold truncate">{selectedLocation.placeName}</span>
+                  <div className="bg-white border border-emerald-300/80 rounded-xl p-3 flex items-center justify-between text-xs text-zinc-800 shadow-2xs">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center flex-shrink-0 text-sm font-bold">📍</div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-zinc-900 truncate text-xs">{selectedLocation.placeName}</div>
+                        {selectedLocation.address && (
+                          <div className="text-[11px] text-zinc-400 truncate">{selectedLocation.address}</div>
+                        )}
+                      </div>
                     </div>
-                    <span className="text-[10px] text-emerald-600 font-medium flex-shrink-0">등록됨</span>
+                    <span className="text-[10px] text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full font-bold flex-shrink-0 ml-2">등록됨</span>
                   </div>
                 ) : (
                   <button
                     type="button"
                     onClick={() => setShowLocationSearchModal(true)}
-                    className="w-full bg-white border border-dashed border-zinc-300 hover:border-emerald-500 text-zinc-600 hover:text-emerald-600 rounded-xl py-2.5 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="w-full bg-white hover:bg-emerald-50/50 border border-emerald-200 hover:border-emerald-500 text-emerald-700 rounded-xl py-3 px-3 text-xs font-bold transition-all flex items-center justify-between shadow-2xs group cursor-pointer"
                   >
-                    <i className="fa-solid fa-magnifying-glass-location"></i>
-                    <span>네이버 지도 위치 검색하여 선택</span>
+                    <div className="flex items-center gap-2">
+                      <span className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs group-hover:scale-105 transition-transform">
+                        <i className="fa-solid fa-magnifying-glass-location"></i>
+                      </span>
+                      <div className="text-left">
+                        <div className="font-bold text-zinc-800 group-hover:text-emerald-700">장소 검색하기</div>
+                        <div className="text-[10px] text-zinc-400 font-normal">네이버 지도로 장소명/주소를 검색해보세요</div>
+                      </div>
+                    </div>
+                    <span className="text-xs text-emerald-600 font-bold bg-emerald-100/70 px-2.5 py-1 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-all">검색</span>
                   </button>
                 )}
               </div>
 
               {/* 위치 검색 모달 */}
               {showLocationSearchModal && (
-                <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4 backdrop-blur-xs" onClick={() => setShowLocationSearchModal(false)}>
-                  <div className="bg-white rounded-2xl w-full max-w-md p-5 text-left shadow-2xl space-y-4" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex justify-between items-center border-b border-zinc-150 pb-3">
-                      <h3 className="text-sm font-bold text-zinc-950 flex items-center gap-1.5">
-                        📍 위치/장소 검색
-                      </h3>
-                      <button onClick={() => setShowLocationSearchModal(false)} className="text-zinc-400 hover:text-zinc-600 text-xl border-none bg-transparent cursor-pointer">×</button>
+                <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn" onClick={() => setShowLocationSearchModal(false)}>
+                  <div className="bg-white rounded-3xl w-full max-w-md p-5 text-left shadow-2xl space-y-4 max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+                    {/* Header */}
+                    <div className="flex justify-between items-center border-b border-zinc-100 pb-3 flex-shrink-0">
+                      <div className="flex items-center gap-2">
+                        <span className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-sm font-bold">
+                          📍
+                        </span>
+                        <div>
+                          <h3 className="text-sm font-bold text-zinc-900 leading-tight">위치 / 장소 검색</h3>
+                          <p className="text-[10px] text-zinc-400 font-normal">등록하고 싶은 장소명이나 지역을 입력하세요</p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => setShowLocationSearchModal(false)} 
+                        className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 hover:text-zinc-800 flex items-center justify-center text-lg border-none cursor-pointer transition-colors"
+                      >
+                        ×
+                      </button>
                     </div>
 
-                    <form onSubmit={handleLocationSearch} className="flex gap-2">
-                      <input
-                        type="text"
-                        value={locationQuery}
-                        onChange={(e) => setLocationQuery(e.target.value)}
-                        placeholder="강남 맛집, 성수 카페 등 장소명 입력..."
-                        className="flex-1 bg-zinc-100 border border-zinc-200 rounded-xl px-3 py-2 text-xs outline-none focus:border-emerald-500 focus:bg-white"
-                        autoFocus
-                      />
-                      <button type="submit" disabled={locationSearching} className="bg-emerald-600 text-white font-bold px-3 py-2 text-xs rounded-xl hover:bg-emerald-700 active:scale-95 transition-all border-none cursor-pointer">
-                        {locationSearching ? "검색 중..." : "검색"}
-                      </button>
+                    {/* Search Form */}
+                    <form onSubmit={handleLocationSearch} className="flex-shrink-0">
+                      <div className="relative flex items-center">
+                        <i className="fa-solid fa-magnifying-glass absolute left-3.5 text-zinc-400 text-xs"></i>
+                        <input
+                          type="text"
+                          value={locationQuery}
+                          onChange={(e) => setLocationQuery(e.target.value)}
+                          placeholder="강남 맛집, 성수 Cafe, 홍대입구 등..."
+                          className="w-full bg-zinc-50 border border-zinc-200 rounded-xl pl-9 pr-20 py-2.5 text-xs outline-none focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 transition-all font-medium"
+                          autoFocus
+                        />
+                        {locationQuery && (
+                          <button
+                            type="button"
+                            onClick={() => { setLocationQuery(""); setLocationSearchResults([]); }}
+                            className="absolute right-14 text-zinc-400 hover:text-zinc-600 text-xs px-1 border-none bg-transparent cursor-pointer"
+                          >
+                            ✕
+                          </button>
+                        )}
+                        <button 
+                          type="submit" 
+                          disabled={locationSearching} 
+                          className="absolute right-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-xs rounded-lg active:scale-95 transition-all border-none cursor-pointer shadow-xs disabled:opacity-50"
+                        >
+                          {locationSearching ? "검색중..." : "검색"}
+                        </button>
+                      </div>
                     </form>
 
-                    <div className="max-h-60 overflow-y-auto divide-y divide-zinc-100">
-                      {locationSearchResults.length > 0 ? (
-                        locationSearchResults.map((loc, idx) => (
-                          <div
-                            key={idx}
-                            onClick={() => {
-                              setSelectedLocation(loc);
-                              setShowLocationSearchModal(false);
-                            }}
-                            className="py-2.5 px-2 hover:bg-emerald-50/60 rounded-xl cursor-pointer transition-colors flex items-center justify-between text-xs"
+                    {/* Popular / Recommended Tags */}
+                    <div className="flex-shrink-0 space-y-1.5">
+                      <span className="text-[11px] font-bold text-zinc-500 flex items-center gap-1">
+                        <i className="fa-solid fa-fire text-amber-500 text-[10px]"></i>
+                        추천 검색어
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {["강남역 맛집", "성수동 카페", "연남동 맛집", "홍대 카페", "서울숲", "성수 팝업"].map((tag) => (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => handleLocationSearch(null, tag)}
+                            className="bg-zinc-100 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 border border-zinc-200 text-zinc-600 text-[11px] font-medium px-2.5 py-1 rounded-full transition-all cursor-pointer"
                           >
-                            <div className="min-w-0 flex-1">
-                              <div className="font-bold text-zinc-900 truncate">{loc.placeName}</div>
+                            #{tag}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Results List */}
+                    <div className="flex-1 overflow-y-auto min-h-[140px] max-h-64 space-y-2 pr-1 pt-1 divide-y divide-zinc-50">
+                      {locationSearching ? (
+                        <div className="py-8 text-center text-xs text-zinc-400 flex flex-col items-center justify-center gap-2">
+                          <span className="inline-block w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></span>
+                          <span>네이버 지도에서 위치를 찾고 있습니다...</span>
+                        </div>
+                      ) : locationSearchResults.length > 0 ? (
+                        <>
+                          {locationSearchResults.map((loc, idx) => (
+                            <div
+                              key={idx}
+                              onClick={() => {
+                                setSelectedLocation(loc);
+                                setShowLocationSearchModal(false);
+                              }}
+                              className="p-3 hover:bg-emerald-50/80 border border-zinc-100 hover:border-emerald-200 rounded-xl cursor-pointer transition-all flex items-center justify-between text-xs group"
+                            >
+                              <div className="min-w-0 flex-1 pr-2">
+                                <div className="font-bold text-zinc-900 group-hover:text-emerald-700 truncate flex items-center gap-1.5">
+                                  <span className="text-xs">📍</span>
+                                  <span>{loc.placeName}</span>
+                                </div>
+                                {loc.address && (
+                                  <div className="text-[11px] text-zinc-400 group-hover:text-emerald-600/80 truncate mt-0.5 pl-4">
+                                    {loc.address}
+                                  </div>
+                                )}
+                              </div>
+                              <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 group-hover:bg-emerald-600 group-hover:text-white px-2.5 py-1 rounded-lg flex-shrink-0 transition-all shadow-2xs">
+                                선택
+                              </span>
                             </div>
-                            <span className="text-[10px] text-emerald-600 font-bold bg-emerald-100/80 px-2 py-0.5 rounded-md flex-shrink-0 ml-2">선택</span>
-                          </div>
-                        ))
+                          ))}
+                        </>
                       ) : (
-                        <p className="text-xs text-zinc-400 text-center py-6">검색된 위치가 없습니다. 장소명을 입력해보세요.</p>
+                        <div className="py-6 text-center text-xs text-zinc-400 space-y-2">
+                          <p>검색어를 입력하고 <span className="font-bold text-emerald-600">검색</span>을 누르거나 추천 검색어를 선택해보세요.</p>
+                          {locationQuery.trim() && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedLocation({
+                                  lat: 37.5665,
+                                  lng: 126.9780,
+                                  placeName: locationQuery.trim(),
+                                  address: "직접 입력 위치"
+                                });
+                                setShowLocationSearchModal(false);
+                              }}
+                              className="mt-2 text-xs text-emerald-700 font-bold bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-xl transition-colors cursor-pointer inline-flex items-center gap-1"
+                            >
+                              <span>✏️ "{locationQuery.trim()}" (으)로 장소 직접 등록하기</span>
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -3372,6 +3487,21 @@ export class ErrorBoundary extends React.Component {
       const [selectedMapPost, setSelectedMapPost] = useState(null);
       const touchStartY = useRef(0);
 
+      const handleTouchStart = (e) => {
+        if (e.touches && e.touches[0]) {
+          touchStartY.current = e.touches[0].clientY;
+        }
+      };
+
+      const handleTouchEnd = (e) => {
+        if (e.changedTouches && e.changedTouches[0]) {
+          const deltaY = e.changedTouches[0].clientY - touchStartY.current;
+          if (deltaY > 60) {
+            setSelectedMapPost(null);
+          }
+        }
+      };
+
       useEffect(() => {
         window.onNaverMapAuthError = function() {
           setAuthError(true);
@@ -3531,22 +3661,6 @@ export class ErrorBoundary extends React.Component {
           setSelectedMapPost(null);
         });
 
-        // [수정 4] 아래로 스와이프 시 닫히도록 터치 제스처 핸들러 추가
-        const handleTouchStart = (e) => {
-          if (e.touches && e.touches[0]) {
-            touchStartY.current = e.touches[0].clientY;
-          }
-        };
-
-        const handleTouchEnd = (e) => {
-          if (e.changedTouches && e.changedTouches[0]) {
-            const deltaY = e.changedTouches[0].clientY - touchStartY.current;
-            if (deltaY > 60) { // 60px 이상 아래로 내렸을 때 시트를 닫습니다.
-              setSelectedMapPost(null);
-            }
-          }
-        };
-
         return () => {
           try {
             window.naver.maps.Event.removeListener(mapClick);
@@ -3641,7 +3755,7 @@ export class ErrorBoundary extends React.Component {
       };
 
       return (
-        <div className="w-full relative bg-zinc-900 select-none overflow-hidden" style={{ flex: 1, minHeight: 0 }}>
+        <div className="w-full h-full relative bg-zinc-900 select-none overflow-hidden flex flex-col flex-1 min-h-0" style={{ flex: 1, height: "100%", minHeight: 0 }}>
           {/* 상단 플로팅 음식점 검색바 */}
           <div className="absolute top-4 left-4 right-4 z-20">
             <form onSubmit={handleSearch} className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-zinc-200 p-2 flex items-center gap-2 transition-all hover:shadow-2xl">
@@ -3711,7 +3825,7 @@ export class ErrorBoundary extends React.Component {
               </p>
             </div>
           ) : (
-            <div ref={mapRef} className="w-full" style={{ flex: 1, minHeight: 0, width: '100%', touchAction: 'none', WebkitUserSelect: 'none', userSelect: 'none', willChange: 'transform', transform: 'translateZ(0)' }}></div>
+            <div ref={mapRef} className="w-full h-full flex-1 min-h-0" style={{ flex: 1, height: "100%", minHeight: 0, width: '100%', touchAction: 'none', WebkitUserSelect: 'none', userSelect: 'none', willChange: 'transform', transform: 'translateZ(0)' }}></div>
           )}
 
           {/* [수정 1, 2, 3, 4] 마커 탭 시 슬라이드업 바텀 시트 */}
@@ -7192,7 +7306,7 @@ export class ErrorBoundary extends React.Component {
             )}
 
             {activeTab === "map" && (
-              <div style={{ flex: 1, height: "100%", overflow: "hidden" }}>
+              <div className="w-full h-full flex-1 flex flex-col min-h-0" style={{ flex: 1, height: "100%", minHeight: 0, overflow: "hidden" }}>
                 <NaverMapView posts={posts} onPostClick={handleRecipePostClick} isActive={true} />
               </div>
             )}
