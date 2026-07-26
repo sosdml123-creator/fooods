@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { db } from "../firebase";
 import { collection, query, onSnapshot, doc, getDoc, addDoc, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 import { FileText, Save, Plus, Edit2, Trash, AlertTriangle, Pin, PinOff } from "lucide-react";
+import { formatDateTime } from "../utils/date";
 
 export default function Notices() {
   const [notices, setNotices] = useState([]);
@@ -235,7 +236,7 @@ export default function Notices() {
                     <h5 className="font-bold text-xs text-zinc-800 dark:text-zinc-200">{notice.title}</h5>
                   </div>
                   <p className="text-xs text-zinc-400 font-mono line-clamp-2 leading-relaxed">{notice.content}</p>
-                  <span className="text-[10px] text-zinc-400 block mt-2">ID: {notice.id} | 예약일시: {notice.publishDate ? notice.publishDate.replace("T", " ") : "-"}</span>
+                  <span className="text-[10px] text-zinc-400 block mt-2">ID: {notice.id} | 예약일시: {formatDateTime(notice.publishDate)}</span>
                 </div>
                 
                 <div className="flex items-center gap-1 flex-shrink-0">

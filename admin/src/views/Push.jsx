@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { db } from "../firebase";
 import { collection, query, onSnapshot, addDoc, doc, updateDoc, getDocs } from "firebase/firestore";
 import { Send, Clock, User, AlertTriangle, ShieldCheck, History } from "lucide-react";
+import { parseDate, formatDateTime } from "../utils/date";
 
 // API URL: 개발환경은 localhost, 프로덕션은 실제 서버
 const API_BASE = typeof window !== "undefined" && window.location.hostname === "localhost"
@@ -329,7 +330,7 @@ export default function Push() {
             <p className="text-xs text-zinc-400 text-center py-16">발송 내역이 비어 있습니다.</p>
           ) : (
             [...history]
-              .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+              .sort((a, b) => (parseDate(b.createdAt)?.getTime() || 0) - (parseDate(a.createdAt)?.getTime() || 0))
               .map((item) => (
                 <div key={item.id} className="p-3.5 rounded-xl border border-zinc-200 dark:border-[#30363d] bg-zinc-50 dark:bg-[#0e1117]/35 text-xs">
                   <div className="flex justify-between items-center mb-1.5">
@@ -351,7 +352,7 @@ export default function Push() {
                         </span>
                       )}
                     </div>
-                    <span className="text-[10px] text-zinc-400">{item.sentAt ? item.sentAt.replace("T", " ").slice(0, 16) : "-"}</span>
+                    <span className="text-[10px] text-zinc-400">{formatDateTime(item.sentAt)}</span>
                   </div>
                   <h5 className="font-bold text-zinc-800 dark:text-zinc-200">{item.title}</h5>
                   <p className="text-zinc-450 mt-1">{item.body}</p>

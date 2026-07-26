@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { db } from "../firebase";
 import { collection, query, onSnapshot, doc, updateDoc, addDoc } from "firebase/firestore";
 import { Search, UserCheck, Shield, Ban, AlertTriangle, RefreshCw } from "lucide-react";
+import { parseDate, formatDate, isSameDay, safeString } from "../utils/date";
 
 const STATUS_CONFIG = {
   normal:              { label: "정상",   color: "text-emerald-500", bg: "bg-emerald-500/10", dot: "🟢" },
@@ -139,8 +140,8 @@ export default function Users({ navigateToUser }) {
     result.sort((a, b) => {
       const nameA = a.nickname || a.name || a.displayName || "";
       const nameB = b.nickname || b.name || b.displayName || "";
-      if (sortBy === "createdAt_desc") return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
-      if (sortBy === "createdAt_asc") return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+      if (sortBy === "createdAt_desc") return (parseDate(b.createdAt)?.getTime() || 0) - (parseDate(a.createdAt)?.getTime() || 0);
+      if (sortBy === "createdAt_asc") return (parseDate(a.createdAt)?.getTime() || 0) - (parseDate(b.createdAt)?.getTime() || 0);
       if (sortBy === "name_asc") return nameA.localeCompare(nameB);
       if (sortBy === "reports_desc") return (b.reportCount || 0) - (a.reportCount || 0);
       return 0;
@@ -257,10 +258,10 @@ export default function Users({ navigateToUser }) {
               ) : (
                 filteredUsers.map((u) => {
                   const displayName = u.nickname || u.name || u.displayName || "플레이터";
-                  const hasAvatar = u.avatarImg && u.avatarImg.startsWith("http");
-                  const dateJoin = u.createdAt ? u.createdAt.split("T")[0] : "-";
-                  const lastLogin = u.lastLoginAt ? u.lastLoginAt.split("T")[0] : "-";
-                  const isToday = u.createdAt && u.createdAt.split("T")[0] === new Date().toISOString().split("T")[0];
+                  const hasAvatar = typeof u.avatarImg === "string" && u.avatarImg.startsWith("http");
+                  const dateJoin = formatDate(u.createdAt);
+                  const lastLogin = formatDate(u.lastLoginAt);
+                  const isToday = isSameDay(u.createdAt, new Date());
 
                   return (
                     <tr

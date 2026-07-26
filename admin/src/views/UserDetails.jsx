@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { db } from "../firebase";
 import { doc, getDoc, updateDoc, addDoc, collection, query, where, getDocs, serverTimestamp } from "firebase/firestore";
 import { ArrowLeft, Save, AlertTriangle, ShieldCheck, RefreshCw, Trash, UserX, Unlock, Ban } from "lucide-react";
+import { formatDateTime } from "../utils/date";
 
 export default function UserDetails({ uid, onBack }) {
   const [user, setUser] = useState(null);
@@ -102,23 +103,26 @@ export default function UserDetails({ uid, onBack }) {
     setActivityLoading(true);
     setActivityData([]);
     try {
-      let q;
       if (activeTab === "posts") {
-        q = query(collection(db, "posts"), where("userId", "==", uid));
+        const [snap1, snap2] = await Promise.all([
+          getDocs(query(collection(db, "posts"), where("userId", "==", uid))),
+          getDocs(query(collection(db, "community_posts"), where("userId", "==", uid)))
+        ]);
+        const docs1 = snap1.docs.map(doc => ({ id: doc.id, _type: "레시피", ...doc.data() }));
+        const docs2 = snap2.docs.map(doc => ({ id: doc.id, _type: "커뮤니티", ...doc.data() }));
+        setActivityData([...docs1, ...docs2]);
       } else if (activeTab === "comments") {
-        q = query(collection(db, "comments"), where("userId", "==", uid));
+        const snap = await getDocs(query(collection(db, "comments"), where("userId", "==", uid)));
+        setActivityData(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       } else if (activeTab === "reports_filed") {
-        q = query(collection(db, "reports"), where("reporter", "==", user?.name || ""));
+        const snap = await getDocs(query(collection(db, "reports"), where("reporter", "==", user?.name || "")));
+        setActivityData(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       } else if (activeTab === "reports_received") {
-        q = query(collection(db, "reports"), where("targetId", "==", uid)); // or author match
+        const snap = await getDocs(query(collection(db, "reports"), where("targetId", "==", uid)));
+        setActivityData(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       } else if (activeTab === "blocks") {
-        q = query(collection(db, "blocks"), where("blockerId", "==", uid));
-      }
-
-      if (q) {
-        const snap = await getDocs(q);
-        const docs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setActivityData(docs);
+        const snap = await getDocs(query(collection(db, "blocks"), where("blockerId", "==", uid)));
+        setActivityData(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }
     } catch (err) {
       console.error("Error loading activities:", err);
@@ -223,7 +227,7 @@ export default function UserDetails({ uid, onBack }) {
     );
   }
 
-  const hasAvatar = user.avatarImg && user.avatarImg.startsWith("http");
+  const hasAvatar = typeof user.avatarImg === "string" && user.avatarImg.startsWith("http");
 
   return (
     <div className="space-y-6">
@@ -259,11 +263,11 @@ export default function UserDetails({ uid, onBack }) {
             </div>
             <div className="flex justify-between">
               <span className="text-zinc-400 font-semibold">가입일시</span>
-              <span className="text-zinc-800 dark:text-zinc-200 font-medium">{user.createdAt ? user.createdAt.replace("T", " ").slice(0, 16) : "-"}</span>
+              <span className="text-zinc-800 dark:text-zinc-200 font-medium">{formatDateTime(user.createdAt)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-zinc-400 font-semibold">마지막 로그인</span>
-              <span className="text-zinc-800 dark:text-zinc-200 font-medium">{user.lastLoginAt ? user.lastLoginAt.replace("T", " ").slice(0, 16) : "-"}</span>
+              <span className="text-zinc-800 dark:text-zinc-200 font-medium">{formatDateTime(user.lastLoginAt)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-zinc-400 font-semibold">계정상태</span>
@@ -286,13 +290,13 @@ export default function UserDetails({ uid, onBack }) {
                     <div className="flex justify-between">
                       <span className="text-zinc-400 font-semibold">기기 첫 등록</span>
                       <span className="text-zinc-800 dark:text-zinc-200 font-medium">
-                        {device.createdAt ? device.createdAt.replace("T", " ").slice(0, 16) : "-"}
+                        {formatDateTime(device.createdAt)}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-zinc-400 font-semibold">기기 최종 로그인</span>
                       <span className="text-zinc-800 dark:text-zinc-200 font-medium">
-                        {device.lastLoginAt ? device.lastLoginAt.replace("T", " ").slice(0, 16) : "-"}
+                        {formatDateTime(device.lastLoginAt)}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
@@ -415,12 +419,12 @@ export default function UserDetails({ uid, onBack }) {
               {activityData.map((act) => (
                 <div key={act.id} className="text-xs p-3.5 rounded-lg border border-zinc-200 dark:border-[#30363d] bg-zinc-50 dark:bg-[#0e1117]/35 flex justify-between items-center">
                   <div>
-                    {activeTab === "posts" && <p className="font-bold text-zinc-800 dark:text-zinc-200">{act.title}</p>}
+                    {activeTab === "posts" && <p className="font-bold text-zinc-800 dark:text-zinc-200">[{act._type || "게시물"}] {act.title || act.body}</p>}
                     {activeTab === "comments" && <p className="text-zinc-800 dark:text-zinc-200">{act.text}</p>}
                     {activeTab === "reports_filed" && <p className="text-zinc-800 dark:text-zinc-200">[{act.targetType === "post" ? "게시물" : "댓글"} 신고] 사유: {act.reason}</p>}
                     {activeTab === "reports_received" && <p className="text-zinc-800 dark:text-zinc-200">신고자: {act.reporter} | 사유: {act.reason}</p>}
                     {activeTab === "blocks" && <p className="text-zinc-800 dark:text-zinc-200">차단한 유저 UID: {act.blockedId}</p>}
-                    <span className="text-[10px] text-zinc-400 mt-1 block">ID: {act.id} | 등록일: {act.createdAt || act.timestamp}</span>
+                    <span className="text-[10px] text-zinc-400 mt-1 block">ID: {act.id} | 등록일: {formatDateTime(act.createdAt || act.timestamp)}</span>
                   </div>
                 </div>
               ))}

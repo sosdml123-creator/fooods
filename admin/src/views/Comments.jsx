@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { db } from "../firebase";
 import { collection, query, onSnapshot, doc, updateDoc, deleteDoc, addDoc } from "firebase/firestore";
 import { Search, Trash, RotateCcw, AlertTriangle } from "lucide-react";
+import { formatDate } from "../utils/date";
 
 export default function Comments({ navigateToUser }) {
   const [comments, setComments] = useState([]);
@@ -152,7 +153,7 @@ export default function Comments({ navigateToUser }) {
                 </tr>
               ) : (
                 filteredComments.map((c) => {
-                  const dateStr = c.createdAt ? c.createdAt.split("T")[0] : "-";
+                  const dateStr = formatDate(c.createdAt);
                   let statusBadge = <span className="text-emerald-500 font-bold bg-emerald-500/10 px-2 py-0.5 rounded text-[10px]">공개</span>;
                   if (c.isHidden) {
                     statusBadge = <span className="text-zinc-400 font-bold bg-zinc-500/10 px-2 py-0.5 rounded text-[10px]">숨김</span>;

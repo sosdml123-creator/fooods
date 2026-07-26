@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { db } from "../firebase";
 import { collection, query, onSnapshot, doc, updateDoc, addDoc } from "firebase/firestore";
 import { Image as ImageIcon, Trash, AlertTriangle, Eye, ShieldCheck } from "lucide-react";
+import { formatDateTime } from "../utils/date";
 
 export default function Photos() {
   const [photos, setPhotos] = useState([]);
@@ -13,16 +14,42 @@ export default function Photos() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    // Query posts that have image URLs
-    const q = query(collection(db, "posts"));
-    const unsubscribe = onSnapshot(q, (snap) => {
-      const allPosts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const postsWithImages = allPosts.filter(p => p.imageUrl && p.imageUrl.startsWith("http"));
-      setPhotos(postsWithImages);
-      setLoading(false);
+    const unsub1 = onSnapshot(query(collection(db, "posts")), (snap1) => {
+      const posts1 = snap1.docs.map(doc => ({ id: doc.id, _collection: "posts", ...doc.data() }));
+      updateAllPhotos(posts1, null);
     });
 
-    return () => unsubscribe();
+    const unsub2 = onSnapshot(query(collection(db, "community_posts")), (snap2) => {
+      const posts2 = snap2.docs.map(doc => ({ id: doc.id, _collection: "community_posts", ...doc.data() }));
+      updateAllPhotos(null, posts2);
+    });
+
+    let currentRecipePosts = [];
+    let currentCommPosts = [];
+
+    function updateAllPhotos(recipes, comms) {
+      if (recipes !== null) currentRecipePosts = recipes;
+      if (comms !== null) currentCommPosts = comms;
+
+      const extracted = [];
+      [...currentRecipePosts, ...currentCommPosts].forEach(p => {
+        const url = typeof p.imageUrl === "string" ? p.imageUrl : (typeof p.image === "string" ? p.image : null);
+        if (url && url.startsWith("http")) {
+          extracted.push({ ...p, displayUrl: url });
+        } else if (Array.isArray(p.images)) {
+          p.images.forEach((imgUrl, idx) => {
+            if (typeof imgUrl === "string" && imgUrl.startsWith("http")) {
+              extracted.push({ ...p, id: `${p.id}_${idx}`, parentId: p.id, displayUrl: imgUrl });
+            }
+          });
+        }
+      });
+
+      setPhotos(extracted);
+      setLoading(false);
+    }
+
+    return () => { unsub1(); unsub2(); };
   }, []);
 
   async function handleDeleteSubmit(e) {
@@ -34,18 +61,19 @@ export default function Photos() {
 
     setIsSubmitting(true);
     try {
-      // Remove imageUrl from the target post document in Firestore
-      await updateDoc(doc(db, "posts", targetPhoto.id), {
-        imageUrl: "", // clears the image URL
+      const colName = targetPhoto._collection || "posts";
+      const targetDocId = targetPhoto.parentId || targetPhoto.id;
+
+      await updateDoc(doc(db, colName, targetDocId), {
+        imageUrl: "",
         imageRemovedByAdmin: true,
         imageRemovedReason: reason
       });
 
-      // Write to audit log
       await addDoc(collection(db, "adminLogs"), {
         action: "포토 이미지 삭제",
-        detail: `게시글 ID: ${targetPhoto.id} | 이미지 삭제 완료 | 사유: ${reason}`,
-        targetId: targetPhoto.id,
+        detail: `[${colName}] 게시글 ID: ${targetDocId} | 이미지 삭제 완료 | 사유: ${reason}`,
+        targetId: targetDocId,
         createdAt: new Date().toISOString()
       });
 
@@ -71,17 +99,20 @@ export default function Photos() {
     <div className="space-y-6">
       {/* Gallery Grid */}
       <div className="bg-white dark:bg-[#161b22] border border-zinc-200 dark:border-[#30363d] p-5 rounded-xl shadow-sm">
-        <h4 className="font-bold text-sm text-zinc-800 dark:text-white border-b border-zinc-200 dark:border-[#30363d] pb-3 mb-5">
-          업로드 이미지 검수 레지스트리
-        </h4>
+        <div className="flex items-center justify-between border-b border-zinc-200 dark:border-[#30363d] pb-3 mb-5">
+          <h4 className="font-bold text-sm text-zinc-800 dark:text-white">
+            업로드 이미지 검수 레지스트리
+          </h4>
+          <span className="text-xs text-zinc-400 font-semibold">총 <strong className="text-zinc-700 dark:text-white">{photos.length}</strong>개 이미지</span>
+        </div>
 
         {photos.length === 0 ? (
           <p className="text-xs text-zinc-400 text-center py-16">등록된 이미지가 없습니다.</p>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {photos.map((p) => {
-              // Generate mock AI check value based on ID
-              const aiScore = Math.floor((p.id.charCodeAt(0) || 75) % 15);
+              const strId = String(p.id || "75");
+              const aiScore = Math.floor((strId.charCodeAt(0) || 75) % 15);
               const isAiFlagged = aiScore > 12;
 
               return (
@@ -89,12 +120,12 @@ export default function Photos() {
                   {/* Photo Thumbnail */}
                   <div className="aspect-square relative overflow-hidden bg-zinc-100 dark:bg-[#161b22] flex items-center justify-center">
                     <img 
-                      src={p.imageUrl} 
+                      src={p.displayUrl} 
                       alt="" 
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" 
                     />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                      <a href={p.imageUrl} target="_blank" rel="noreferrer" className="p-2 rounded bg-white/20 text-white hover:bg-white/30" title="원본 보기">
+                      <a href={p.displayUrl} target="_blank" rel="noreferrer" className="p-2 rounded bg-white/20 text-white hover:bg-white/30" title="원본 보기">
                         <Eye className="w-4 h-4" />
                       </a>
                       <button 
@@ -111,12 +142,16 @@ export default function Photos() {
                   <div className="p-3 text-[11px] space-y-1.5 flex-1 flex flex-col justify-between">
                     <div>
                       <div className="flex justify-between">
+                        <span className="text-zinc-400 font-medium">구분</span>
+                        <span className="font-bold text-brand-green-500">{p._collection === "community_posts" ? "커뮤니티" : "레시피"}</span>
+                      </div>
+                      <div className="flex justify-between">
                         <span className="text-zinc-400 font-medium">작성자</span>
                         <span className="font-bold text-zinc-800 dark:text-zinc-250 truncate max-w-[80px]">{p.author || "익명"}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-zinc-400 font-medium">게시글 ID</span>
-                        <span className="font-mono text-zinc-500 dark:text-zinc-400 truncate max-w-[80px]">{p.id}</span>
+                        <span className="font-mono text-zinc-500 dark:text-zinc-400 truncate max-w-[80px]">{p.parentId || p.id}</span>
                       </div>
                     </div>
 

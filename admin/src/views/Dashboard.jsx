@@ -9,6 +9,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, BarChart, Bar, Legend
 } from "recharts";
+import { parseDate, formatDate, formatDateTime, isSameDay } from "../utils/date";
 
 function getDatesInRange(days) {
   const dates = [];
@@ -64,21 +65,21 @@ export default function Dashboard({ navigateToUser }) {
       // 가입자
       const usersSnap = await getDocs(collection(db, "users"));
       usersSnap.forEach(doc => {
-        const d = doc.data().createdAt?.split("T")[0];
+        const d = formatDate(doc.data().createdAt, null);
         if (d && buckets[d]) buckets[d].가입자++;
       });
 
       // 게시글
       const postsSnap = await getDocs(collection(db, "posts"));
       postsSnap.forEach(doc => {
-        const d = doc.data().createdAt?.split("T")[0];
+        const d = formatDate(doc.data().createdAt, null);
         if (d && buckets[d]) buckets[d].게시글++;
       });
 
       // 신고
       const reportsSnap = await getDocs(collection(db, "reports"));
       reportsSnap.forEach(doc => {
-        const d = doc.data().createdAt?.split("T")[0];
+        const d = formatDate(doc.data().createdAt, null);
         if (d && buckets[d]) buckets[d].신고++;
       });
 
@@ -97,12 +98,12 @@ export default function Dashboard({ navigateToUser }) {
   }
 
   useEffect(() => {
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = formatDate(new Date());
 
     // 회원 통계
     const unsubUsers = onSnapshot(query(collection(db, "users")), (snap) => {
       const all = snap.docs.map(d => d.data());
-      const todayUsers = all.filter(u => u.createdAt?.startsWith(todayStr)).length;
+      const todayUsers = all.filter(u => isSameDay(u.createdAt, todayStr)).length;
       const suspended = all.filter(u => u.status === "suspended" || u.status === "permanent_suspended").length;
       const locked = all.filter(u => u.status === "locked").length;
       const withdrawn = all.filter(u => u.status === "withdrawn" || u.status === "deleted").length;
@@ -118,24 +119,24 @@ export default function Dashboard({ navigateToUser }) {
       }));
 
       const sortedUsers = [...snap.docs.map(d => ({ id: d.id, ...d.data() }))]
-        .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+        .sort((a, b) => (parseDate(b.createdAt)?.getTime() || 0) - (parseDate(a.createdAt)?.getTime() || 0))
         .slice(0, 5);
       setRecentUsers(sortedUsers);
     });
 
     // 게시글
     const unsubPosts = onSnapshot(query(collection(db, "posts")), (snap) => {
-      const todayCount = snap.docs.filter(d => d.data().createdAt?.startsWith(todayStr)).length;
+      const todayCount = snap.docs.filter(d => isSameDay(d.data().createdAt, todayStr)).length;
       setStats(prev => ({ ...prev, todayPosts: todayCount }));
     });
 
     // 신고
     const unsubReports = onSnapshot(query(collection(db, "reports")), (snap) => {
       const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const todayCount = all.filter(r => r.createdAt?.startsWith(todayStr)).length;
+      const todayCount = all.filter(r => isSameDay(r.createdAt, todayStr)).length;
       const waiting = all.filter(r => r.status === "waiting" || r.status === "Pending").length;
       setStats(prev => ({ ...prev, todayReports: todayCount, waitingReports: waiting }));
-      setRecentReports(all.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 5));
+      setRecentReports(all.sort((a, b) => (parseDate(b.createdAt)?.getTime() || 0) - (parseDate(a.createdAt)?.getTime() || 0)).slice(0, 5));
     });
 
     // 공지사항
@@ -253,7 +254,7 @@ export default function Dashboard({ navigateToUser }) {
             {recentUsers.length === 0 ? (
               <p className="text-xs text-zinc-400 py-8 text-center">최근 가입한 사용자가 없습니다.</p>
             ) : recentUsers.map(u => {
-              const isToday = u.createdAt?.startsWith(new Date().toISOString().split("T")[0]);
+              const isToday = isSameDay(u.createdAt, new Date());
               return (
                 <div
                   key={u.id}
@@ -262,7 +263,7 @@ export default function Dashboard({ navigateToUser }) {
                 >
                   <div className="flex items-center gap-2">
                     <div className="w-7 h-7 rounded-full bg-zinc-200 dark:bg-[#30363d] overflow-hidden flex items-center justify-center flex-shrink-0">
-                      {u.avatarImg ? (
+                      {typeof u.avatarImg === "string" && u.avatarImg.startsWith("http") ? (
                         <img src={u.avatarImg} alt="" className="w-full h-full object-cover" />
                       ) : (
                         <span className="font-bold text-zinc-500 text-xs">{u.name?.[0] || "?"}</span>
@@ -275,7 +276,7 @@ export default function Dashboard({ navigateToUser }) {
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {isToday && <span className="text-[9px] bg-emerald-500/10 text-emerald-500 font-bold px-1.5 py-0.5 rounded">오늘</span>}
-                    <span className="text-[10px] text-zinc-400">{u.createdAt ? u.createdAt.split("T")[0] : "-"}</span>
+                    <span className="text-[10px] text-zinc-400">{formatDate(u.createdAt)}</span>
                   </div>
                 </div>
               );
@@ -294,7 +295,7 @@ export default function Dashboard({ navigateToUser }) {
             ) : recentNotices.map(notice => (
               <div key={notice.id} className="flex items-center justify-between text-xs p-2.5 rounded-lg hover:bg-zinc-50 dark:hover:bg-[#0e1117]/30 transition-colors">
                 <span className="text-zinc-800 dark:text-zinc-200 truncate max-w-[70%]">{notice.title}</span>
-                <span className="text-[10px] text-zinc-400 flex-shrink-0">{notice.createdAt ? notice.createdAt.split("T")[0] : "-"}</span>
+                <span className="text-[10px] text-zinc-400 flex-shrink-0">{formatDate(notice.createdAt)}</span>
               </div>
             ))}
           </div>
@@ -308,7 +309,7 @@ export default function Dashboard({ navigateToUser }) {
             ) : recentLogs.map(log => (
               <div key={log.id} className="text-xs p-2.5 bg-zinc-50 dark:bg-[#0e1117]/30 border-l-2 border-brand-green-500 rounded-r">
                 <span className="font-semibold text-zinc-800 dark:text-zinc-200">[{log.action}]</span> {log.detail}
-                <p className="text-[9px] text-zinc-400 mt-1">{log.createdAt?.replace("T", " ").slice(0, 16)}</p>
+                <p className="text-[9px] text-zinc-400 mt-1">{formatDateTime(log.createdAt)}</p>
               </div>
             ))}
           </div>

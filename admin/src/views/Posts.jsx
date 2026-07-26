@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { db } from "../firebase";
 import { collection, query, onSnapshot, doc, updateDoc, deleteDoc, addDoc } from "firebase/firestore";
 import { Search, Eye, EyeOff, Pin, PinOff, Trash, AlertTriangle, AlertCircle } from "lucide-react";
+import { formatDate } from "../utils/date";
 
 export default function Posts({ navigateToUser }) {
   const [posts, setPosts] = useState([]);
@@ -9,6 +10,7 @@ export default function Posts({ navigateToUser }) {
   const [loading, setLoading] = useState(true);
 
   // Search & Filter state
+  const [categoryFilter, setCategoryFilter] = useState("all"); // "all", "recipe", "community"
   const [searchQuery, setSearchQuery] = useState("");
   const [searchType, setSearchType] = useState("title"); // "title", "uid", "author", "postId"
   const [statusFilter, setStatusFilter] = useState("all"); // "all", "hidden", "reported"
@@ -20,24 +22,50 @@ export default function Posts({ navigateToUser }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    // Listen to both posts and community_posts if needed.
-    // For simplicity, we can listen to the "posts" collection which holds the recipes and posts
-    const q = query(collection(db, "posts"));
-    const unsubscribe = onSnapshot(q, (snap) => {
-      const allPosts = snap.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data()
+    let recipePosts = [];
+    let communityPosts = [];
+
+    const unsub1 = onSnapshot(query(collection(db, "posts")), (snap1) => {
+      recipePosts = snap1.docs.map((d) => ({
+        id: d.id,
+        _collection: "posts",
+        _typeLabel: "레시피",
+        ...d.data()
       }));
-      setPosts(allPosts);
-      setLoading(false);
+      combine();
     });
 
-    return () => unsubscribe();
+    const unsub2 = onSnapshot(query(collection(db, "community_posts")), (snap2) => {
+      communityPosts = snap2.docs.map((d) => ({
+        id: d.id,
+        _collection: "community_posts",
+        _typeLabel: "커뮤니티",
+        ...d.data()
+      }));
+      combine();
+    });
+
+    function combine() {
+      setPosts([...recipePosts, ...communityPosts]);
+      setLoading(false);
+    }
+
+    return () => {
+      unsub1();
+      unsub2();
+    };
   }, []);
 
   // Filter Logic
   useEffect(() => {
     let result = [...posts];
+
+    // Category filter
+    if (categoryFilter === "recipe") {
+      result = result.filter(p => p._collection === "posts");
+    } else if (categoryFilter === "community") {
+      result = result.filter(p => p._collection === "community_posts");
+    }
 
     // Status filter
     if (statusFilter === "hidden") {
@@ -49,19 +77,22 @@ export default function Posts({ navigateToUser }) {
     // Search query filter
     if (searchQuery.trim() !== "") {
       const q = searchQuery.toLowerCase().trim();
-      if (searchType === "title") {
-        result = result.filter(p => p.title && p.title.toLowerCase().includes(q));
-      } else if (searchType === "uid") {
-        result = result.filter(p => p.userId && p.userId.toLowerCase().includes(q));
-      } else if (searchType === "author") {
-        result = result.filter(p => p.author && p.author.toLowerCase().includes(q));
-      } else if (searchType === "postId") {
-        result = result.filter(p => p.id && p.id.toLowerCase().includes(q));
-      }
+      result = result.filter(p => {
+        const title = (p.title || p.body || "").toLowerCase();
+        const uid = (p.userId || p.uid || "").toLowerCase();
+        const author = (p.author || "").toLowerCase();
+        const pid = (p.id || "").toLowerCase();
+
+        if (searchType === "title") return title.includes(q);
+        if (searchType === "uid") return uid.includes(q);
+        if (searchType === "author") return author.includes(q);
+        if (searchType === "postId") return pid.includes(q);
+        return title.includes(q) || uid.includes(q) || author.includes(q) || pid.includes(q);
+      });
     }
 
     setFilteredPosts(result);
-  }, [posts, searchQuery, searchType, statusFilter]);
+  }, [posts, categoryFilter, searchQuery, searchType, statusFilter]);
 
   // Handle operations
   async function handleActionSubmit(e) {
@@ -74,7 +105,8 @@ export default function Posts({ navigateToUser }) {
     setIsSubmitting(true);
     try {
       let actionLabel = "";
-      const postRef = doc(db, "posts", targetPost.id);
+      const colName = targetPost._collection || "posts";
+      const postRef = doc(db, colName, targetPost.id);
 
       if (actionType === "hide") {
         actionLabel = "게시물 숨김";
@@ -96,7 +128,7 @@ export default function Posts({ navigateToUser }) {
       // Audit Log write
       await addDoc(collection(db, "adminLogs"), {
         action: actionLabel,
-        detail: `게시물 ID: ${targetPost.id} | 제목: ${targetPost.title} | 사유: ${reason}`,
+        detail: `[${colName}] 게시물 ID: ${targetPost.id} | 제목: ${targetPost.title || targetPost.body?.slice(0, 20)} | 사유: ${reason}`,
         targetId: targetPost.id,
         createdAt: new Date().toISOString()
       });
@@ -124,13 +156,23 @@ export default function Posts({ navigateToUser }) {
     <div className="space-y-6">
       {/* 1. Filter Header */}
       <div className="bg-white dark:bg-[#161b22] border border-zinc-200 dark:border-[#30363d] p-5 rounded-xl shadow-sm flex flex-wrap gap-4 items-center justify-between">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <select 
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="px-3 py-2 rounded-lg border border-zinc-300 dark:border-[#30363d] bg-white dark:bg-[#0e1117] text-xs font-bold text-brand-green-500 focus:outline-none"
+          >
+            <option value="all">전체 게시글 (레시피+커뮤니티)</option>
+            <option value="recipe">레시피 게시글만</option>
+            <option value="community">커뮤니티 게시글만</option>
+          </select>
+
           <select 
             value={searchType}
             onChange={(e) => setSearchType(e.target.value)}
             className="px-3 py-2 rounded-lg border border-zinc-300 dark:border-[#30363d] bg-white dark:bg-[#0e1117] text-xs font-semibold text-zinc-700 dark:text-zinc-300 focus:outline-none"
           >
-            <option value="title">제목</option>
+            <option value="title">제목/본문</option>
             <option value="uid">UID</option>
             <option value="author">작성자</option>
             <option value="postId">게시글 ID</option>
@@ -154,14 +196,14 @@ export default function Posts({ navigateToUser }) {
             onChange={(e) => setStatusFilter(e.target.value)}
             className="px-3 py-2 rounded-lg border border-zinc-300 dark:border-[#30363d] bg-white dark:bg-[#0e1117] text-xs font-semibold text-zinc-700 dark:text-zinc-300 focus:outline-none"
           >
-            <option value="all">전체 목록</option>
+            <option value="all">전체 상태</option>
             <option value="hidden">숨김 처리됨</option>
             <option value="reported">신고 접수됨</option>
           </select>
         </div>
 
         <span className="text-xs font-semibold text-zinc-400">
-          게시글 수: <strong className="text-zinc-700 dark:text-white">{filteredPosts.length}</strong> 개
+          게시글 수: <strong className="text-zinc-700 dark:text-white">{filteredPosts.length}</strong> / {posts.length} 개
         </span>
       </div>
 
@@ -171,11 +213,11 @@ export default function Posts({ navigateToUser }) {
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-zinc-50 dark:bg-[#161b22]/30 border-b border-zinc-200 dark:border-[#30363d] text-zinc-400 uppercase tracking-wider font-semibold">
+                <th className="px-5 py-3">구분</th>
                 <th className="px-5 py-3">게시글 ID</th>
-                <th className="px-5 py-3">제목</th>
+                <th className="px-5 py-3">제목 / 본문</th>
                 <th className="px-5 py-3">작성자</th>
-                <th className="px-5 py-3">조회수</th>
-                <th className="px-5 py-3">좋아요</th>
+                <th className="px-5 py-3">등록일</th>
                 <th className="px-5 py-3 text-center">신고</th>
                 <th className="px-5 py-3">상태</th>
                 <th className="px-5 py-3 text-center">동작</th>
@@ -191,6 +233,8 @@ export default function Posts({ navigateToUser }) {
               ) : (
                 filteredPosts.map((p) => {
                   const reportsCount = p.reportCount || 0;
+                  const displayTitle = p.title || (p.body ? p.body.slice(0, 30) : "(제목 없음)");
+                  const dateStr = formatDate(p.createdAt || p.timestamp);
                   
                   // Status layout
                   let statusBadge = <span className="text-emerald-500 font-bold bg-emerald-500/10 px-2 py-0.5 rounded text-[10px]">공개</span>;
@@ -199,19 +243,27 @@ export default function Posts({ navigateToUser }) {
                   }
 
                   return (
-                    <tr key={p.id} className="hover:bg-zinc-50/50 dark:hover:bg-[#21262d]/25 transition-colors">
+                    <tr key={`${p._collection}_${p.id}`} className="hover:bg-zinc-50/50 dark:hover:bg-[#21262d]/25 transition-colors">
+                      <td className="px-5 py-3">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          p._collection === "community_posts" 
+                            ? "bg-purple-500/10 text-purple-500" 
+                            : "bg-blue-500/10 text-blue-500"
+                        }`}>
+                          {p._typeLabel}
+                        </span>
+                      </td>
                       <td className="px-5 py-3 font-mono text-[11px] text-zinc-400">{p.id}</td>
                       <td className="px-5 py-3 font-bold text-zinc-800 dark:text-zinc-200">
                         <div className="flex items-center gap-2">
                           {p.isPinned && <Pin className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />}
-                          <span className="truncate max-w-[200px]">{p.title}</span>
+                          <span className="truncate max-w-[220px]">{displayTitle}</span>
                         </div>
                       </td>
-                      <td className="px-5 py-3 font-medium text-brand-green-500 hover:underline cursor-pointer" onClick={() => navigateToUser(p.userId)}>
+                      <td className="px-5 py-3 font-medium text-brand-green-500 hover:underline cursor-pointer" onClick={() => navigateToUser(p.userId || p.uid)}>
                         {p.author || "익명"}
                       </td>
-                      <td className="px-5 py-3 text-zinc-500 dark:text-zinc-400">{p.viewCount || 0}</td>
-                      <td className="px-5 py-3 text-zinc-500 dark:text-zinc-400">{p.likeCount || 0}</td>
+                      <td className="px-5 py-3 text-zinc-500 dark:text-zinc-400">{dateStr}</td>
                       <td className={`px-5 py-3 text-center font-bold ${reportsCount > 0 ? "text-red-500 bg-red-500/5" : "text-zinc-400"}`}>
                         {reportsCount}
                       </td>

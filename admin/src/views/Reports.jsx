@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { db } from "../firebase";
 import { collection, query, onSnapshot, doc, updateDoc, addDoc } from "firebase/firestore";
 import { Search, Eye, AlertTriangle, CheckCircle, Trash } from "lucide-react";
+import { formatDate } from "../utils/date";
 
 export default function Reports({ navigateToUser }) {
   const [reports, setReports] = useState([]);
@@ -186,7 +187,7 @@ export default function Reports({ navigateToUser }) {
                 </tr>
               ) : (
                 filteredReports.map((rep) => {
-                  const dateStr = rep.createdAt ? rep.createdAt.split("T")[0] : "-";
+                  const dateStr = formatDate(rep.createdAt);
                   
                   // Status badge format
                   let statusBadge = <span className="text-red-500 font-bold bg-red-500/10 px-2.5 py-0.5 rounded-full text-[10px]">대기중</span>;

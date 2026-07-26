@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { db } from "../firebase";
 import { collection, query, onSnapshot, doc, deleteDoc, addDoc } from "firebase/firestore";
 import { Search, Ban, Unlock, AlertTriangle } from "lucide-react";
+import { formatDateTime } from "../utils/date";
 
 export default function Blocks() {
   const [blocks, setBlocks] = useState([]);
@@ -127,7 +128,7 @@ export default function Blocks() {
                 </tr>
               ) : (
                 filteredBlocks.map((b) => {
-                  const dateStr = b.createdAt ? b.createdAt.replace("T", " ").slice(0, 16) : "-";
+                  const dateStr = formatDateTime(b.createdAt);
                   
                   return (
                     <tr key={b.id} className="hover:bg-zinc-50/50 dark:hover:bg-[#21262d]/25 transition-colors">

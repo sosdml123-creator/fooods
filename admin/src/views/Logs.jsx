@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { db } from "../firebase";
 import { collection, query, onSnapshot, orderBy } from "firebase/firestore";
 import { Search, History } from "lucide-react";
+import { formatDateTime } from "../utils/date";
 
 export default function Logs() {
   const [logs, setLogs] = useState([]);
@@ -91,7 +92,7 @@ export default function Logs() {
                 </tr>
               ) : (
                 filteredLogs.map((log) => {
-                  const dateStr = log.createdAt ? log.createdAt.replace("T", " ").slice(0, 19) : "-";
+                  const dateStr = formatDateTime(log.createdAt);
                   
                   return (
                     <tr key={log.id} className="hover:bg-zinc-50/50 dark:hover:bg-[#21262d]/25 transition-colors">

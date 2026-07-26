@@ -6,6 +6,7 @@ import {
 import { BarChart3, TrendingUp, Users, Calendar, RefreshCw } from "lucide-react";
 import { db } from "../firebase";
 import { collection, query, onSnapshot, orderBy, getDocs } from "firebase/firestore";
+import { formatDate } from "../utils/date";
 
 function getDatesInRange(days) {
   const dates = [];
@@ -46,7 +47,7 @@ export default function Statistics() {
       usersSnap.forEach(doc => {
         totalUsers++;
         const data = doc.data();
-        const dateStr = data.createdAt ? data.createdAt.split("T")[0] : null;
+        const dateStr = formatDate(data.createdAt, null);
         if (dateStr && buckets[dateStr]) buckets[dateStr].가입자++;
       });
 
@@ -57,7 +58,7 @@ export default function Statistics() {
       postsSnap.forEach(doc => {
         totalPosts++;
         const data = doc.data();
-        const dateStr = data.createdAt ? data.createdAt.split("T")[0] : null;
+        const dateStr = formatDate(data.createdAt, null);
         if (dateStr && buckets[dateStr]) buckets[dateStr].게시글++;
         // 태그 집계
         if (Array.isArray(data.tags)) {
@@ -73,7 +74,7 @@ export default function Statistics() {
       comSnap.forEach(doc => {
         totalCommunity++;
         const data = doc.data();
-        const dateStr = data.createdAt ? data.createdAt.split("T")[0] : null;
+        const dateStr = formatDate(data.createdAt, null);
         if (dateStr && buckets[dateStr]) buckets[dateStr].커뮤니티++;
       });
 
@@ -83,7 +84,7 @@ export default function Statistics() {
       reportsSnap.forEach(doc => {
         totalReports++;
         const data = doc.data();
-        const dateStr = data.createdAt ? data.createdAt.split("T")[0] : null;
+        const dateStr = formatDate(data.createdAt, null);
         if (dateStr && buckets[dateStr]) buckets[dateStr].신고++;
       });
 
