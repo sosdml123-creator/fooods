@@ -5412,6 +5412,7 @@ export class ErrorBoundary extends React.Component {
 
       // 검색 상태
       const [searchQuery, setSearchQuery] = useState("");
+      const [searchMode, setSearchMode] = useState("posts");
       const [searchPostsResult, setSearchPostsResult] = useState([]);
       const [searchUsersResult, setSearchUsersResult] = useState([]);
       const [isSearching, setIsSearching] = useState(false);

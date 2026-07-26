@@ -254,15 +254,110 @@ app.get(["/api/naver-geocode", "/api/v1/naver-geocode"], async (req, res) => {
   }
 });
 
-// 네이버 지역 검색 (Local Search - 상호명/가게 이름 검색 프록시 + 주소 지오코딩 결합)
+// ── TM128(KATECH/Bessel) → WGS84 수학 변환 (API 키 불필요) ──────────────────
+// 네이버 지역 검색 API가 반환하는 mapx/mapy는 TM128 정수 좌표계 값
+// Bessel 1841 타원체 기반 TM 투영 → Bessel lat/lng → WGS84 변환
+function convertTM128toWGS84(mx, my) {
+  try {
+    // Bessel 1841 타원체 파라미터
+    const a   = 6377397.155;
+    const b   = 6356078.9628;
+    const e2  = (a * a - b * b) / (a * a);
+
+    // TM128 투영 파라미터 (중부원점: 위도 38°N, 경도 127°E 또는 TM128: 128°E)
+    // 네이버 지역 검색 API는 TM128 (중부원점 127E가 아닌 128E 기반) 사용
+    const k0      = 1.0;
+    const phi0    = 38.0 * Math.PI / 180.0;   // 원점 위도
+    const lambda0 = 127.0 * Math.PI / 180.0;  // 원점 경도 (네이버 API: 127°E 기반)
+    const FE      = 200000.0;                 // 가산 X (m)
+    const FN      = 500000.0;                 // 가산 Y (m)
+
+    const x = mx - FE;
+    const y = my - FN;
+
+    // 원점에서의 자오선 호장 M0
+    const M0 = a * (
+      (1 - e2/4 - 3*e2*e2/64 - 5*e2*e2*e2/256) * phi0
+      - (3*e2/8 + 3*e2*e2/32 + 45*e2*e2*e2/1024) * Math.sin(2*phi0)
+      + (15*e2*e2/256 + 45*e2*e2*e2/1024) * Math.sin(4*phi0)
+      - (35*e2*e2*e2/3072) * Math.sin(6*phi0)
+    );
+
+    const M  = M0 + y / k0;
+    const mu = M / (a * (1 - e2/4 - 3*e2*e2/64 - 5*e2*e2*e2/256));
+
+    const e1 = (1 - Math.sqrt(1 - e2)) / (1 + Math.sqrt(1 - e2));
+
+    // 근사 위도 phi1
+    const phi1 = mu
+      + (3*e1/2 - 27*e1*e1*e1/32) * Math.sin(2*mu)
+      + (21*e1*e1/16 - 55*e1*e1*e1*e1/32) * Math.sin(4*mu)
+      + (151*e1*e1*e1/96) * Math.sin(6*mu)
+      + (1097*e1*e1*e1*e1/512) * Math.sin(8*mu);
+
+    const N1 = a / Math.sqrt(1 - e2 * Math.sin(phi1) * Math.sin(phi1));
+    const T1 = Math.tan(phi1) * Math.tan(phi1);
+    const C1 = (e2 / (1 - e2)) * Math.cos(phi1) * Math.cos(phi1);
+    const R1 = a * (1 - e2) / Math.pow(1 - e2 * Math.sin(phi1) * Math.sin(phi1), 1.5);
+    const D  = x / (N1 * k0);
+
+    // Bessel 타원체상의 위도/경도 (라디안)
+    let latB = phi1 - (N1 * Math.tan(phi1) / R1)
+      * (D*D/2
+         - (5 + 3*T1 + 10*C1 - 4*C1*C1 - 9*e2/(1-e2)) * D*D*D*D/24
+         + (61 + 90*T1 + 298*C1 + 45*T1*T1 - 252*e2/(1-e2) - 3*C1*C1) * D*D*D*D*D*D/720);
+
+    let lngB = lambda0 + (D
+      - (1 + 2*T1 + C1) * D*D*D/6
+      + (5 - 2*C1 + 28*T1 - 3*C1*C1 + 8*e2/(1-e2) + 24*T1*T1) * D*D*D*D*D/120)
+      / Math.cos(phi1);
+
+    // Bessel → WGS84 (한국 Molodensky 파라미터)
+    const dX = -146.43, dY = 507.89, dZ = 685.47;
+
+    const N2 = a / Math.sqrt(1 - e2 * Math.sin(latB) * Math.sin(latB));
+    const X  = N2 * Math.cos(latB) * Math.cos(lngB);
+    const Y  = N2 * Math.cos(latB) * Math.sin(lngB);
+    const Z  = N2 * (1 - e2) * Math.sin(latB);
+
+    const X2 = X + dX, Y2 = Y + dY, Z2 = Z + dZ;
+
+    // WGS84 타원체 파라미터
+    const aW  = 6378137.0;
+    const fW  = 1 / 298.257223563;
+    const bW  = aW * (1 - fW);
+    const e2W = (aW*aW - bW*bW) / (aW*aW);
+
+    const p     = Math.sqrt(X2*X2 + Y2*Y2);
+    const theta = Math.atan2(Z2 * aW, p * bW);
+
+    const latW = Math.atan2(
+      Z2 + (e2W * aW * aW / bW) * Math.pow(Math.sin(theta), 3),
+      p - e2W * aW * Math.pow(Math.cos(theta), 3)
+    );
+    const lngW = Math.atan2(Y2, X2);
+
+    const lat = latW * 180.0 / Math.PI;
+    const lng = lngW * 180.0 / Math.PI;
+
+    // 한국 범위 검증 (위도 33~38.5, 경도 125~130)
+    if (lat < 33 || lat > 38.5 || lng < 125 || lng > 130) {
+      return null;
+    }
+    return { lat, lng };
+  } catch (e) {
+    return null;
+  }
+}
+
+// 네이버 지역 검색 (Local Search - 상호명/가게 이름 검색 프록시)
+// mapx/mapy TM128 좌표 → 순수 수학 변환으로 WGS84 lat/lng 제공 (API 키 불필요)
 app.get(["/api/naver-local-search", "/api/v1/naver-local-search"], async (req, res) => {
   const query = req.query.query;
   if (!query) return res.status(400).json({ success: false, message: "검색어가 필요합니다." });
 
-  const searchClientId = process.env.NAVER_SEARCH_CLIENT_ID || "_eOv9Rm5SlwkxGKU0O7f";
+  const searchClientId     = process.env.NAVER_SEARCH_CLIENT_ID     || "_eOv9Rm5SlwkxGKU0O7f";
   const searchClientSecret = process.env.NAVER_SEARCH_CLIENT_SECRET || "vGZ4rS99EJ";
-  const mapClientId = process.env.NAVER_CLIENT_ID || "u35nq8hdr1";
-  const mapClientSecret = process.env.NAVER_CLIENT_SECRET || "";
 
   try {
     const response = await axios.get("https://openapi.naver.com/v1/search/local.json", {
@@ -272,55 +367,45 @@ app.get(["/api/naver-local-search", "/api/v1/naver-local-search"], async (req, r
         sort: "random"
       },
       headers: {
-        "X-Naver-Client-Id": searchClientId,
+        "X-Naver-Client-Id":     searchClientId,
         "X-Naver-Client-Secret": searchClientSecret
       }
     });
 
     const rawItems = response.data?.items || [];
 
-    // 각 상호명의 실제 도로명/지번 주소로 Geocoding API를 병렬 호출하여 정확한 WGS84 위도/경도(lat, lng) 확보
-    const items = await Promise.all(
-      rawItems.map(async (item) => {
-        const cleanTitle = item.title ? item.title.replace(/<[^>]*>/g, "") : "";
-        const targetAddress = item.roadAddress || item.address;
-        let lat = null;
-        let lng = null;
+    const items = rawItems.map(item => {
+      const cleanTitle = item.title ? item.title.replace(/<[^>]*>/g, "") : "";
 
-        if (targetAddress) {
-          try {
-            const geoRes = await axios.get("https://maps.apigw.ntruss.com/map-geocode/v2/geocode", {
-              params: { query: targetAddress },
-              headers: {
-                "x-ncp-apigw-api-key-id": mapClientId,
-                "x-ncp-apigw-api-key": mapClientSecret
-              },
-              timeout: 3000
-            });
-            if (geoRes.data && geoRes.data.addresses && geoRes.data.addresses.length > 0) {
-              lat = parseFloat(geoRes.data.addresses[0].y);
-              lng = parseFloat(geoRes.data.addresses[0].x);
-            }
-          } catch (geoErr) {
-            console.warn(`[Naver Local Geocode Warning] Failed for address "${targetAddress}":`, geoErr.message);
-          }
+      // mapx/mapy (TM128 정수) → WGS84 수학 변환 (API 키 필요 없음)
+      let lat = null;
+      let lng = null;
+      const mx = parseInt(item.mapx);
+      const my = parseInt(item.mapy);
+      if (!isNaN(mx) && !isNaN(my) && mx > 0 && my > 0) {
+        const wgs = convertTM128toWGS84(mx, my);
+        if (wgs) {
+          lat = wgs.lat;
+          lng = wgs.lng;
         }
+      }
 
-        return {
-          title: cleanTitle,
-          address: item.address || "",
-          roadAddress: item.roadAddress || "",
-          mapx: item.mapx,
-          mapy: item.mapy,
-          lat,
-          lng,
-          category: item.category || "",
-          description: item.description || "",
-          telephone: item.telephone || "",
-          link: item.link || ""
-        };
-      })
-    );
+      console.log(`[LocalSearch] "${cleanTitle}" mapx=${mx} mapy=${my} → lat=${lat} lng=${lng}`);
+
+      return {
+        title:       cleanTitle,
+        address:     item.address     || "",
+        roadAddress: item.roadAddress || "",
+        mapx:        item.mapx,
+        mapy:        item.mapy,
+        lat,
+        lng,
+        category:    item.category    || "",
+        description: item.description || "",
+        telephone:   item.telephone   || "",
+        link:        item.link        || ""
+      };
+    });
 
     return res.json({
       success: true,
