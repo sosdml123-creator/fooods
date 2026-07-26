@@ -516,12 +516,26 @@ export class ErrorBoundary extends React.Component {
     // --- 3. 하위 컴포넌트 선언 ---
 
     const AdBannerAdSense = React.memo(function AdBannerAdSense() {
+      const insRef = useRef(null);
       const isNativeApp = typeof window !== 'undefined' && window.flutter_inappwebview && window.flutter_inappwebview.callHandler;
+
+      useEffect(() => {
+        if (isNativeApp) return;
+        try {
+          if (insRef.current && !insRef.current.getAttribute('data-adsbygoogle-status') && !insRef.current.getAttribute('data-ad-status')) {
+            (window.adsbygoogle = window.adsbygoogle || []).push({});
+          }
+        } catch (e) {
+          console.warn("[AdBannerAdSense] Safe catch:", e);
+        }
+      }, [isNativeApp]);
+
       if (isNativeApp) return null;
 
       return (
         <div className="w-full my-2 px-3 py-1 bg-zinc-50 border border-zinc-200/80 rounded-xl overflow-hidden shadow-xs flex justify-center items-center min-h-[50px]">
           <ins
+            ref={insRef}
             className="adsbygoogle"
             style={{ display: 'block', width: '100%', height: '50px', textAlign: 'center' }}
             data-ad-client="ca-pub-3878859120989916"
