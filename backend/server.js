@@ -291,7 +291,7 @@ async function fetchDeepLinkMeta(initialUrl) {
     console.log(`[LinkMeta Debug] Redirected to URL: ${finalUrl}`);
     console.log(`[LinkMeta Debug] Response status: ${responseStatusCode}, HTML length: ${finalHtml.length}`);
     console.log('[LinkMeta Debug] Response headers:', JSON.stringify(res.headers));
-    console.log('[LinkMeta Debug] Raw HTML sample:', finalHtml.substring(0, 1500));
+    console.log('[LinkMeta Debug] Raw HTML FULL:', finalHtml);
   } catch (err) {
     console.error("[LinkMeta Debug] Initial HTTP fetch error:", err.message);
   }
@@ -374,7 +374,7 @@ async function fetchDeepLinkMeta(initialUrl) {
         responseStatusCode = res2.status;
         console.log(`[LinkMeta Debug] JS Redirect step ${redirectStep} response status: ${responseStatusCode}, HTML length: ${finalHtml.length}`);
         console.log(`[LinkMeta Debug] JS Redirect step ${redirectStep} Response headers:`, JSON.stringify(res2.headers));
-        console.log(`[LinkMeta Debug] JS Redirect step ${redirectStep} Raw HTML sample:`, finalHtml.substring(0, 1500));
+        console.log(`[LinkMeta Debug] JS Redirect step ${redirectStep} Raw HTML FULL:`, finalHtml);
       } else {
         break;
       }
