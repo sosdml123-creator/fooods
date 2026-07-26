@@ -4,6 +4,8 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'dart:async';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 
 Future<void> main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
@@ -70,11 +72,16 @@ class _WebViewScreenState extends State<WebViewScreen> {
   void _loadBannerAd({bool isFallback = false}) {
     if (_bannerAd != null) return;
 
+    // Platform 분기: Android와 iOS 구글 공식 애드몹 테스트 광고 단위 ID 분리
+    final String fallbackTestAdUnitId = Platform.isAndroid
+        ? 'ca-app-pub-3940256099942544/6300978111' // Android 공식 테스트 배너 ID
+        : 'ca-app-pub-3940256099942544/2934735716'; // iOS 공식 테스트 배너 ID
+
     final targetUnitId = isFallback
-        ? 'ca-app-pub-3940256099942544/6300978111' // Google 공식 애드몹 테스트 광고 단위 ID
+        ? fallbackTestAdUnitId
         : _adUnitId; // 유저 발급 실시간 애드몹 광고 단위 ID
 
-    debugPrint('[AdMob] Attempting to load banner ad with Unit ID: $targetUnitId (isFallback: $isFallback)');
+    debugPrint('[AdMob] Attempting to load banner ad on ${Platform.operatingSystem} with Unit ID: $targetUnitId (isFallback: $isFallback)');
 
     _bannerAd = BannerAd(
       adUnitId: targetUnitId,
@@ -98,9 +105,9 @@ class _WebViewScreenState extends State<WebViewScreen> {
               _isBannerAdLoaded = false;
             });
           }
-          // 실시간 광고 단위 ID 노출 실패 시 테스트 전용 ID로 재시도하여 APK 테스트 시 광고 노출 보장
+          // 실시간 광고 단위 ID 노출 실패 시 테스트 전용 ID로 재시도하여 앱 테스트 시 광고 노출 보장
           if (!isFallback) {
-            debugPrint('[AdMob] Retrying with Google Test Ad Unit ID for APK testing guarantee...');
+            debugPrint('[AdMob] Retrying with Google Test Ad Unit ID for testing guarantee...');
             _loadBannerAd(isFallback: true);
           }
         },
@@ -161,7 +168,10 @@ class _WebViewScreenState extends State<WebViewScreen> {
         if (controller != null && await controller.canGoBack()) {
           controller.goBack();
         } else {
-          SystemNavigator.pop();
+          // 플랫폼 분기: Android에서만 SystemNavigator.pop() 호출 (iOS에서는 앱 강제 종료 방지)
+          if (Platform.isAndroid) {
+            SystemNavigator.pop();
+          }
         }
       },
       child: Scaffold(
@@ -191,10 +201,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
                         databaseEnabled: true,
                         supportZoom: false,
                         useShouldOverrideUrlLoading: true,
+                        allowsInlineMediaPlayback: true, // iOS 동영상 인라인 재생 허용
+                        allowsBackForwardNavigationGestures: Platform.isIOS, // iOS 스와이프 뒤로가기 제스처
                       ),
                       onWebViewCreated: (controller) {
                         _webViewController = controller;
-                        debugPrint('[WebView] Initialized.');
+                        debugPrint('[WebView] Initialized on ${Platform.operatingSystem}.');
 
                         // 웹앱 준비 완료 시그널 수신 핸들러 (선택 보조)
                         controller.addJavaScriptHandler(
@@ -272,6 +284,17 @@ class _WebViewScreenState extends State<WebViewScreen> {
                         final uri = navigationAction.request.url;
                         final urlStr = uri?.toString() ?? '';
                         debugPrint('[WebView Navigation] Request URL: $urlStr');
+
+                        if (uri != null && !['http', 'https', 'file', 'chrome', 'data', 'about'].contains(uri.scheme)) {
+                          if (Platform.isAndroid) {
+                            // Android 전용: intent:// 또는 custom scheme 처리
+                            debugPrint('[Android Custom Scheme] Intent scheme detected: ${uri.scheme}');
+                          } else if (Platform.isIOS) {
+                            // iOS 전용: kakaokompassauth, kakaolink, nmap 등 iOS 커스텀 스킴 처리
+                            debugPrint('[iOS Custom Scheme] Custom scheme detected: ${uri.scheme}');
+                          }
+                        }
+
                         return NavigationActionPolicy.ALLOW;
                       },
                     ),

@@ -201,6 +201,18 @@ async function writeFirestoreUser(uid, userData) {
   }
 }
 
+async function deleteFirestoreUser(uid) {
+  try {
+    const url = `${FIRESTORE_BASE_URL}/users/${uid}`;
+    await axios.delete(url);
+    console.log(`[Firestore REST] User document deleted for uid: ${uid}`);
+    return true;
+  } catch (err) {
+    console.error("[Firestore REST] Error deleting user:", err.message);
+    return false;
+  }
+}
+
 function readUsers() {
   return readJsonFile(USERS_DB_PATH, []);
 }
@@ -245,6 +257,7 @@ module.exports = {
   getR2PresignedUrl,
   findFirestoreUserByField,
   writeFirestoreUser,
+  deleteFirestoreUser,
   readUsers,
   writeUsers,
   verifyFirebaseIdToken

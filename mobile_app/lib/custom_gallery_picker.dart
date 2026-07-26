@@ -113,11 +113,18 @@ class _CustomGalleryPickerState extends State<CustomGalleryPicker> {
     final PermissionState ps = await PhotoManager.requestPermissionExtend();
     bool isAuthorized = ps.isAuth;
     
-    if (!isAuthorized && Platform.isAndroid) {
-      final photosStatus = await Permission.photos.status;
-      final storageStatus = await Permission.storage.status;
-      if (photosStatus.isGranted || storageStatus.isGranted) {
-        isAuthorized = true;
+    if (!isAuthorized) {
+      if (Platform.isAndroid) {
+        final photosStatus = await Permission.photos.status;
+        final storageStatus = await Permission.storage.status;
+        if (photosStatus.isGranted || storageStatus.isGranted) {
+          isAuthorized = true;
+        }
+      } else if (Platform.isIOS) {
+        final photosStatus = await Permission.photos.status;
+        if (photosStatus.isGranted || photosStatus.isLimited) {
+          isAuthorized = true;
+        }
       }
     }
 

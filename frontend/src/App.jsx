@@ -6098,6 +6098,16 @@ export class ErrorBoundary extends React.Component {
       async function handleDeleteAccount() {
         if (await window.showConfirm("정말로 회원 탈퇴를 진행하시겠습니까?\n작성하신 게시물과 댓글, 저장된 모든 정보가 영구 삭제됩니다.")) {
           try {
+            const uid = auth.currentUser ? auth.currentUser.uid : null;
+            const nickname = userProfile ? userProfile.nickname : null;
+            
+            // 백엔드 Firestore 유저 문서 및 모든 데이터 삭제 API 호출
+            await fetch("/api/v1/auth/withdraw", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ uid, nickname })
+            }).catch(e => console.error("Backend withdraw API error:", e));
+
             if (auth.currentUser) {
               await auth.currentUser.delete();
             }

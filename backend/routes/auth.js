@@ -7,10 +7,14 @@ const { signupLimiter, loginLimiter } = require("../middlewares");
 const { 
   findFirestoreUserByField, 
   writeFirestoreUser, 
+  deleteFirestoreUser,
   readUsers, 
   writeUsers,
   readJsonFile,
-  MODERATION_RULES_PATH
+  writeJsonFile,
+  MODERATION_RULES_PATH,
+  RECIPE_POSTS_DB_PATH,
+  COMMUNITY_POSTS_DB_PATH
 } = require("../firebase");
 
 const client_id = process.env.KAKAO_CLIENT_ID || "3c6b9b1d740c3c2cb76369773ea57471"; 
@@ -354,18 +358,56 @@ router.get("/logout", async function (req, res) {
   });
 });
 
-// 7. 카카오 연결 끊기 (회원 탈퇴 등)
-router.get("/unlink", async function (req, res) {
-  if (!req.session.key) {
-    return res.status(401).send("로그인이 필요합니다.");
+// 8. 회원 탈퇴 및 사용자 Firestore/로컬 데이터 완전 삭제 API
+router.post("/withdraw", async function (req, res) {
+  const { uid, nickname } = req.body || {};
+  console.log(`[회원 탈퇴 요청] UID: ${uid}, 닉네임: ${nickname}`);
+
+  try {
+    let targetUid = uid;
+    let targetNickname = nickname;
+
+    if (req.session.user) {
+      targetUid = targetUid || req.session.user.uid;
+      targetNickname = targetNickname || req.session.user.nickname;
+    }
+
+    // 1. Firestore에서 유저 문서 삭제
+    if (targetUid) {
+      await deleteFirestoreUser(targetUid);
+    }
+
+    // 2. 로컬 DB(users.json)에서 유저 삭제
+    const users = readUsers();
+    const updatedUsers = users.filter(u => {
+      if (targetUid && u.uid === targetUid) return false;
+      if (targetNickname && u.nickname === targetNickname) return false;
+      return true;
+    });
+    writeUsers(updatedUsers);
+
+    // 3. 유저가 작성한 게시글 정리 (community_posts.json, recipe_posts.json)
+    if (targetNickname) {
+      const commPosts = readJsonFile(COMMUNITY_POSTS_DB_PATH, []);
+      const filteredComm = commPosts.filter(p => p.author !== targetNickname);
+      writeJsonFile(COMMUNITY_POSTS_DB_PATH, filteredComm);
+
+      const recipePosts = readJsonFile(RECIPE_POSTS_DB_PATH, []);
+      const filteredRecipe = recipePosts.filter(p => p.author !== targetNickname);
+      writeJsonFile(RECIPE_POSTS_DB_PATH, filteredRecipe);
+    }
+
+    // 4. 세션 삭제
+    req.session.destroy(function (err) {
+      if (err) console.error("세션 파기 오류:", err);
+    });
+    res.clearCookie("connect.sid");
+
+    return res.json({ success: true, message: "회원 탈퇴 및 모든 개인 데이터가 영구 삭제되었습니다." });
+  } catch (err) {
+    console.error("[Withdraw API] Error:", err.message);
+    return res.status(500).json({ success: false, message: "회원 탈퇴 처리 중 오류가 발생했습니다." });
   }
-  const uri = kapi_host + "/v1/user/unlink";
-  const header = { Authorization: "Bearer " + req.session.key };
-  await call("POST", uri, {}, header);
-  
-  req.session.destroy();
-  const active_frontend = getFrontendUrl(req);
-  res.status(302).redirect(`${active_frontend}/index.html`);
 });
 
 module.exports = router;

@@ -318,7 +318,14 @@ async function fetchDeepLinkMeta(initialUrl) {
     }
   }
 
-  // 3단계: 쿠팡 (link.coupang.com) JS/Meta Refresh 딥링크 리다이렉트 추적 (최대 3회)
+  // 3단계: 쿠팡 (link.coupang.com) JS/Meta Refresh/redirectWebUrl 딥링크 리다이렉트 추적 (최대 3회)
+  function decodeHexEscapes(str) {
+    if (!str) return "";
+    return str.replace(/\\x([0-9A-Fa-f]{2})/g, (_, hex) => 
+      String.fromCharCode(parseInt(hex, 16))
+    );
+  }
+
   const extractRedirectUrl = (html) => {
     if (!html) return null;
     const matchHref = html.match(/location\.href\s*=\s*["']([^"']+)["']/i);
@@ -337,6 +344,14 @@ async function fetchDeepLinkMeta(initialUrl) {
                              html.match(/content=["']\d+;\s*url=([^"']+)["']/i);
     if (matchMetaRefresh && matchMetaRefresh[1]) return matchMetaRefresh[1];
 
+    const matchWebUrl = html.match(/redirectWebUrl\s*=\s*['"]([^'"]+)['"]/i);
+    if (matchWebUrl && matchWebUrl[1]) {
+      console.log('[LinkMeta Debug] Extracted redirectWebUrl (raw):', matchWebUrl[1]);
+      const decodedUrl = decodeHexEscapes(matchWebUrl[1]);
+      console.log('[LinkMeta Debug] Decoded product URL:', decodedUrl);
+      return decodedUrl;
+    }
+
     const matchProductUrl = html.match(/(https:\/\/(?:www\.)?coupang\.com\/vp\/products\/[^\s"'<>]+)/i) ||
                             html.match(/(https:\/\/(?:www\.)?coupang\.com\/[^\s"'<>]+)/i);
     if (matchProductUrl && matchProductUrl[1]) return matchProductUrl[1];
@@ -345,7 +360,7 @@ async function fetchDeepLinkMeta(initialUrl) {
   };
 
   let redirectStep = 0;
-  while ((isCoupang || finalHtml.includes("Deeplink Redirect") || finalHtml.includes("deeplink") || finalHtml.includes("location") || finalHtml.includes("refresh")) && redirectStep < 3) {
+  while ((isCoupang || finalHtml.includes("Deeplink Redirect") || finalHtml.includes("deeplink") || finalHtml.includes("location") || finalHtml.includes("refresh") || finalHtml.includes("redirectWebUrl")) && redirectStep < 3) {
     const nextRawUrl = extractRedirectUrl(finalHtml);
     if (!nextRawUrl) break;
 
@@ -372,7 +387,7 @@ async function fetchDeepLinkMeta(initialUrl) {
         finalHtml = res2.data;
         finalUrl = nextUrl;
         responseStatusCode = res2.status;
-        console.log(`[LinkMeta Debug] JS Redirect step ${redirectStep} response status: ${responseStatusCode}, HTML length: ${finalHtml.length}`);
+        console.log(`[LinkMeta Debug] Product page fetch status: ${responseStatusCode}, HTML length: ${finalHtml.length}`);
         console.log(`[LinkMeta Debug] JS Redirect step ${redirectStep} Response headers:`, JSON.stringify(res2.headers));
         console.log(`[LinkMeta Debug] JS Redirect step ${redirectStep} Raw HTML FULL:`, finalHtml);
       } else {
@@ -471,7 +486,7 @@ async function fetchDeepLinkMeta(initialUrl) {
   const ogImage = (finalHtml.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i) ||
                    finalHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i))?.[1];
 
-  console.log(`[LinkMeta Debug] Parsed og:title: ${ogTitle || 'null'}, og:image: ${ogImage || 'null'}`);
+  console.log(`[LinkMeta Debug] Product page og:title: ${ogTitle || 'null'}, og:image: ${ogImage || 'null'}`);
 
   // 이미지 파싱: og:image -> twitter:image -> link rel=image_src -> coupangcdn -> prod-image
   const coupangCdnMatch = finalHtml.match(/(?:https?:)?\/\/(thumbnail\d*\.coupangcdn\.com\/[^\s"'<>]+\.(?:jpg|png|jpeg|webp))/i);

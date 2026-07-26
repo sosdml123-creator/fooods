@@ -5,7 +5,7 @@
 		<key>CFBundleDevelopmentRegion</key>
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
 		<key>CFBundleDisplayName</key>
-		<string>Plating Mobile App</string>
+		<string>플레이팅</string>
 		<key>CFBundleExecutable</key>
 		<string>$(EXECUTABLE_NAME)</string>
 		<key>CFBundleIdentifier</key>
@@ -45,8 +45,39 @@
 		<true/>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
+
+		<!-- AdMob iOS Application ID -->
 		<key>GADApplicationIdentifier</key>
 		<string>ca-app-pub-3878859120989916~6785126111</string>
+
+		<!-- Kakao Login URL Scheme (kakaobc33059f4ab69acb3ceea81b09cdc4ef) -->
+		<key>CFBundleURLTypes</key>
+		<array>
+			<dict>
+				<key>CFBundleTypeRole</key>
+				<string>Editor</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>kakaobc33059f4ab69acb3ceea81b09cdc4ef</string>
+				</array>
+			</dict>
+		</array>
+
+		<!-- LSApplicationQueriesSchemes for Kakao / Naver App Schemes -->
+		<key>LSApplicationQueriesSchemes</key>
+		<array>
+			<string>kakaokompassauth</string>
+			<string>kakaolink</string>
+			<string>kakaoplus</string>
+			<string>nmap</string>
+			<string>naversearchapp</string>
+			<string>naversearchthirdlogin</string>
+		</array>
+
+		<!-- Naver Map iOS SDK Client ID -->
+		<key>NMFClientId</key>
+		<string>YOUR_NAVER_MAP_CLIENT_ID</string>
+
 		<key>UIStatusBarHidden</key>
 		<false/>
 		<key>NSCameraUsageDescription</key>
