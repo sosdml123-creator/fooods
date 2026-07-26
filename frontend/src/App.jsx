@@ -3574,8 +3574,7 @@ export class ErrorBoundary extends React.Component {
             mapDataControl: false,
             tileTransition: false,          // 모바일 앱 타일 스터터링 걸림 방지 (false 적용 시 훨씬 부드러움)
             inertialPan: true,             // 관성 스크롤 유지
-            inertialPanDuration: 300,       // 모바일 최적 300ms
-            useStyleMap: true
+            inertialPanDuration: 300        // 모바일 최적 300ms
           };
           mapInstanceRef.current = new window.naver.maps.Map(mapRef.current, mapOptions);
         }
@@ -3594,7 +3593,9 @@ export class ErrorBoundary extends React.Component {
         const validPosts = (posts || []).filter(post => {
           if (!post) return false;
           // location 존재 및 lat/lng 좌표 유효성 검사 (null 체크)
-          const hasLocation = post.location && typeof post.location.lat === 'number' && typeof post.location.lng === 'number';
+          const hasLocation = post.location && 
+            typeof post.location.lat === 'number' && !isNaN(post.location.lat) &&
+            typeof post.location.lng === 'number' && !isNaN(post.location.lng);
           if (!hasLocation) return false;
           
           // 카테고리 필터 연동 (전체 / 맛집 / 카페 / 배달)
@@ -7306,7 +7307,7 @@ export class ErrorBoundary extends React.Component {
             )}
 
             {activeTab === "map" && (
-              <div className="w-full h-full flex-1 flex flex-col min-h-0" style={{ flex: 1, height: "100%", minHeight: 0, overflow: "hidden" }}>
+              <div className="w-full h-full flex-1 flex flex-col min-h-0" style={{ flex: 1, height: "calc(100vh - 120px)", minHeight: "450px", overflow: "hidden" }}>
                 <NaverMapView posts={posts} onPostClick={handleRecipePostClick} isActive={true} />
               </div>
             )}
