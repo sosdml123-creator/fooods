@@ -45,11 +45,9 @@
 		<true/>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
-
 		<!-- AdMob iOS Application ID -->
 		<key>GADApplicationIdentifier</key>
 		<string>ca-app-pub-3878859120989916~6785126111</string>
-
 		<!-- Kakao Login URL Scheme (kakaobc33059f4ab69acb3ceea81b09cdc4ef) -->
 		<key>CFBundleURLTypes</key>
 		<array>
@@ -62,7 +60,6 @@
 				</array>
 			</dict>
 		</array>
-
 		<!-- LSApplicationQueriesSchemes for Kakao / Naver App Schemes -->
 		<key>LSApplicationQueriesSchemes</key>
 		<array>
@@ -73,11 +70,9 @@
 			<string>naversearchapp</string>
 			<string>naversearchthirdlogin</string>
 		</array>
-
 		<!-- Naver Map iOS SDK Client ID -->
 		<key>NMFClientId</key>
 		<string>YOUR_NAVER_MAP_CLIENT_ID</string>
-
 		<key>UIStatusBarHidden</key>
 		<false/>
 		<key>NSCameraUsageDescription</key>

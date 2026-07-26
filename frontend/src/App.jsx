@@ -7058,7 +7058,7 @@ export class ErrorBoundary extends React.Component {
       }
 
       return (
-        <div className="app-container">
+        <div className="app-container" style={activeTab === "map" ? { height: "100vh", maxHeight: "100vh", overflow: "hidden", display: "flex", flexDirection: "column" } : {}}>
           <AdBanner />
 
           {activeTab !== "community" && activeTab !== "community_detail" && activeTab !== "community_write" && activeTab !== "notifications" && (
@@ -7109,6 +7109,8 @@ export class ErrorBoundary extends React.Component {
             className="no-scrollbar"
             style={{
               flex: 1,
+              height: activeTab === "map" ? "100%" : "auto",
+              minHeight: 0,
               overflowY: activeTab === "map" ? "hidden" : "auto",
               display: "flex",
               flexDirection: "column"
@@ -7321,7 +7323,7 @@ export class ErrorBoundary extends React.Component {
             )}
 
             {activeTab === "map" && (
-              <div className="w-full h-full flex-1 flex flex-col min-h-0" style={{ flex: 1, height: "calc(100vh - 120px)", minHeight: "450px", overflow: "hidden" }}>
+              <div className="w-full h-full flex-1 flex flex-col min-h-0" style={{ flex: 1, width: "100%", height: "100%", minHeight: 0, overflow: "hidden" }}>
                 <NaverMapView posts={posts} onPostClick={handleRecipePostClick} isActive={true} />
               </div>
             )}
