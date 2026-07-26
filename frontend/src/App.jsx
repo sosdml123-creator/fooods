@@ -5219,6 +5219,17 @@ export class ErrorBoundary extends React.Component {
         resolve: null
       });
 
+      // 홈 피드 카테고리 필터 상태
+      const [selectedCategory, setSelectedCategory] = useState("전체");
+
+      // 검색 상태
+      const [searchQuery, setSearchQuery] = useState("");
+      const [searchPostsResult, setSearchPostsResult] = useState([]);
+      const [searchUsersResult, setSearchUsersResult] = useState([]);
+      const [isSearching, setIsSearching] = useState(false);
+
+      // 글쓰기 탭 활성 여부 (activeTab 기반으로 파생)
+      const writeOpen = activeTab === "write";
 
 
       // 운영 전환을 위한 1회성 로컬 캐시(IndexedDB 및 localStorage) 강제 클렌징
@@ -5349,18 +5360,6 @@ export class ErrorBoundary extends React.Component {
       const kakaoSyncInProgressRef = useRef(new URLSearchParams(window.location.search).has("token"));
 
       const [dbLoaded, setDbLoaded] = useState(false); // IndexedDB 로드 완료 플래그
-
-      // 홈 피드 카테고리 필터 상태
-      const [selectedCategory, setSelectedCategory] = useState("전체");
-
-      // 검색 상태
-      const [searchQuery, setSearchQuery] = useState("");
-      const [searchPostsResult, setSearchPostsResult] = useState([]);
-      const [searchUsersResult, setSearchUsersResult] = useState([]);
-      const [isSearching, setIsSearching] = useState(false);
-
-      // 글쓰기 탭 활성 여부 (activeTab 기반으로 파생)
-      const writeOpen = activeTab === "write";
 
       function loadBackendPosts() {
         fetch("/api/v1/posts")
