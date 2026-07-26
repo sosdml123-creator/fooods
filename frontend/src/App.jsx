@@ -6616,6 +6616,24 @@ export class ErrorBoundary extends React.Component {
         const user = auth.currentUser;
         if (!user) return;
 
+        // ⚡ [낙관적 UI 업데이트] 서버 응답을 기다리지 않고 클릭 0.01초 만에 즉시 반응
+        setPosts(prevPosts =>
+          prevPosts.map(p => {
+            if (p.id === id) {
+              const hasScrapped = p.scrappedBy?.includes(user.uid) || p.scrappedBy?.includes(profile.name) || p.scrapped;
+              const newScrappedBy = hasScrapped
+                ? (p.scrappedBy || []).filter(u => u !== user.uid && u !== profile.name)
+                : [...(p.scrappedBy || []), user.uid];
+              return {
+                ...p,
+                scrapped: !hasScrapped,
+                scrappedBy: newScrappedBy
+              };
+            }
+            return p;
+          })
+        );
+
         const postRef = db.collection("posts").doc(id);
         db.runTransaction(async (transaction) => {
           const doc = await transaction.get(postRef);
@@ -7065,6 +7083,24 @@ export class ErrorBoundary extends React.Component {
         }
         const user = auth.currentUser;
         if (!user) return;
+
+        // ⚡ [낙관적 UI 업데이트] 서버 응답을 기다리지 않고 클릭 0.01초 만에 즉시 반응
+        setCommunityPosts(prevPosts =>
+          prevPosts.map(p => {
+            if (p.id === postId) {
+              const hasScrapped = p.scrappedBy?.includes(user.uid) || p.scrappedBy?.includes(profile.name) || p.scrapped;
+              const newScrappedBy = hasScrapped
+                ? (p.scrappedBy || []).filter(u => u !== user.uid && u !== profile.name)
+                : [...(p.scrappedBy || []), user.uid];
+              return {
+                ...p,
+                scrapped: !hasScrapped,
+                scrappedBy: newScrappedBy
+              };
+            }
+            return p;
+          })
+        );
 
         const postRef = db.collection("community_posts").doc(postId);
         db.runTransaction(async (transaction) => {
