@@ -5188,36 +5188,6 @@ export class ErrorBoundary extends React.Component {
         return () => window.removeEventListener("popstate", handleLocationChange);
       }, [activeTab]);
 
-      // 탭 변경 시 네이티브 앱(Flutter WebView)으로 광고 표시/숨김 알림 (지도 탭일 때 광고 숨김)
-      useEffect(() => {
-        if (typeof window !== "undefined" && window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-          if (activeTab === "map") {
-            window.flutter_inappwebview.callHandler('hideAd', {}).catch(() => {});
-          } else if (isLoggedIn) {
-            window.flutter_inappwebview.callHandler('showAd', { type: 'banner', position: 'top' }).catch(() => {});
-          }
-        }
-      }, [activeTab, isLoggedIn]);
-
-      const [selectedCategory, setSelectedCategory] = useState("전체");
-      const [searchQuery, setSearchQuery] = useState("");
-      const [searchPostsResult, setSearchPostsResult] = useState([]);
-      const [searchUsersResult, setSearchUsersResult] = useState([]);
-      const [searchMode, setSearchMode] = useState("posts"); // "posts" | "users"
-      const [isSearching, setIsSearching] = useState(false);
-
-      const getInitialWriteOpen = () => {
-        try {
-          return sessionStorage.getItem("fooods_write_open") === "true";
-        } catch (e) {
-          return false;
-        }
-      };
-      const [writeOpen, setWriteOpen] = useState(getInitialWriteOpen);
-
-      useEffect(() => {
-        try { sessionStorage.setItem("fooods_write_open", writeOpen ? "true" : "false"); } catch(e) {}
-      }, [writeOpen]);
       const [loginOpen, setLoginOpen] = useState(false);
       const [isLoggedIn, setIsLoggedIn] = useState(false);
       const [appInitializing, setAppInitializing] = useState(true);
@@ -5228,6 +5198,17 @@ export class ErrorBoundary extends React.Component {
           window.flutter_inappwebview.callHandler('onLoginStatusChanged', { isLoggedIn: isLoggedIn }).catch(() => {});
         }
       }, [isLoggedIn]);
+
+      // 탭 변경 시 네이티브 앱(Flutter WebView)으로 광고 표시/숨김 알림 (지도 탭일 때 광고 숨김)
+      useEffect(() => {
+        if (typeof window !== "undefined" && window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+          if (activeTab === "map") {
+            window.flutter_inappwebview.callHandler('hideAd', {}).catch(() => {});
+          } else if (isLoggedIn) {
+            window.flutter_inappwebview.callHandler('showAd', { type: 'banner', position: 'top' }).catch(() => {});
+          }
+        }
+      }, [activeTab, isLoggedIn]);
       const [writeInitialImages, setWriteInitialImages] = useState([]);
       const [communityInitialImages, setCommunityInitialImages] = useState([]);
 
