@@ -3729,12 +3729,15 @@ export class ErrorBoundary extends React.Component {
           const mapOptions = {
             center: new window.naver.maps.LatLng(37.5665, 126.9780),
             zoom: 14,
-            zoomControl: false,             // 오른쪽 상단 플러스/마이너스 바 제거!
+            zoomControl: false,             // 커스텀 줌 버튼 사용
             scaleControl: false,            // 축척 바 제거
             mapDataControl: false,
-            tileTransition: false,          // 모바일 앱 타일 스터터링 걸림 방지 (false 적용 시 훨씬 부드러움)
-            inertialPan: true,             // 관성 스크롤 유지
-            inertialPanDuration: 300        // 모바일 최적 300ms
+            logoControl: false,
+            mapTypeControl: false,
+            tileTransition: true,           // 부드러운 타일 페이드/블렌딩 전환 켜기 (60fps 스무스 드래그)
+            inertialPan: true,              // 관성 스크롤 유지
+            inertialPanDuration: 400,       // 자연스러운 400ms 감속 관성
+            disableKineticPan: false        // 손가락 터치 튕김 시 부드러운 관성 패닝 활성화
           };
           mapInstanceRef.current = new window.naver.maps.Map(mapRef.current, mapOptions);
         }
@@ -4080,7 +4083,24 @@ export class ErrorBoundary extends React.Component {
               </p>
             </div>
           ) : (
-            <div ref={mapRef} className="w-full h-full flex-1 min-h-0" style={{ flex: 1, height: "100%", minHeight: 0, width: '100%', touchAction: 'none', WebkitUserSelect: 'none', userSelect: 'none', willChange: 'transform', transform: 'translateZ(0)' }}></div>
+            <div 
+              ref={mapRef} 
+              className="w-full h-full flex-1 min-h-0" 
+              style={{ 
+                flex: 1, 
+                height: "100%", 
+                minHeight: 0, 
+                width: '100%', 
+                touchAction: 'pan-x pan-y', 
+                WebkitUserSelect: 'none', 
+                userSelect: 'none', 
+                willChange: 'transform', 
+                transform: 'translate3d(0,0,0)',
+                WebkitTransform: 'translate3d(0,0,0)',
+                backfaceVisibility: 'hidden',
+                WebkitBackfaceVisibility: 'hidden'
+              }}
+            ></div>
           )}
 
           {/* [수정 1, 2, 3, 4] 마커 탭 시 슬라이드업 바텀 시트 */}
