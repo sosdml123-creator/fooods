@@ -254,13 +254,15 @@ app.get(["/api/naver-geocode", "/api/v1/naver-geocode"], async (req, res) => {
   }
 });
 
-// 네이버 지역 검색 (Local Search - 상호명/가게 이름 검색 프록시)
+// 네이버 지역 검색 (Local Search - 상호명/가게 이름 검색 프록시 + 주소 지오코딩 결합)
 app.get(["/api/naver-local-search", "/api/v1/naver-local-search"], async (req, res) => {
   const query = req.query.query;
   if (!query) return res.status(400).json({ success: false, message: "검색어가 필요합니다." });
 
-  const clientId = process.env.NAVER_SEARCH_CLIENT_ID || "_eOv9Rm5SlwkxGKU0O7f";
-  const clientSecret = process.env.NAVER_SEARCH_CLIENT_SECRET || "vGZ4rS99EJ";
+  const searchClientId = process.env.NAVER_SEARCH_CLIENT_ID || "_eOv9Rm5SlwkxGKU0O7f";
+  const searchClientSecret = process.env.NAVER_SEARCH_CLIENT_SECRET || "vGZ4rS99EJ";
+  const mapClientId = process.env.NAVER_CLIENT_ID || "u35nq8hdr1";
+  const mapClientSecret = process.env.NAVER_CLIENT_SECRET || "";
 
   try {
     const response = await axios.get("https://openapi.naver.com/v1/search/local.json", {
@@ -270,22 +272,55 @@ app.get(["/api/naver-local-search", "/api/v1/naver-local-search"], async (req, r
         sort: "random"
       },
       headers: {
-        "X-Naver-Client-Id": clientId,
-        "X-Naver-Client-Secret": clientSecret
+        "X-Naver-Client-Id": searchClientId,
+        "X-Naver-Client-Secret": searchClientSecret
       }
     });
 
-    const items = (response.data?.items || []).map(item => ({
-      title: item.title ? item.title.replace(/<[^>]*>/g, "") : "",
-      address: item.address || "",
-      roadAddress: item.roadAddress || "",
-      mapx: item.mapx,
-      mapy: item.mapy,
-      category: item.category || "",
-      description: item.description || "",
-      telephone: item.telephone || "",
-      link: item.link || ""
-    }));
+    const rawItems = response.data?.items || [];
+
+    // 각 상호명의 실제 도로명/지번 주소로 Geocoding API를 병렬 호출하여 정확한 WGS84 위도/경도(lat, lng) 확보
+    const items = await Promise.all(
+      rawItems.map(async (item) => {
+        const cleanTitle = item.title ? item.title.replace(/<[^>]*>/g, "") : "";
+        const targetAddress = item.roadAddress || item.address;
+        let lat = null;
+        let lng = null;
+
+        if (targetAddress) {
+          try {
+            const geoRes = await axios.get("https://maps.apigw.ntruss.com/map-geocode/v2/geocode", {
+              params: { query: targetAddress },
+              headers: {
+                "x-ncp-apigw-api-key-id": mapClientId,
+                "x-ncp-apigw-api-key": mapClientSecret
+              },
+              timeout: 3000
+            });
+            if (geoRes.data && geoRes.data.addresses && geoRes.data.addresses.length > 0) {
+              lat = parseFloat(geoRes.data.addresses[0].y);
+              lng = parseFloat(geoRes.data.addresses[0].x);
+            }
+          } catch (geoErr) {
+            console.warn(`[Naver Local Geocode Warning] Failed for address "${targetAddress}":`, geoErr.message);
+          }
+        }
+
+        return {
+          title: cleanTitle,
+          address: item.address || "",
+          roadAddress: item.roadAddress || "",
+          mapx: item.mapx,
+          mapy: item.mapy,
+          lat,
+          lng,
+          category: item.category || "",
+          description: item.description || "",
+          telephone: item.telephone || "",
+          link: item.link || ""
+        };
+      })
+    );
 
     return res.json({
       success: true,

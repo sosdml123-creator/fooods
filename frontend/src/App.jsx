@@ -2291,11 +2291,11 @@ export class ErrorBoundary extends React.Component {
 
           if (localData.success && localData.data && localData.data.items && localData.data.items.length > 0) {
             const items = localData.data.items.map(item => {
-              let lat = 37.5665;
-              let lng = 126.9780;
+              let lat = item.lat;
+              let lng = item.lng;
 
-              // TM128 정수 좌표를 WGS84 위경도로 변환
-              if (window.naver && window.naver.maps && window.naver.maps.TransCoord && item.mapx && item.mapy) {
+              // 백엔드에서 lat/lng가 바로 안 구해진 경우, SDK TransCoord 2차 시도
+              if ((!lat || !lng) && window.naver && window.naver.maps && window.naver.maps.TransCoord && item.mapx && item.mapy) {
                 try {
                   const pt = new window.naver.maps.Point(parseInt(item.mapx), parseInt(item.mapy));
                   const latLng = window.naver.maps.TransCoord.fromTM128ToLatLng(pt);
@@ -2304,6 +2304,12 @@ export class ErrorBoundary extends React.Component {
                 } catch (e) {
                   console.warn("TransCoord conversion failed:", e);
                 }
+              }
+
+              // 최후 기본값
+              if (!lat || !lng) {
+                lat = 37.5665;
+                lng = 126.9780;
               }
 
               return {
@@ -3814,10 +3820,10 @@ export class ErrorBoundary extends React.Component {
 
           if (localData.success && localData.data && localData.data.items && localData.data.items.length > 0) {
             const item = localData.data.items[0];
-            let lat = 37.5665;
-            let lng = 126.9780;
+            let lat = item.lat;
+            let lng = item.lng;
 
-            if (window.naver && window.naver.maps && window.naver.maps.TransCoord && item.mapx && item.mapy) {
+            if ((!lat || !lng) && window.naver && window.naver.maps && window.naver.maps.TransCoord && item.mapx && item.mapy) {
               try {
                 const pt = new window.naver.maps.Point(parseInt(item.mapx), parseInt(item.mapy));
                 const latLng = window.naver.maps.TransCoord.fromTM128ToLatLng(pt);
@@ -3826,6 +3832,11 @@ export class ErrorBoundary extends React.Component {
               } catch (e) {
                 console.warn("TransCoord conversion failed:", e);
               }
+            }
+
+            if (!lat || !lng) {
+              lat = 37.5665;
+              lng = 126.9780;
             }
 
             const realAddress = item.roadAddress || item.address || query;
