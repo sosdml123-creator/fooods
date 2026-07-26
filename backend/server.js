@@ -256,74 +256,76 @@ app.get(["/api/naver-geocode", "/api/v1/naver-geocode"], async (req, res) => {
 
 // 리다이렉트 추적 및 OG / JSON-LD / 가격 스마트 파서 헬퍼
 async function fetchDeepLinkMeta(initialUrl) {
+  console.log(`[LinkMeta Debug] Initial requested URL: ${initialUrl}`);
   let finalHtml = "";
   let finalUrl = initialUrl;
+  let responseStatusCode = 0;
 
-  // 크롤러 차단을 피하기 위한 PC Chrome 데스크톱 헤더
-  const desktopHeaders = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Cache-Control": "no-cache"
-  };
-
-  // 모바일 Safari 헤더
+  // 모바일 Safari 헤더 (쿠팡 및 일반 사이트 크롤러 차단 방지)
   const mobileHeaders = {
-    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/605.1.15",
+    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7"
+    "Accept-Language": "ko-KR,ko;q=0.9"
   };
 
   const isCoupang = initialUrl.includes("coupang.com");
   const isNaverMap = initialUrl.includes("naver.me") || initialUrl.includes("map.naver") || initialUrl.includes("place.naver");
-  const headers = isCoupang ? desktopHeaders : (isNaverMap ? mobileHeaders : desktopHeaders);
+  const headers = mobileHeaders;
 
-  // 1단계: HTTP Redirect (301, 302, 307, 308) 10회 추적
+  // 1단계: HTTP Redirect (301, 302, 307, 308) 추적
   try {
     const res = await axios.get(initialUrl, {
-      timeout: 8000,
+      timeout: 5000,
       headers,
-      maxRedirects: 10,
+      maxRedirects: 5,
       validateStatus: (status) => status >= 200 && status < 400
     });
 
+    responseStatusCode = res.status;
     finalHtml = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
     if (res.request && res.request.res && res.request.res.responseUrl) {
       finalUrl = res.request.res.responseUrl;
     } else if (res.config && res.config.url) {
       finalUrl = res.config.url;
     }
+    console.log(`[LinkMeta Debug] Redirected to URL: ${finalUrl}`);
+    console.log(`[LinkMeta Debug] Response status: ${responseStatusCode}, HTML length: ${finalHtml.length}`);
   } catch (err) {
-    console.warn("[LinkMeta Redirect Catch]:", err.message);
+    console.error("[LinkMeta Debug] Initial HTTP fetch error:", err.message);
   }
 
   // 2단계: 네이버 지도 (naver.me / map.naver.com / place.naver.com) 전용 스마트 파서
   if (isNaverMap) {
     try {
-      // Place ID 추출 (예: /place/12345678 또는 /entry/place/12345678)
-      const placeIdMatch = finalUrl.match(/(?:place|restaurant|entry\/place)\/(\d+)/) || finalHtml.match(/(?:place|restaurant)\/(\d+)/);
+      // Place ID 추출 (예: /place/12345678, /restaurant/12345678, /entry/place/12345678 등)
+      const placeIdMatch = finalUrl.match(/(?:place|restaurant|hospital|hairshop|accommodation|entry\/place|place-detail)\/(\d+)/) || 
+                           finalUrl.match(/[?&](?:code|id|placeId)=(\d+)/) || 
+                           finalHtml.match(/(?:place|restaurant)\/(\d+)/);
       if (placeIdMatch && placeIdMatch[1]) {
         const placeId = placeIdMatch[1];
         const placeMobileUrl = `https://m.place.naver.com/place/${placeId}/home`;
-        const placeRes = await axios.get(placeMobileUrl, { timeout: 7000, headers: mobileHeaders });
+        const placeRes = await axios.get(placeMobileUrl, { timeout: 5000, headers: mobileHeaders });
         if (typeof placeRes.data === "string" && placeRes.data.length > 500) {
           finalHtml = placeRes.data;
           finalUrl = placeMobileUrl;
+          responseStatusCode = placeRes.status;
         }
       }
     } catch (e) {
-      console.warn("[NaverMap Place Parser Error]:", e.message);
+      console.error("[LinkMeta Debug] NaverMap Place Parser Error:", e.message);
     }
   }
 
-  // 3단계: 쿠팡 (link.coupang.com) 딥링크/JS 리다이렉트 주소 2차 추적
-  if (isCoupang || finalHtml.includes("Deeplink Redirect") || finalHtml.includes("deeplink") || finalHtml.includes("http-equiv=\"refresh\"")) {
+  // 3단계: 쿠팡 (link.coupang.com) 딥링크/JS 리다이렉트 및 meta refresh 추적 (최대 2회)
+  let redirectCount = 0;
+  while ((isCoupang || finalHtml.includes("Deeplink Redirect") || finalHtml.includes("deeplink") || finalHtml.includes("http-equiv=\"refresh\"")) && redirectCount < 2) {
     const refreshMatch = finalHtml.match(/content=["']\d+;\s*url=([^"']+)["']/i) ||
                          finalHtml.match(/location\.(?:href|replace)\s*=\s*["']([^"']+)["']/i) ||
                          finalHtml.match(/(https:\/\/(?:www\.)?coupang\.com\/vp\/products\/[^\s"'<]+)/i) ||
                          finalHtml.match(/(https:\/\/(?:www\.)?coupang\.com\/[^\s"'<]+)/i);
 
     if (refreshMatch && refreshMatch[1]) {
+      redirectCount++;
       let nextUrl = refreshMatch[1].replace(/&amp;/g, "&");
       if (nextUrl.startsWith("/")) {
         try {
@@ -332,18 +334,26 @@ async function fetchDeepLinkMeta(initialUrl) {
         } catch(e) {}
       }
       try {
+        console.log(`[LinkMeta Debug] Meta/JS Refresh Redirect #${redirectCount} to URL: ${nextUrl}`);
         const res2 = await axios.get(nextUrl, {
-          timeout: 8000,
-          headers: desktopHeaders,
-          maxRedirects: 10
+          timeout: 5000,
+          headers: mobileHeaders,
+          maxRedirects: 5
         });
         if (typeof res2.data === "string" && res2.data.length > 500) {
           finalHtml = res2.data;
           finalUrl = nextUrl;
+          responseStatusCode = res2.status;
+          console.log(`[LinkMeta Debug] Refresh response status: ${responseStatusCode}, HTML length: ${finalHtml.length}`);
+        } else {
+          break;
         }
       } catch (err2) {
-        console.warn("[Coupang Refresh Fetch Error]:", err2.message);
+        console.error("[LinkMeta Debug] Coupang Refresh Fetch Error:", err2.message);
+        break;
       }
+    } else {
+      break;
     }
   }
 
@@ -410,6 +420,16 @@ async function fetchDeepLinkMeta(initialUrl) {
     title = pageTitle.trim();
   }
 
+  // 쿠팡 전용 상품명 클래스 서브 파서
+  if (isCoupang || host === "쿠팡") {
+    const coupangTitleMatch = finalHtml.match(/class=["'][^"']*prod-buy-header__title[^"']*["'][^>]*>([^<]+)</i) ||
+                              finalHtml.match(/class=["'][^"']*prod-title[^"']*["'][^>]*>([^<]+)</i);
+    if (coupangTitleMatch && coupangTitleMatch[1]) {
+      const cTitle = coupangTitleMatch[1].trim();
+      if (isValidTitle(cTitle)) title = cTitle;
+    }
+  }
+
   // description 파싱
   const ogDesc = (finalHtml.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i) ||
                   finalHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:description["']/i) ||
@@ -418,16 +438,23 @@ async function fetchDeepLinkMeta(initialUrl) {
     description = ogDesc.trim();
   }
 
-  // 이미지 파싱: og:image -> twitter:image -> link rel=image_src -> prod-image
+  const ogImage = (finalHtml.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i) ||
+                   finalHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i))?.[1];
+
+  console.log(`[LinkMeta Debug] Parsed og:title: ${ogTitle || 'null'}, og:image: ${ogImage || 'null'}`);
+
+  // 이미지 파싱: og:image -> twitter:image -> link rel=image_src -> coupangcdn -> prod-image
+  const coupangCdnMatch = finalHtml.match(/(?:https?:)?\/\/(thumbnail\d*\.coupangcdn\.com\/[^\s"'<>]+\.(?:jpg|png|jpeg|webp))/i);
+  const coupangCdnImg = coupangCdnMatch?.[1];
+  console.log(`[LinkMeta Debug] coupangcdn regex match: ${coupangCdnImg ? `SUCCESS (${coupangCdnImg})` : 'FAILED'}`);
+
   if (!image) {
-    const ogImage = (finalHtml.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i) ||
-                     finalHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i))?.[1];
     const twitterImage = (finalHtml.match(/<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i) ||
                          finalHtml.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']twitter:image["']/i))?.[1];
     const relImage = (finalHtml.match(/<link[^>]*rel=["']image_src["'][^>]*href=["']([^"']+)["']/i))?.[1];
-    const prodImgSrc = (finalHtml.match(/<img[^>]*class=["'][^"']*prod-image[^"']*["'][^>]*src=["']([^"']+)["']/i))?.[1];
+    const prodImgSrc = (finalHtml.match(/<img[^>]*class=["'][^"']*(?:prod-image|target_img|detail-image)[^"']*["'][^>]*src=["']([^"']+)["']/i))?.[1];
 
-    image = ogImage || twitterImage || relImage || prodImgSrc || "";
+    image = ogImage || twitterImage || relImage || (coupangCdnImg ? `https://${coupangCdnImg}` : "") || prodImgSrc || "";
   }
 
   // 가격 (Price) 파싱
@@ -445,7 +472,7 @@ async function fetchDeepLinkMeta(initialUrl) {
     }
   }
 
-  // HTML Entity 디코딩 및 불필요한 접두사 정제
+  // HTML Entity 디코딩 및 불필요한 접두사/접미사 정제
   if (title) {
     title = title
       .replace(/&amp;/g, "&")
@@ -455,10 +482,17 @@ async function fetchDeepLinkMeta(initialUrl) {
       .replace(/&#39;/g, "'")
       .replace(/&#x27;/g, "'")
       .replace(/^쿠팡!\s*-\s*/i, "")
+      .replace(/^\[쿠팡\]\s*/i, "")
       .replace(/\s*\|\s*쿠팡$/i, "")
+      .replace(/\s*-\s*쿠팡$/i, "")
+      .replace(/^쿠팡\s*-\s*/i, "")
       .replace(/^\[네이버\s*지도\]\s*/i, "")
       .replace(/\s*:\s*네이버\s*MY\s*플레이스$/i, "")
+      .replace(/\s*:\s*네이버\s*플레이스$/i, "")
       .replace(/\s*-\s*네이버\s*지도$/i, "")
+      .replace(/\s*-\s*네이버\s*MY\s*플레이스$/i, "")
+      .replace(/\s*\|\s*네이버\s*지도$/i, "")
+      .replace(/,\s*주소.*$/i, "")
       .trim();
   }
 
@@ -512,6 +546,8 @@ async function fetchDeepLinkMeta(initialUrl) {
   } else if (price) {
     formattedPrice = price.includes("원") ? price : `${price}원`;
   }
+
+  console.log(`[LinkMeta Debug] Final result - Title: ${title}, Image: ${image}`);
 
   return {
     title,

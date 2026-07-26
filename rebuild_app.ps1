@@ -44,9 +44,10 @@ Write-Host "Selected Build Number (Version Code): $buildNumber"
 Write-Host "========================================"
 
 $sdkDir = "d:\food\sdks"
+$flutterBin = "$sdkDir\flutter_324\bin\flutter.bat"
 $env:JAVA_HOME = "$sdkDir\jdk"
 $env:ANDROID_HOME = "$sdkDir\android"
-$env:PATH = "$sdkDir\jdk\bin;$sdkDir\android\cmdline-tools\latest\bin;$sdkDir\flutter\bin;" + $env:PATH
+$env:PATH = "$sdkDir\jdk\bin;$sdkDir\android\cmdline-tools\latest\bin;$sdkDir\flutter_324\bin;" + $env:PATH
 
 # 1. Backup keystore and restore Git HEAD mobile_app
 Write-Host "1. Restoring mobile_app from Git HEAD and protecting keystore..."
@@ -67,7 +68,7 @@ if (Test-Path $tempBackupKeystore) {
 # 2. Clean Flutter project
 Write-Host "2. Running flutter clean..."
 Set-Location "d:\food\mobile_app"
-& "$sdkDir\flutter\bin\flutter.bat" clean
+& $flutterBin clean
 
 # 3. Android API 36 settings configuration
 Write-Host "3. Updating build.gradle for compileSdk/targetSdk 36..."
@@ -88,22 +89,22 @@ $wrapperContent = $wrapperContent.Replace("gradle-8.4-all.zip", "gradle-8.7-all.
 $settingsPath = "d:\food\mobile_app\android\settings.gradle"
 $settingsContent = [System.IO.File]::ReadAllText($settingsPath)
 $settingsContent = $settingsContent -replace 'id "com.android.application" version "[^"]+"', 'id "com.android.application" version "8.5.1"'
-$settingsContent = $settingsContent -replace 'id "org.jetbrains.kotlin.android" version "[^"]+"', 'id "org.jetbrains.kotlin.android" version "2.3.0"'
+$settingsContent = $settingsContent -replace 'id "org.jetbrains.kotlin.android" version "[^"]+"', 'id "org.jetbrains.kotlin.android" version "2.0.21"'
 [System.IO.File]::WriteAllText($settingsPath, $settingsContent)
 
 # 5. Pub get and launcher/splash generation
 Write-Host "5. Running pub get and generating icons/splash..."
 Set-Location "d:\food\mobile_app"
-& "$sdkDir\flutter\bin\flutter.bat" pub get
-& "$sdkDir\flutter\bin\flutter.bat" pub run flutter_launcher_icons
-& "$sdkDir\flutter\bin\flutter.bat" pub run flutter_native_splash:create
+& $flutterBin pub get
+& $flutterBin pub run flutter_launcher_icons
+& $flutterBin pub run flutter_native_splash:create
 
 # 6. Build final App Bundle (AAB) and APK
 Write-Host "========================================"
 Write-Host "6. Building release App Bundle (AAB) and APK (Name: $buildName, Number: $buildNumber)..."
 Write-Host "========================================"
-& "$sdkDir\flutter\bin\flutter.bat" build appbundle --release --build-name=$buildName --build-number=$buildNumber --split-debug-info=build/app/outputs/symbols
-& "$sdkDir\flutter\bin\flutter.bat" build apk --release --build-name=$buildName --build-number=$buildNumber --split-debug-info=build/app/outputs/symbols
+& $flutterBin build appbundle --release --build-name=$buildName --build-number=$buildNumber --split-debug-info=build/app/outputs/symbols
+& $flutterBin build apk --release --build-name=$buildName --build-number=$buildNumber --split-debug-info=build/app/outputs/symbols
 
 Write-Host "========================================"
 Write-Host "🎉 Build completed successfully!"

@@ -359,7 +359,19 @@ export class ErrorBoundary extends React.Component {
       }, [data.image]);
 
       useEffect(() => {
-        const isBadTitle = !linkObj.title || linkObj.title.includes("Deeplink Redirect") || linkObj.title === "상세 링크" || linkObj.title === "Deeplink";
+        const titleStr = linkObj.title || "";
+        const imgStr = linkObj.image || "";
+        const isBadTitle = !titleStr || 
+          titleStr.includes("Deeplink") || 
+          titleStr.includes("상세 링크") || 
+          titleStr.includes("추천 링크") || 
+          titleStr.includes("쿠팡 추천") || 
+          titleStr.includes("네이버 장소") || 
+          titleStr.includes("네이버 지도 추천") || 
+          titleStr === "상세 링크" ||
+          imgStr.includes("unsplash") ||
+          !imgStr;
+
         if (isBadTitle || !linkObj.image || !linkObj.description) {
           if (linkUrl && linkUrl.startsWith("http")) {
             fetch(`/api/link-meta?url=${encodeURIComponent(linkUrl)}`)
@@ -395,12 +407,16 @@ export class ErrorBoundary extends React.Component {
           rel="noopener noreferrer"
         >
           {/* [좌측/상단]: 상품 또는 식당 대표 썸네일 이미지 */}
-          <div className="w-16 h-16 rounded-xl bg-zinc-100 overflow-hidden flex-shrink-0 border border-zinc-200/80 relative shadow-inner">
+          <div 
+            className="w-16 h-16 rounded-xl bg-zinc-100 overflow-hidden flex-shrink-0 border border-zinc-200/80 relative shadow-inner"
+            style={{ width: '64px', height: '64px', minWidth: '64px', minHeight: '64px', flexShrink: 0 }}
+          >
             <img 
               src={imgSrc} 
               alt={data.title} 
               onError={() => setImgSrc(defaultImage)}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
             {isMap && (
               <div className="absolute inset-0 bg-emerald-950/20 flex items-center justify-center text-white text-base">
@@ -410,7 +426,7 @@ export class ErrorBoundary extends React.Component {
           </div>
 
           {/* [우측/하단]: 상세 브랜드, 상품명/식당이름, 가격 및 카드 설명 */}
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1" style={{ flex: 1, minWidth: 0 }}>
             <div className="flex items-center gap-1.5 mb-1">
               <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded border ${
                 isMap 
@@ -439,7 +455,7 @@ export class ErrorBoundary extends React.Component {
             </p>
           </div>
 
-          <div className="flex-shrink-0 pl-1 text-zinc-400 group-hover:text-emerald-600 transition-colors">
+          <div className="flex-shrink-0 pl-1 text-zinc-400 group-hover:text-emerald-600 transition-colors" style={{ flexShrink: 0 }}>
             <i className={`fa-solid ${isMap ? 'fa-arrow-up-right-from-square text-emerald-500' : 'fa-chevron-right'} text-xs`}></i>
           </div>
         </a>
@@ -500,22 +516,19 @@ export class ErrorBoundary extends React.Component {
     // --- 3. 하위 컴포넌트 선언 ---
 
     const AdBannerAdSense = React.memo(function AdBannerAdSense() {
+      const isNativeApp = typeof window !== 'undefined' && window.flutter_inappwebview && window.flutter_inappwebview.callHandler;
+      if (isNativeApp) return null;
+
       return (
-        <div className="ad-banner cursor-pointer my-2 p-3 bg-gradient-to-r from-amber-50/90 via-orange-50/90 to-amber-50/90 border border-amber-200/80 rounded-2xl shadow-xs transition-all hover:shadow-sm" style={{ minHeight: "80px" }}>
-          <div className="text-[10px] font-bold text-amber-600 tracking-wider mb-0.5 flex items-center justify-between">
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-              SPONSORED · PLATING PARTNER
-            </span>
-            <span className="text-[9px] text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded font-medium">추천 구역</span>
-          </div>
-          <div className="text-xs font-bold text-zinc-900 mb-0.5 flex items-center justify-between">
-            <span>🍳 요리할 때 필수! 감성 타이머 & 주방 특가</span>
-            <i className="fa-solid fa-chevron-right text-[10px] text-zinc-400"></i>
-          </div>
-          <div className="text-[10px] text-zinc-500">
-            sponsored by Plating Partner
-          </div>
+        <div className="w-full my-2 px-3 py-1 bg-zinc-50 border border-zinc-200/80 rounded-xl overflow-hidden shadow-xs flex justify-center items-center min-h-[50px]">
+          <ins
+            className="adsbygoogle"
+            style={{ display: 'block', width: '100%', height: '50px', textAlign: 'center' }}
+            data-ad-client="ca-pub-3878859120989916"
+            data-ad-slot="2421488045"
+            data-ad-format="horizontal"
+            data-full-width-responsive="true"
+          />
         </div>
       );
     }, () => true);
@@ -2501,32 +2514,40 @@ export class ErrorBoundary extends React.Component {
         try {
           setLoading(true);
 
-          const productLinks = links.map(l => {
-            const preview = linkPreviews[l.id];
-            if (preview && !preview.loading) {
-              return {
-                id: generateId(),
-                url: l.url.trim(),
-                title: preview.title || l.parsedName || "상세 링크",
-                image: preview.image || "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&q=80&w=400",
-                description: preview.description || "",
-                price: preview.price || "",
-                host: preview.host || new URL(l.url.trim()).hostname.replace("www.", "")
-              };
-            } else {
-              let host = "link";
-              try { host = new URL(l.url.trim()).hostname.replace("www.", ""); } catch(err) {}
-              return {
-                id: generateId(),
-                url: l.url.trim(),
-                title: l.parsedName || "상세 링크",
-                image: "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&q=80&w=400",
-                description: "",
-                price: "",
-                host
-              };
+          const productLinks = (await Promise.all(links.map(async (l) => {
+            const rawUrl = l.url.trim();
+            if (!rawUrl) return null;
+
+            let preview = linkPreviews[l.id];
+            const isFallbackPreview = !preview || preview.loading || !preview.title || 
+              preview.title.includes("상세 링크") || preview.title.includes("쿠팡 추천") || preview.title.includes("네이버 장소");
+
+            if (isFallbackPreview && rawUrl.startsWith("http")) {
+              try {
+                const fetchedMeta = await fetchLinkMeta(rawUrl);
+                if (fetchedMeta && fetchedMeta.title) preview = fetchedMeta;
+              } catch(e) {}
             }
-          }).filter(l => l.url !== "");
+
+            let host = "link";
+            try { host = new URL(rawUrl).hostname.replace("www.", ""); } catch(err) {}
+            if (host.includes("coupang")) host = "쿠팡";
+            else if (host.includes("naver") || host.includes("map")) host = "네이버 지도";
+
+            return {
+              id: generateId(),
+              url: rawUrl,
+              title: preview?.title || l.parsedName || (host === "쿠팡" ? "쿠팡 추천 상품" : (host === "네이버 지도" ? "네이버 지도 장소" : "상세 추천 링크")),
+              image: preview?.image || (host === "네이버 지도" 
+                ? "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=400"
+                : (host === "쿠팡" 
+                  ? "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&q=80&w=400"
+                  : "https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=400")),
+              description: preview?.description || "",
+              price: preview?.price || "",
+              host: preview?.host || host
+            };
+          }))).filter(Boolean);
 
           const detectedTags = extractHashtags(body);
           let placeInfo = null;
@@ -3393,18 +3414,19 @@ export class ErrorBoundary extends React.Component {
         };
       }, [clientId]);
 
-      // 지도 탭이 활성화될 때 네이버 지도 resize 강제 트리거 (흰색 화면 방지)
+        // 지도 탭이 활성화될 때 네이버 지도 resize 강제 트리거 (흰색 화면 방지)
       useEffect(() => {
         if (!isActive || !mapInstanceRef.current || !window.naver || !window.naver.maps) return;
-        // display:none → block 전환 후 지도 크기를 재계산시킵니다.
+        // display:none → block 전환 후 충분한 시간을 주고 지도 크기를 재계산시킵니다.
         const tid = setTimeout(() => {
           try {
+            window.dispatchEvent(new Event('resize'));
             window.naver.maps.Event.trigger(mapInstanceRef.current, 'resize');
             mapInstanceRef.current.autoResize();
           } catch (e) {
             console.warn('Map resize trigger error:', e);
           }
-        }, 50);
+        }, 150);
         return () => clearTimeout(tid);
       }, [isActive]);
 
@@ -3619,7 +3641,7 @@ export class ErrorBoundary extends React.Component {
       };
 
       return (
-        <div className="w-full relative bg-zinc-900 select-none overflow-hidden" style={{ height: "100%" }}>
+        <div className="w-full relative bg-zinc-900 select-none overflow-hidden" style={{ flex: 1, minHeight: 0 }}>
           {/* 상단 플로팅 음식점 검색바 */}
           <div className="absolute top-4 left-4 right-4 z-20">
             <form onSubmit={handleSearch} className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-zinc-200 p-2 flex items-center gap-2 transition-all hover:shadow-2xl">
@@ -3689,7 +3711,7 @@ export class ErrorBoundary extends React.Component {
               </p>
             </div>
           ) : (
-            <div ref={mapRef} className="w-full h-full" style={{ touchAction: 'none', webkitUserSelect: 'none', userSelect: 'none', willChange: 'transform', transform: 'translateZ(0)' }}></div>
+            <div ref={mapRef} className="w-full" style={{ flex: 1, minHeight: 0, width: '100%', touchAction: 'none', WebkitUserSelect: 'none', userSelect: 'none', willChange: 'transform', transform: 'translateZ(0)' }}></div>
           )}
 
           {/* [수정 1, 2, 3, 4] 마커 탭 시 슬라이드업 바텀 시트 */}
@@ -5011,6 +5033,13 @@ export class ErrorBoundary extends React.Component {
       const [loginOpen, setLoginOpen] = useState(false);
       const [isLoggedIn, setIsLoggedIn] = useState(false);
       const [appInitializing, setAppInitializing] = useState(true);
+
+      // 네이티브 앱(Flutter WebView)으로 로그인 상태 변경 알림
+      useEffect(() => {
+        if (typeof window !== "undefined" && window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+          window.flutter_inappwebview.callHandler('onLoginStatusChanged', { isLoggedIn: isLoggedIn }).catch(() => {});
+        }
+      }, [isLoggedIn]);
       const [writeInitialImages, setWriteInitialImages] = useState([]);
       const [communityInitialImages, setCommunityInitialImages] = useState([]);
 
@@ -6937,7 +6966,15 @@ export class ErrorBoundary extends React.Component {
             </div>
           )}
 
-          <main className="flex-1 overflow-y-auto no-scrollbar" style={{ position: "relative" }}>
+          <main
+            className="no-scrollbar"
+            style={{
+              flex: 1,
+              overflowY: activeTab === "map" ? "hidden" : "auto",
+              display: "flex",
+              flexDirection: "column"
+            }}
+          >
             {activeTab === "home" && (
               <div className="masonry-feed">
                 {selectedCategory === "팔로잉" && filteredPosts.length === 0 ? (
@@ -7144,17 +7181,11 @@ export class ErrorBoundary extends React.Component {
               />
             )}
 
-            <div style={{
-              display: activeTab === "map" ? "block" : "none",
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              overflow: "hidden"
-            }}>
-              <NaverMapView posts={posts} onPostClick={handleRecipePostClick} isActive={activeTab === "map"} />
-            </div>
+            {activeTab === "map" && (
+              <div style={{ flex: 1, height: "100%", overflow: "hidden" }}>
+                <NaverMapView posts={posts} onPostClick={handleRecipePostClick} isActive={true} />
+              </div>
+            )}
 
             {activeTab === "mypage" && (
               <MyPage 
@@ -7206,7 +7237,7 @@ export class ErrorBoundary extends React.Component {
             )}
           </main>
 
-          {/* 홈 화면 우측 하단 플로팅 글쓰기 버튼 */}
+
           {activeTab === 'home' && (
             <button 
               className="community-fab"

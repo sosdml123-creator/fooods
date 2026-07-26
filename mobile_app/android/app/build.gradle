@@ -27,7 +27,7 @@ if (flutterVersionName == null) {
 android {
     namespace = "com.foodhouse.plating_mobile_app"
     compileSdk = 36
-    ndkVersion = "26.1.10909125"
+    ndkVersion = "27.0.12077973"
 
     kotlinOptions {
         jvmTarget = '1.8'
