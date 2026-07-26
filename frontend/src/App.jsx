@@ -3573,12 +3573,17 @@ export class ErrorBoundary extends React.Component {
     const NaverMapView = React.memo(function NaverMapView({ posts, onPostClick, isActive }) {
       const mapRef = useRef(null);
       const mapInstanceRef = useRef(null);
-      const markersRef = useRef([]);
+      const markersRef = useRef([]);        // 게시글 마커 (useEffect 클리어 대상)
+      const searchMarkersRef = useRef([]); // 검색 마커 (별도 관리, useEffect에서 클리어하지 않음)
       const [mapLoaded, setMapLoaded] = useState(false);
       const [authError, setAuthError] = useState(false);
       const [searchQuery, setSearchQuery] = useState("");
       const [searching, setSearching] = useState(false);
+      const [searchResultCount, setSearchResultCount] = useState(null); // 검색 결과 수
       const [selectedPlace, setSelectedPlace] = useState(null);
+      const [myLocation, setMyLocation] = useState(null); // GPS 현재 위치
+      const [locating, setLocating] = useState(false);    // GPS 로딩
+      const myLocationMarkerRef = useRef(null);           // 내 위치 마커
       const clientId = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || "u35nq8hdr1";
 
       // [수정 2] 지도 탭 카테고리 필터 칩 상태 (전체 / 맛집 / 카페 / 배달)
@@ -3625,7 +3630,8 @@ export class ErrorBoundary extends React.Component {
         if (window.naver && window.naver.maps && window.naver.maps.LatLng) {
           setMapLoaded(true);
         } else {
-          const scriptUrl = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${clientId}&submodules=geocoder`;
+          // transcoord 서브모듈 포함 (TM128→WGS84 좌표 변환 필요)
+          const scriptUrl = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${clientId}&submodules=geocoder,transcoord`;
           const existingScript = document.querySelector(`script[src*="oapi.map.naver.com"]`);
           if (!existingScript) {
             const script = document.createElement("script");
@@ -3645,6 +3651,56 @@ export class ErrorBoundary extends React.Component {
           }
         };
       }, [clientId]);
+
+      // GPS 내 위치 이동 함수
+      const handleMyLocation = () => {
+        if (!navigator.geolocation) {
+          alert("이 기기에서는 위치 서비스를 지원하지 않습니다.");
+          return;
+        }
+        setLocating(true);
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            setMyLocation({ lat, lng });
+            if (mapInstanceRef.current && window.naver && window.naver.maps) {
+              const latlng = new window.naver.maps.LatLng(lat, lng);
+              mapInstanceRef.current.setCenter(latlng);
+              mapInstanceRef.current.setZoom(16);
+
+              // 기존 내 위치 마커 제거
+              if (myLocationMarkerRef.current) {
+                myLocationMarkerRef.current.setMap(null);
+              }
+              // 내 위치 마커 추가
+              myLocationMarkerRef.current = new window.naver.maps.Marker({
+                position: latlng,
+                map: mapInstanceRef.current,
+                icon: {
+                  content: `<div style="width:18px;height:18px;background:#2563eb;border:3px solid white;border-radius:50%;box-shadow:0 2px 8px rgba(37,99,235,0.5);animation:pulse 1.5s infinite;"></div>`,
+                  anchor: new window.naver.maps.Point(9, 9)
+                },
+                title: "현재 내 위치"
+              });
+            }
+            setLocating(false);
+          },
+          (err) => {
+            console.warn("GPS Error:", err.message);
+            alert("위치 정보를 가져오지 못했습니다. 위치 권한을 확인해 주세요.");
+            setLocating(false);
+          },
+          { timeout: 10000, maximumAge: 30000 }
+        );
+      };
+
+      // 지도 줌 커스텀 버튼
+      const handleZoom = (delta) => {
+        if (!mapInstanceRef.current) return;
+        const current = mapInstanceRef.current.getZoom();
+        mapInstanceRef.current.setZoom(Math.max(6, Math.min(21, current + delta)));
+      };
 
         // 지도 탭이 활성화될 때 네이버 지도 resize 강제 트리거 (흰색 화면 방지)
       useEffect(() => {
@@ -3866,16 +3922,31 @@ export class ErrorBoundary extends React.Component {
         if (mapInstanceRef.current && window.naver && window.naver.maps) {
           const newCenter = new window.naver.maps.LatLng(lat, lng);
           mapInstanceRef.current.setCenter(newCenter);
-          mapInstanceRef.current.setZoom(15);
+          mapInstanceRef.current.setZoom(16);
 
+          // 기존 검색 마커 모두 제거 (게시글 마커 markersRef와 독립적으로 관리)
+          searchMarkersRef.current.forEach(m => { try { m.setMap(null); } catch(e) {} });
+          searchMarkersRef.current = [];
+
+          // 검색 결과 마커 생성 (animation 없이 안전하게)
           const searchMarker = new window.naver.maps.Marker({
             position: newCenter,
             map: mapInstanceRef.current,
             title: titleName,
-            animation: window.naver.maps.Animation.BOUNCE
+            icon: {
+              content: `<div style="
+                display:flex;align-items:center;gap:5px;
+                background:#059669;color:white;
+                padding:6px 12px;border-radius:9999px;
+                box-shadow:0 4px 16px rgba(5,150,105,0.45);
+                font-size:12px;font-weight:700;white-space:nowrap;
+                border:2px solid white;
+              "><span>🔍</span><span>${titleName}</span></div>`,
+              anchor: new window.naver.maps.Point(20, 18)
+            }
           });
-          setTimeout(() => searchMarker.setAnimation(null), 1500);
-          markersRef.current.push(searchMarker);
+          searchMarkersRef.current.push(searchMarker);
+          setSearchResultCount(1);
         }
 
         setSelectedPlace({
@@ -3893,7 +3964,7 @@ export class ErrorBoundary extends React.Component {
         <div className="w-full h-full relative bg-zinc-900 select-none overflow-hidden flex flex-col flex-1 min-h-0" style={{ flex: 1, height: "100%", minHeight: 0 }}>
           {/* 상단 플로팅 음식점 검색바 */}
           <div className="absolute top-4 left-4 right-4 z-20">
-            <form onSubmit={handleSearch} className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-zinc-200 p-2 flex items-center gap-2 transition-all hover:shadow-2xl">
+            <form onSubmit={handleSearch} className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-zinc-200 p-2 flex items-center gap-2 transition-all hover:shadow-2xl" onReset={() => { setSearchQuery(""); setSearchResultCount(null); searchMarkersRef.current.forEach(m => { try { m.setMap(null); } catch(e) {} }); searchMarkersRef.current = []; setSelectedPlace(null); }}>
               <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center font-bold flex-shrink-0 shadow-md">
                 <i className="fa-solid fa-utensils text-sm"></i>
               </div>
@@ -3907,7 +3978,7 @@ export class ErrorBoundary extends React.Component {
               {searchQuery && (
                 <button
                   type="button"
-                  onClick={() => setSearchQuery("")}
+                  onClick={() => { setSearchQuery(""); setSearchResultCount(null); searchMarkersRef.current.forEach(m => { try { m.setMap(null); } catch(e) {} }); searchMarkersRef.current = []; setSelectedPlace(null); }}
                   className="text-zinc-400 hover:text-zinc-600 p-1"
                 >
                   <i className="fa-solid fa-circle-xmark"></i>
@@ -3946,6 +4017,51 @@ export class ErrorBoundary extends React.Component {
                 </button>
               ))}
             </div>
+            {/* 검색 결과 배지 */}
+            {searchResultCount !== null && (
+              <div className="mt-2 px-1">
+                <span className="inline-flex items-center gap-1.5 bg-emerald-600 text-white text-[11px] font-bold px-3 py-1 rounded-full shadow-md">
+                  <i className="fa-solid fa-location-dot"></i>
+                  검색 결과 {searchResultCount}곳 지도에 표시됨
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* 우측 플로팅 컨트롤 버튼 (GPS + 줌) */}
+          <div className="absolute right-4 bottom-24 z-20 flex flex-col gap-2">
+            {/* 내 위치 GPS 버튼 */}
+            <button
+              type="button"
+              onClick={handleMyLocation}
+              disabled={locating}
+              title="내 위치로 이동"
+              className="w-11 h-11 rounded-2xl bg-white/95 backdrop-blur-md shadow-xl border border-zinc-200 flex items-center justify-center text-blue-600 hover:bg-blue-50 hover:border-blue-300 transition-all active:scale-95 disabled:opacity-50"
+            >
+              {locating ? (
+                <i className="fa-solid fa-spinner animate-spin text-sm"></i>
+              ) : (
+                <i className="fa-solid fa-location-crosshairs text-sm"></i>
+              )}
+            </button>
+            {/* 줌인 버튼 */}
+            <button
+              type="button"
+              onClick={() => handleZoom(1)}
+              title="확대"
+              className="w-11 h-11 rounded-t-2xl rounded-b-none bg-white/95 backdrop-blur-md shadow-xl border border-b-0 border-zinc-200 flex items-center justify-center text-zinc-700 hover:bg-zinc-50 transition-all active:scale-95 text-lg font-bold"
+            >
+              +
+            </button>
+            {/* 줌아웃 버튼 */}
+            <button
+              type="button"
+              onClick={() => handleZoom(-1)}
+              title="축소"
+              className="w-11 h-11 rounded-b-2xl rounded-t-none bg-white/95 backdrop-blur-md shadow-xl border border-zinc-200 flex items-center justify-center text-zinc-700 hover:bg-zinc-50 transition-all active:scale-95 text-lg font-bold"
+            >
+              −
+            </button>
           </div>
 
           {/* 지도 메인 캔버스 */}
