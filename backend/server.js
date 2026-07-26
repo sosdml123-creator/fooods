@@ -316,46 +316,72 @@ async function fetchDeepLinkMeta(initialUrl) {
     }
   }
 
-  // 3단계: 쿠팡 (link.coupang.com) 딥링크/JS 리다이렉트 및 meta refresh 추적 (최대 2회)
-  let redirectCount = 0;
-  while ((isCoupang || finalHtml.includes("Deeplink Redirect") || finalHtml.includes("deeplink") || finalHtml.includes("http-equiv=\"refresh\"")) && redirectCount < 2) {
-    const refreshMatch = finalHtml.match(/content=["']\d+;\s*url=([^"']+)["']/i) ||
-                         finalHtml.match(/location\.(?:href|replace)\s*=\s*["']([^"']+)["']/i) ||
-                         finalHtml.match(/(https:\/\/(?:www\.)?coupang\.com\/vp\/products\/[^\s"'<]+)/i) ||
-                         finalHtml.match(/(https:\/\/(?:www\.)?coupang\.com\/[^\s"'<]+)/i);
+  // 3단계: 쿠팡 (link.coupang.com) JS/Meta Refresh 딥링크 리다이렉트 추적 (최대 3회)
+  const extractRedirectUrl = (html) => {
+    if (!html) return null;
+    const matchHref = html.match(/location\.href\s*=\s*["']([^"']+)["']/i);
+    if (matchHref && matchHref[1]) return matchHref[1];
 
-    if (refreshMatch && refreshMatch[1]) {
-      redirectCount++;
-      let nextUrl = refreshMatch[1].replace(/&amp;/g, "&");
-      if (nextUrl.startsWith("/")) {
-        try {
-          const u = new URL(finalUrl);
-          nextUrl = `${u.protocol}//${u.host}${nextUrl}`;
-        } catch(e) {}
-      }
+    const matchReplace = html.match(/location\.replace\s*\(\s*["']([^"']+)["']\s*\)/i);
+    if (matchReplace && matchReplace[1]) return matchReplace[1];
+
+    const matchWindowLoc = html.match(/window\.location(?:\.href)?\s*=\s*["']([^"']+)["']/i);
+    if (matchWindowLoc && matchWindowLoc[1]) return matchWindowLoc[1];
+
+    const matchDocLoc = html.match(/document\.location(?:\.href)?\s*=\s*["']([^"']+)["']/i);
+    if (matchDocLoc && matchDocLoc[1]) return matchDocLoc[1];
+
+    const matchMetaRefresh = html.match(/<meta[^>]*http-equiv=["']refresh["'][^>]*content=["']\d+;\s*url=([^"']+)["']/i) ||
+                             html.match(/content=["']\d+;\s*url=([^"']+)["']/i);
+    if (matchMetaRefresh && matchMetaRefresh[1]) return matchMetaRefresh[1];
+
+    const matchProductUrl = html.match(/(https:\/\/(?:www\.)?coupang\.com\/vp\/products\/[^\s"'<>]+)/i) ||
+                            html.match(/(https:\/\/(?:www\.)?coupang\.com\/[^\s"'<>]+)/i);
+    if (matchProductUrl && matchProductUrl[1]) return matchProductUrl[1];
+
+    return null;
+  };
+
+  let redirectStep = 0;
+  while ((isCoupang || finalHtml.includes("Deeplink Redirect") || finalHtml.includes("deeplink") || finalHtml.includes("location") || finalHtml.includes("refresh")) && redirectStep < 3) {
+    const nextRawUrl = extractRedirectUrl(finalHtml);
+    if (!nextRawUrl) break;
+
+    let nextUrl = nextRawUrl.replace(/&amp;/g, "&");
+    if (nextUrl.startsWith("/")) {
       try {
-        console.log(`[LinkMeta Debug] Meta/JS Refresh Redirect #${redirectCount} to URL: ${nextUrl}`);
-        const res2 = await axios.get(nextUrl, {
-          timeout: 5000,
-          headers: mobileHeaders,
-          maxRedirects: 5
-        });
-        if (typeof res2.data === "string" && res2.data.length > 500) {
-          finalHtml = res2.data;
-          finalUrl = nextUrl;
-          responseStatusCode = res2.status;
-          console.log(`[LinkMeta Debug] Refresh response status: ${responseStatusCode}, HTML length: ${finalHtml.length}`);
-        } else {
-          break;
-        }
-      } catch (err2) {
-        console.error("[LinkMeta Debug] Coupang Refresh Fetch Error:", err2.message);
+        const u = new URL(finalUrl);
+        nextUrl = `${u.protocol}//${u.host}${nextUrl}`;
+      } catch(e) {}
+    }
+
+    if (nextUrl === finalUrl) break;
+
+    redirectStep++;
+    console.log(`[LinkMeta Debug] JS Redirect step ${redirectStep} -> URL: ${nextUrl}`);
+
+    try {
+      const res2 = await axios.get(nextUrl, {
+        timeout: 5000,
+        headers: mobileHeaders,
+        maxRedirects: 5
+      });
+      if (typeof res2.data === "string" && res2.data.length > 500) {
+        finalHtml = res2.data;
+        finalUrl = nextUrl;
+        responseStatusCode = res2.status;
+        console.log(`[LinkMeta Debug] JS Redirect step ${redirectStep} response status: ${responseStatusCode}, HTML length: ${finalHtml.length}`);
+      } else {
         break;
       }
-    } else {
+    } catch (err2) {
+      console.error(`[LinkMeta Debug] JS Redirect step ${redirectStep} fetch error:`, err2.message);
       break;
     }
   }
+
+  const isProductPage = finalUrl.includes("coupang.com/vp/products/");
+  console.log(`[LinkMeta Debug] Final page URL is coupang product page: ${isProductPage} (${finalUrl})`);
 
   let host = "link";
   try {
