@@ -2294,15 +2294,17 @@ export class ErrorBoundary extends React.Component {
               let lat = item.lat;
               let lng = item.lng;
 
-              // 백엔드에서 lat/lng가 바로 안 구해진 경우, SDK TransCoord 2차 시도
-              if ((!lat || !lng) && window.naver && window.naver.maps && window.naver.maps.TransCoord && item.mapx && item.mapy) {
-                try {
-                  const pt = new window.naver.maps.Point(parseInt(item.mapx), parseInt(item.mapy));
-                  const latLng = window.naver.maps.TransCoord.fromTM128ToLatLng(pt);
-                  lat = latLng.lat();
-                  lng = latLng.lng();
-                } catch (e) {
-                  console.warn("TransCoord conversion failed:", e);
+              // 백엔드 lat/lng 파싱 보강 (mapx: 경도*10^7, mapy: 위도*10^7)
+              if (!lat || !lng) {
+                const mx = parseFloat(item.mapx);
+                const my = parseFloat(item.mapy);
+                if (!isNaN(mx) && !isNaN(my) && mx > 0 && my > 0) {
+                  const calcLng = mx / 10000000.0;
+                  const calcLat = my / 10000000.0;
+                  if (calcLat >= 33 && calcLat <= 39 && calcLng >= 124 && calcLng <= 132) {
+                    lat = calcLat;
+                    lng = calcLng;
+                  }
                 }
               }
 
@@ -3879,14 +3881,16 @@ export class ErrorBoundary extends React.Component {
             let lat = item.lat;
             let lng = item.lng;
 
-            if ((!lat || !lng) && window.naver && window.naver.maps && window.naver.maps.TransCoord && item.mapx && item.mapy) {
-              try {
-                const pt = new window.naver.maps.Point(parseInt(item.mapx), parseInt(item.mapy));
-                const latLng = window.naver.maps.TransCoord.fromTM128ToLatLng(pt);
-                lat = latLng.lat();
-                lng = latLng.lng();
-              } catch (e) {
-                console.warn("TransCoord conversion failed:", e);
+            if (!lat || !lng) {
+              const mx = parseFloat(item.mapx);
+              const my = parseFloat(item.mapy);
+              if (!isNaN(mx) && !isNaN(my) && mx > 0 && my > 0) {
+                const calcLng = mx / 10000000.0;
+                const calcLat = my / 10000000.0;
+                if (calcLat >= 33 && calcLat <= 39 && calcLng >= 124 && calcLng <= 132) {
+                  lat = calcLat;
+                  lng = calcLng;
+                }
               }
             }
 
