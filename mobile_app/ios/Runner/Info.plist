@@ -81,5 +81,8 @@
 		<string>글쓰기 시 갤러리에서 음식 사진을 선택하기 위해 사진 라이브러리 권한이 필요합니다.</string>
 		<key>NSPhotoLibraryAddUsageDescription</key>
 		<string>사진 저장을 위해 권한이 필요합니다.</string>
+		<!-- Apple Encryption Export Compliance Bypassing -->
+		<key>ITSAppUsesNonExemptEncryption</key>
+		<false/>
 	</dict>
 </plist>
