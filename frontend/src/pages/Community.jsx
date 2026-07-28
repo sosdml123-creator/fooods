@@ -275,7 +275,7 @@ export function CommunityDetailView({
   const [openCommentKebabId, setOpenCommentKebabId] = useState(null);
 
   const isMyPost = post.userId === currentUserUid || post.author === "나" || post.author === currentUserName;
-  const isAdmin = currentUserRole === "admin";
+  const isAdmin = currentUserRole === "admin" || currentUserRole === "SUPER_ADMIN" || currentUserName === "어드민";
 
   useEffect(() => {
     setEditComTitle(post.title);
@@ -490,13 +490,21 @@ export function CommunityDetailView({
                             <button onClick={() => { setReplyingToId(c.id); setOpenCommentKebabId(null); }}>
                               답글 달기
                             </button>
-                            {!isAdmin && isMyComment && (
-                              <>
-                                <button onClick={() => { startEditComment(c); setOpenCommentKebabId(null); }}>수정</button>
-                                <button className="delete-btn" onClick={() => { onDeleteComment(post.id, c.id); setOpenCommentKebabId(null); }}>삭제</button>
-                              </>
+                            {isMyComment && (
+                              <button onClick={() => { startEditComment(c); setOpenCommentKebabId(null); }}>수정</button>
                             )}
-                            {!isAdmin && !isMyComment && (
+                            {(isMyComment || isAdmin) && (
+                              <button 
+                                className="delete-btn font-bold text-red-650"
+                                onClick={() => { 
+                                  onDeleteComment(post.id, c.id); 
+                                  setOpenCommentKebabId(null); 
+                                }}
+                              >
+                                {isAdmin && !isMyComment ? "삭제 (관리자)" : "삭제"}
+                              </button>
+                            )}
+                            {!isMyComment && (
                               <button 
                                 className="text-red-500 font-bold"
                                 onClick={() => {
@@ -507,17 +515,6 @@ export function CommunityDetailView({
                                 }}
                               >
                                 🚩 신고하기
-                              </button>
-                            )}
-                            {isAdmin && (
-                              <button 
-                                className="delete-btn font-bold text-red-650"
-                                onClick={() => { 
-                                  onDeleteComment(post.id, c.id); 
-                                  setOpenCommentKebabId(null); 
-                                }}
-                              >
-                                삭제 (관리자)
                               </button>
                             )}
                           </div>

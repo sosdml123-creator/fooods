@@ -681,7 +681,7 @@ export class ErrorBoundary extends React.Component {
 
       const isVideo = post.mediaType === "video";
       const isMyPost = post.author === "나" || post.author === currentUserName;
-      const isAdmin = currentUserRole === "admin";
+      const isAdmin = currentUserRole === "admin" || currentUserRole === "SUPER_ADMIN" || profile?.role === "admin" || currentUserName === "어드민";
 
       useEffect(() => {
         setEditTitle(post.title);
@@ -849,18 +849,30 @@ export class ErrorBoundary extends React.Component {
                                 </>
                               )
                             ) : (
-                              <button 
-                                type="button"
-                                className="comment-action-btn text-rose-500 font-semibold"
-                                onClick={() => {
-                                  if (window.openReportModal) {
-                                    window.openReportModal("comment", c.id, c.author, c.text);
-                                  }
-                                }}
-                                title="신고"
-                              >
-                                <i className="fa-regular fa-bell text-[10px] text-rose-500 mr-0.5"></i>신고
-                              </button>
+                              <div className="flex items-center gap-1.5">
+                                {isAdmin && (
+                                  <button 
+                                    type="button"
+                                    className="comment-action-btn delete font-semibold text-red-650"
+                                    onClick={() => onDeleteComment(post.id, c.id)}
+                                    title="삭제 (관리자)"
+                                  >
+                                    <i className="fa-solid fa-trash text-red-500 mr-0.5"></i>삭제
+                                  </button>
+                                )}
+                                <button 
+                                  type="button"
+                                  className="comment-action-btn text-rose-500 font-semibold"
+                                  onClick={() => {
+                                    if (window.openReportModal) {
+                                      window.openReportModal("comment", c.id, c.author, c.text);
+                                    }
+                                  }}
+                                  title="신고"
+                                >
+                                  <i className="fa-regular fa-bell text-[10px] text-rose-500 mr-0.5"></i>신고
+                                </button>
+                              </div>
                             )}
                           </div>
                         </div>
@@ -1490,7 +1502,7 @@ export class ErrorBoundary extends React.Component {
       const [openCommentKebabId, setOpenCommentKebabId] = useState(null);
 
       const isMyPost = post.author === "나" || post.author === currentUserName;
-      const isAdmin = currentUserRole === "admin";
+      const isAdmin = currentUserRole === "admin" || currentUserRole === "SUPER_ADMIN" || profile?.role === "admin" || currentUserName === "어드민";
 
       useEffect(() => {
         setEditComTitle(post.title);
@@ -1724,13 +1736,21 @@ export class ErrorBoundary extends React.Component {
                                 <button onClick={() => { setReplyingToId(c.id); setOpenCommentKebabId(null); }}>
                                   답글 달기
                                 </button>
-                                {!isAdmin && isMyComment && (
-                                  <>
-                                    <button onClick={() => { startEditComment(c); setOpenCommentKebabId(null); }}>수정</button>
-                                    <button className="delete-btn" onClick={() => { onDeleteComment(post.id, c.id); setOpenCommentKebabId(null); }}>삭제</button>
-                                  </>
+                                {isMyComment && (
+                                  <button onClick={() => { startEditComment(c); setOpenCommentKebabId(null); }}>수정</button>
                                 )}
-                                {!isAdmin && !isMyComment && (
+                                {(isMyComment || isAdmin) && (
+                                  <button 
+                                    className="delete-btn font-bold text-red-650" 
+                                    onClick={() => { 
+                                      onDeleteComment(post.id, c.id); 
+                                      setOpenCommentKebabId(null); 
+                                    }}
+                                  >
+                                    {isAdmin && !isMyComment ? "삭제 (관리자)" : "삭제"}
+                                  </button>
+                                )}
+                                {!isMyComment && (
                                   <button 
                                     className="text-red-500 font-bold"
                                     onClick={() => {
@@ -1741,17 +1761,6 @@ export class ErrorBoundary extends React.Component {
                                     }}
                                   >
                                     🚩 신고하기
-                                  </button>
-                                )}
-                                {isAdmin && (
-                                  <button 
-                                    className="delete-btn font-bold text-red-650"
-                                    onClick={() => { 
-                                      onDeleteComment(post.id, c.id); 
-                                      setOpenCommentKebabId(null); 
-                                    }}
-                                  >
-                                    삭제 (관리자)
                                   </button>
                                 )}
                               </div>
@@ -4668,9 +4677,29 @@ export class ErrorBoundary extends React.Component {
               }
             }
           } else if (targetType === "comment") {
-            const parentId = targetParentId || comPosts.find(p => p.comments.some(c => c.id === targetId))?.id;
+            let parentId = targetParentId;
+            let targetColl = "community_posts";
             if (parentId) {
-              const postRef = db.collection("community_posts").doc(parentId);
+              let pDoc = await db.collection("community_posts").doc(parentId).get();
+              if (!pDoc.exists) {
+                pDoc = await db.collection("posts").doc(parentId).get();
+                targetColl = "posts";
+              }
+            } else {
+              let foundCom = comPosts.find(p => (p.comments || []).some(c => c.id === targetId));
+              if (foundCom) {
+                parentId = foundCom.id;
+                targetColl = "community_posts";
+              } else {
+                let foundRec = (posts || []).find(p => (p.comments || []).some(c => c.id === targetId));
+                if (foundRec) {
+                  parentId = foundRec.id;
+                  targetColl = "posts";
+                }
+              }
+            }
+            if (parentId) {
+              const postRef = db.collection(targetColl).doc(parentId);
               await db.runTransaction(async (transaction) => {
                 const doc = await transaction.get(postRef);
                 if (doc.exists) {

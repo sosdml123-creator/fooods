@@ -156,9 +156,29 @@ function AdminReportsView({
           }
         }
       } else if (targetType === "comment") {
-        const parentId = targetParentId || comPosts.find(p => p.comments.some(c => c.id === targetId))?.id;
+        let parentId = targetParentId;
+        let targetColl = "community_posts";
         if (parentId) {
-          const postRef = db.collection("community_posts").doc(parentId);
+          let pDoc = await db.collection("community_posts").doc(parentId).get();
+          if (!pDoc.exists) {
+            pDoc = await db.collection("posts").doc(parentId).get();
+            targetColl = "posts";
+          }
+        } else {
+          let foundCom = comPosts.find(p => (p.comments || []).some(c => c.id === targetId));
+          if (foundCom) {
+            parentId = foundCom.id;
+            targetColl = "community_posts";
+          } else {
+            let foundRec = (posts || []).find(p => (p.comments || []).some(c => c.id === targetId));
+            if (foundRec) {
+              parentId = foundRec.id;
+              targetColl = "posts";
+            }
+          }
+        }
+        if (parentId) {
+          const postRef = db.collection(targetColl).doc(parentId);
           await db.runTransaction(async (transaction) => {
             const doc = await transaction.get(postRef);
             if (doc.exists) {
