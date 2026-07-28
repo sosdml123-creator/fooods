@@ -981,8 +981,12 @@ export class ErrorBoundary extends React.Component {
         return () => { isMounted = false; };
       }, [userName, db, creatorInfo]);
 
-      const effectiveFollowersCount = userFollowersList.length > 0 ? userFollowersList.length : (creatorInfo.followersCount || 0);
-      const effectiveFollowingCount = userFollowingList.length > 0 ? userFollowingList.length : (creatorInfo.followingCount || 0);
+      const effectiveFollowersCount = loadingFollows 
+        ? (creatorInfo.followersCount || 0) 
+        : userFollowersList.length;
+      const effectiveFollowingCount = loadingFollows 
+        ? (creatorInfo.followingCount || 0) 
+        : userFollowingList.length;
 
       const currentLoggedUser = profile?.name || auth?.currentUser?.displayName || "";
 
@@ -6975,7 +6979,7 @@ export class ErrorBoundary extends React.Component {
           // 언팔로우
           setFollowingList(currentFollowing.filter(name => name !== userName));
           setCreatorsData(prev => {
-            const userData = prev[userName] || { bio: "플레이팅 크리에이터입니다.", followersCount: 15, followingCount: 8, avatarImg: "" };
+            const userData = prev[userName] || { bio: "플레이팅 크리에이터입니다.", followersCount: 0, followingCount: 0, avatarImg: "" };
             return {
               ...prev,
               [userName]: {
@@ -6994,7 +6998,7 @@ export class ErrorBoundary extends React.Component {
           // 팔로우
           setFollowingList([...currentFollowing, userName]);
           setCreatorsData(prev => {
-            const userData = prev[userName] || { bio: "플레이팅 크리에이터입니다.", followersCount: 15, followingCount: 8, avatarImg: "" };
+            const userData = prev[userName] || { bio: "플레이팅 크리에이터입니다.", followersCount: 0, followingCount: 0, avatarImg: "" };
             return {
               ...prev,
               [userName]: {
@@ -7890,7 +7894,7 @@ export class ErrorBoundary extends React.Component {
               <UserProfileView 
                 userName={activeUser}
                 posts={posts}
-                creatorInfo={creatorsData[activeUser] || { bio: "플레이팅 크리에이터입니다.", followersCount: 15, followingCount: 8, avatarImg: "" }}
+                creatorInfo={creatorsData[activeUser] || { bio: "소개글이 없습니다.", followersCount: 0, followingCount: 0, avatarImg: "" }}
                 isFollowing={currentFollowing.includes(activeUser)}
                 onFollowToggle={(targetName) => handleFollowToggle(targetName || activeUser)}
                 onBack={() => setActiveTab("home")}
