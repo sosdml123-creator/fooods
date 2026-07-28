@@ -480,7 +480,7 @@ function MyPage({
                           className="flex items-center gap-3 cursor-pointer min-w-0 flex-1"
                           onClick={() => {
                             setFollowModal(null);
-                            onAuthorClick(follower.uid);
+                            onAuthorClick(follower.nickname);
                           }}
                         >
                           <span className="w-9 h-9 rounded-full border border-zinc-200 overflow-hidden bg-zinc-100 flex items-center justify-center text-zinc-700 text-xs font-bold flex-shrink-0">
@@ -502,7 +502,7 @@ function MyPage({
                                 ? "bg-zinc-100 text-zinc-650 hover:bg-zinc-200" 
                                 : "bg-zinc-950 text-white hover:bg-zinc-800"
                             }`}
-                            onClick={() => onFollowToggle(follower.uid || follower.nickname)}
+                            onClick={() => onFollowToggle(follower.nickname)}
                           >
                             {isFollowingBack ? "맞팔로잉" : "팔로우"}
                           </button>
@@ -525,7 +525,7 @@ function MyPage({
                     );
                   }
                   return followingList.map(uidOrNickname => {
-                    const dbUser = (usersList || []).find(u => u.uid === uidOrNickname);
+                    const dbUser = (usersList || []).find(u => u.uid === uidOrNickname || u.nickname === uidOrNickname);
                     const nickname = dbUser ? (dbUser.nickname || dbUser.name || "플레이터") : uidOrNickname;
                     const userData = dbUser ? {
                       bio: dbUser.bio || dbUser.intro || "플레이팅 크리에이터입니다.",
@@ -540,7 +540,7 @@ function MyPage({
                           className="flex items-center gap-3 cursor-pointer min-w-0 flex-1"
                           onClick={() => {
                             setFollowModal(null);
-                            onAuthorClick(uidOrNickname);
+                            onAuthorClick(nickname);
                           }}
                         >
                           <span className="w-9 h-9 rounded-full border border-zinc-200 overflow-hidden bg-zinc-100 flex items-center justify-center text-zinc-700 text-xs font-bold flex-shrink-0">

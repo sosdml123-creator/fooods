@@ -91,24 +91,67 @@ class MainActivity: FlutterActivity() {
                 Intent(Intent.ACTION_VIEW, Uri.parse(url))
             }
             
-            // Add flag to open in a new task
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            
-            // Resolve activity
-            val packageManager = context.packageManager
-            if (intent.resolveActivity(packageManager) != null) {
+
+            // 1. 앱이 설치되어 있는 경우 해당 앱 실행시도 (Android 11+ Package Visibility 제약 없이 직접 startActivity 실행)
+            try {
                 context.startActivity(intent)
                 return true
-            } else {
-                // If package is specified, try to open Play Store fallback
-                val pack = intent.`package`
-                if (pack != null) {
+            } catch (e: Exception) {
+                android.util.Log.w("MainActivity", "Direct startActivity failed for $url: ${e.message}")
+            }
+
+            // 2. 앱 미설치 시: intent에 S.browser_fallback_url이 있으면 해당 모바일 웹 URL 실행
+            val fallbackUrl = intent.getStringExtra("browser_fallback_url")
+            if (!fallbackUrl.isNullOrEmpty()) {
+                try {
+                    val fallbackIntent = Intent(Intent.ACTION_VIEW, Uri.parse(fallbackUrl))
+                    fallbackIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(fallbackIntent)
+                    return true
+                } catch (e: Exception) {
+                    android.util.Log.w("MainActivity", "Fallback URL startActivity failed: ${e.message}")
+                }
+            }
+
+            // 3. 앱 미설치 시: package명이 지정되어 있으면 플레이스토어 페이지로 이동
+            val pack = intent.`package`
+            if (!pack.isNullOrEmpty()) {
+                try {
                     val marketIntent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$pack"))
                     marketIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    if (marketIntent.resolveActivity(packageManager) != null) {
-                        context.startActivity(marketIntent)
+                    context.startActivity(marketIntent)
+                    return true
+                } catch (e: Exception) {
+                    try {
+                        val webMarketIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$pack"))
+                        webMarketIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(webMarketIntent)
                         return true
+                    } catch (e2: Exception) {
+                        e2.printStackTrace()
                     }
+                }
+            }
+
+            // 4. 커스텀 스킴(nmap, coupang 등) 미설치 시 패키지 매핑 fallback
+            val scheme = intent.scheme
+            val fallbackPackage = when (scheme) {
+                "nmap" -> "com.nhn.android.nmap"
+                "naversearchapp" -> "com.nhn.android.search"
+                "coupang" -> "com.coupang.mobile"
+                "kakaotalk", "kakaolink" -> "com.kakao.talk"
+                "toss", "supertoss" -> "viva.republica.toss"
+                else -> null
+            }
+            if (fallbackPackage != null) {
+                try {
+                    val marketIntent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$fallbackPackage"))
+                    marketIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(marketIntent)
+                    return true
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
             }
         } catch (e: Exception) {

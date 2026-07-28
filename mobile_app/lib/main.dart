@@ -3,9 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 
 Future<void> main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
@@ -278,8 +278,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
                         debugPrint('[WebView Console] [${consoleMessage.messageLevel}] ${consoleMessage.message}');
                       },
                       onReceivedError: (controller, request, error) {
-                        debugPrint('[WebView ReceivedError] URL: ${request.url?.toString()}, ErrorCode: ${error.type}, Description: ${error.description}');
-                        final urlStr = request.url?.toString() ?? '';
+                        debugPrint('[WebView ReceivedError] URL: ${request.url.toString()}, ErrorCode: ${error.type}, Description: ${error.description}');
+                        final urlStr = request.url.toString();
                         final isMainFrame = request.isForMainFrame ?? false;
 
                         if (isMainFrame && (urlStr == _targetUrl || urlStr == "$_targetUrl/" || urlStr.startsWith(_targetUrl))) {
@@ -293,20 +293,58 @@ class _WebViewScreenState extends State<WebViewScreen> {
                         }
                       },
                       onReceivedHttpError: (controller, request, errorResponse) {
-                        debugPrint('[WebView HTTP Error] URL: ${request.url?.toString()}, Status: ${errorResponse.statusCode}, Reason: ${errorResponse.reasonPhrase}');
+                        debugPrint('[WebView HTTP Error] URL: ${request.url.toString()}, Status: ${errorResponse.statusCode}, Reason: ${errorResponse.reasonPhrase}');
                       },
                       shouldOverrideUrlLoading: (controller, navigationAction) async {
                         final uri = navigationAction.request.url;
                         final urlStr = uri?.toString() ?? '';
                         debugPrint('[WebView Navigation] Request URL: $urlStr');
 
-                        if (uri != null && !['http', 'https', 'file', 'chrome', 'data', 'about'].contains(uri.scheme)) {
-                          if (Platform.isAndroid) {
-                            // Android 전용: intent:// 또는 custom scheme 처리
-                            debugPrint('[Android Custom Scheme] Intent scheme detected: ${uri.scheme}');
-                          } else if (Platform.isIOS) {
-                            // iOS 전용: kakaokompassauth, kakaolink, nmap 등 iOS 커스텀 스킴 처리
-                            debugPrint('[iOS Custom Scheme] Custom scheme detected: ${uri.scheme}');
+                        if (uri != null) {
+                          final scheme = uri.scheme.toLowerCase();
+                          final host = uri.host.toLowerCase();
+
+                          // 1. 커스텀 스킴(nmap, coupang 등) 및 intent:// URL 감지
+                          final isCustomScheme = !['http', 'https', 'file', 'chrome', 'data', 'about'].contains(scheme) || urlStr.startsWith('intent:');
+
+                          // 2. 외부 웹 도메인(myplating.kr 이외의 네이버지도/쿠팡 등 외부 링크) 감지
+                          final isExternalWebLink = (scheme == 'http' || scheme == 'https') &&
+                              host.isNotEmpty &&
+                              !host.endsWith('myplating.kr') &&
+                              host != 'localhost' &&
+                              host != '127.0.0.1';
+
+                          if (isCustomScheme || isExternalWebLink) {
+                            debugPrint('[External Link / Intent Intercepted] Scheme: $scheme, Host: $host, URL: $urlStr');
+
+                            if (Platform.isAndroid) {
+                              try {
+                                const platform = MethodChannel('com.foodhouse.plating/intent');
+                                await platform.invokeMethod('launchIntent', {'url': urlStr});
+                              } catch (e) {
+                                debugPrint('[Android MethodChannel Error] $e');
+                                try {
+                                  if (await canLaunchUrl(uri)) {
+                                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                  }
+                                } catch (err) {
+                                  debugPrint('[url_launcher Fallback Error] $err');
+                                }
+                              }
+                            } else if (Platform.isIOS) {
+                              try {
+                                if (await canLaunchUrl(uri)) {
+                                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                } else {
+                                  debugPrint('[iOS Scheme Error] Cannot launch url: $urlStr');
+                                }
+                              } catch (e) {
+                                debugPrint('[iOS Scheme Error] $e');
+                              }
+                            }
+
+                            // 외부 앱/브라우저로 이동시키므로 웹뷰 내부 Navigation은 취소
+                            return NavigationActionPolicy.CANCEL;
                           }
                         }
 

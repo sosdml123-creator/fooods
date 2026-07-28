@@ -886,8 +886,105 @@ export class ErrorBoundary extends React.Component {
       );
     }
 
-    function UserProfileView({ userName, posts, creatorInfo, isFollowing, onFollowToggle, onBack, onCardClick }) {
+    function UserProfileView({ 
+      userName, 
+      posts, 
+      creatorInfo, 
+      isFollowing, 
+      onFollowToggle, 
+      onBack, 
+      onCardClick,
+      db,
+      auth,
+      creatorsData = {},
+      followingList = [],
+      onAuthorClick,
+      profile
+    }) {
       const userPosts = posts.filter(post => post.author === userName);
+      const [followModal, setFollowModal] = useState(null); // null, "followers", or "following"
+      const [userFollowersList, setUserFollowersList] = useState([]);
+      const [userFollowingList, setUserFollowingList] = useState([]);
+      const [loadingFollows, setLoadingFollows] = useState(false);
+
+      useEffect(() => {
+        if (!userName) return;
+        let isMounted = true;
+        setLoadingFollows(true);
+
+        const fetchFollowData = async () => {
+          try {
+            // 1. 팔로워 목록 조회 (followingList에 userName이 포함된 유저)
+            let fetchedFollowers = [];
+            if (db) {
+              try {
+                const snap = await db.collection("users")
+                  .where("followingList", "array-contains", userName)
+                  .get();
+                snap.forEach(doc => {
+                  const data = doc.data();
+                  fetchedFollowers.push({
+                    uid: doc.id,
+                    nickname: data.nickname || data.name || "알 수 없음",
+                    bio: data.bio || data.intro || "소개글이 없습니다.",
+                    avatarImg: data.avatarImg || data.profileImage || ""
+                  });
+                });
+              } catch (e) {
+                console.error("[UserProfileView] followers query error:", e);
+              }
+            }
+            if (isMounted) setUserFollowersList(fetchedFollowers);
+
+            // 2. 팔로잉 목록 조회 (userName 사용자의 followingList)
+            let fetchedFollowing = [];
+            if (db) {
+              try {
+                const snap = await db.collection("users")
+                  .where("nickname", "==", userName)
+                  .get();
+                if (!snap.empty) {
+                  const userDoc = snap.docs[0].data();
+                  const targetList = userDoc.followingList || [];
+                  fetchedFollowing = targetList.map(name => {
+                    const cData = creatorsData[name] || {};
+                    return {
+                      nickname: name,
+                      bio: cData.bio || "플레이팅 크리에이터입니다.",
+                      avatarImg: cData.avatarImg || ""
+                    };
+                  });
+                }
+              } catch (e) {
+                console.error("[UserProfileView] following query error:", e);
+              }
+            }
+            // Firestore 결과가 비어있고 creatorInfo에 mock/fallback 팔로잉 목록이 있는 경우
+            if (fetchedFollowing.length === 0 && creatorInfo.followingList && Array.isArray(creatorInfo.followingList)) {
+              fetchedFollowing = creatorInfo.followingList.map(name => ({
+                nickname: name,
+                bio: creatorsData[name]?.bio || "플레이팅 크리에이터입니다.",
+                avatarImg: creatorsData[name]?.avatarImg || ""
+              }));
+            }
+
+            if (isMounted) setUserFollowingList(fetchedFollowing);
+          } catch (err) {
+            console.error("[UserProfileView] fetchFollowData failed:", err);
+          } finally {
+            if (isMounted) setLoadingFollows(false);
+          }
+        };
+
+        fetchFollowData();
+
+        return () => { isMounted = false; };
+      }, [userName, db, creatorInfo]);
+
+      const effectiveFollowersCount = userFollowersList.length > 0 ? userFollowersList.length : (creatorInfo.followersCount || 0);
+      const effectiveFollowingCount = userFollowingList.length > 0 ? userFollowingList.length : (creatorInfo.followingCount || 0);
+
+      const currentLoggedUser = profile?.name || auth?.currentUser?.displayName || "";
 
       return (
         <section className="my-page">
@@ -910,7 +1007,7 @@ export class ErrorBoundary extends React.Component {
               
               <button 
                 className={`text-[11px] font-bold px-4 py-1.5 rounded-full transition-colors flex-shrink-0 ${isFollowing ? 'secondary' : 'primary'}`}
-                onClick={onFollowToggle}
+                onClick={() => onFollowToggle && onFollowToggle(userName)}
               >
                 {isFollowing ? "팔로잉" : "팔로우"}
               </button>
@@ -921,13 +1018,19 @@ export class ErrorBoundary extends React.Component {
                 <strong>{userPosts.length}</strong>
                 <span>게시글</span>
               </div>
-              <div className="stat">
-                <strong>{(creatorInfo.followersCount || 0).toLocaleString()}</strong>
-                <span>팔로워</span>
+              <div 
+                className="stat cursor-pointer active:scale-95 transition-transform hover:opacity-80"
+                onClick={() => setFollowModal("followers")}
+              >
+                <strong>{effectiveFollowersCount.toLocaleString()}</strong>
+                <span className="text-zinc-600 font-bold hover:text-zinc-900">팔로워</span>
               </div>
-              <div className="stat">
-                <strong>{(creatorInfo.followingCount || 0).toLocaleString()}</strong>
-                <span>팔로잉</span>
+              <div 
+                className="stat cursor-pointer active:scale-95 transition-transform hover:opacity-80"
+                onClick={() => setFollowModal("following")}
+              >
+                <strong>{effectiveFollowingCount.toLocaleString()}</strong>
+                <span className="text-zinc-600 font-bold hover:text-zinc-900">팔로잉</span>
               </div>
             </div>
           </div>
@@ -956,6 +1059,118 @@ export class ErrorBoundary extends React.Component {
               )}
             </div>
           </div>
+
+          {followModal && (
+            <div className="sheet-backdrop animate-fade-in" onClick={() => setFollowModal(null)} style={{ zIndex: 1200 }}>
+              <section className="sheet animate-slide-up" onClick={(e) => e.stopPropagation()}>
+                <header className="sheet-head">
+                  <h2>{followModal === "followers" ? `${userName} 님의 팔로워 (${userFollowersList.length})` : `${userName} 님의 팔로잉 (${userFollowingList.length})`}</h2>
+                  <button type="button" onClick={() => setFollowModal(null)}>×</button>
+                </header>
+                <div className="py-2 max-h-[350px] overflow-y-auto no-scrollbar">
+                  {(() => {
+                    if (followModal === "followers") {
+                      if (!userFollowersList || userFollowersList.length === 0) {
+                        return (
+                          <div className="text-center py-12 text-zinc-400 text-xs">
+                            {loadingFollows ? "팔로워 목록을 불러오는 중..." : "팔로워가 없습니다."}
+                          </div>
+                        );
+                      }
+                      return userFollowersList.map(follower => {
+                        const targetName = follower.nickname;
+                        const isMe = targetName === currentLoggedUser;
+                        const isUserFollowing = (followingList || []).includes(targetName);
+                        return (
+                          <div key={follower.uid || targetName} className="flex items-center justify-between py-2.5 px-4 border-b border-zinc-100 last:border-none">
+                            <div 
+                              className="flex items-center gap-3 cursor-pointer min-w-0 flex-1"
+                              onClick={() => {
+                                setFollowModal(null);
+                                if (onAuthorClick) onAuthorClick(targetName);
+                              }}
+                            >
+                              <span className="w-9 h-9 rounded-full border border-zinc-200 overflow-hidden bg-zinc-100 flex items-center justify-center text-zinc-700 text-xs font-bold flex-shrink-0">
+                                {follower.avatarImg ? (
+                                  <img src={follower.avatarImg} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  targetName.slice(0, 1)
+                                )}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <strong className="text-xs text-zinc-900 block truncate">{targetName}</strong>
+                                <span className="text-[10px] text-zinc-450 block truncate mt-0.5">{follower.bio}</span>
+                              </div>
+                            </div>
+                            {!isMe && (
+                              <button 
+                                className={`text-[10px] font-bold px-3 py-1.5 rounded-lg active:scale-95 transition-all flex-shrink-0 ${
+                                  isUserFollowing 
+                                    ? "bg-zinc-100 text-zinc-650 hover:bg-zinc-200" 
+                                    : "bg-zinc-950 text-white hover:bg-zinc-800"
+                                }`}
+                                onClick={() => onFollowToggle && onFollowToggle(targetName)}
+                              >
+                                {isUserFollowing ? "팔로잉 중" : "팔로우"}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      });
+                    } else {
+                      if (!userFollowingList || userFollowingList.length === 0) {
+                        return (
+                          <div className="text-center py-12 text-zinc-400 text-xs">
+                            {loadingFollows ? "팔로잉 목록을 불러오는 중..." : "팔로잉하는 사용자가 없습니다."}
+                          </div>
+                        );
+                      }
+                      return userFollowingList.map(followingUser => {
+                        const targetName = followingUser.nickname;
+                        const isMe = targetName === currentLoggedUser;
+                        const isUserFollowing = (followingList || []).includes(targetName);
+                        return (
+                          <div key={targetName} className="flex items-center justify-between py-2.5 px-4 border-b border-zinc-100 last:border-none">
+                            <div 
+                              className="flex items-center gap-3 cursor-pointer min-w-0 flex-1"
+                              onClick={() => {
+                                setFollowModal(null);
+                                if (onAuthorClick) onAuthorClick(targetName);
+                              }}
+                            >
+                              <span className="w-9 h-9 rounded-full border border-zinc-200 overflow-hidden bg-zinc-100 flex items-center justify-center text-zinc-700 text-xs font-bold flex-shrink-0">
+                                {followingUser.avatarImg ? (
+                                  <img src={followingUser.avatarImg} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  targetName.slice(0, 1)
+                                )}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <strong className="text-xs text-zinc-900 block truncate">{targetName}</strong>
+                                <span className="text-[10px] text-zinc-450 block truncate mt-0.5">{followingUser.bio}</span>
+                              </div>
+                            </div>
+                            {!isMe && (
+                              <button 
+                                className={`text-[10px] font-bold px-3 py-1.5 rounded-lg active:scale-95 transition-all flex-shrink-0 ${
+                                  isUserFollowing 
+                                    ? "bg-zinc-100 text-zinc-650 hover:bg-zinc-200" 
+                                    : "bg-zinc-950 text-white hover:bg-zinc-800"
+                                }`}
+                                onClick={() => onFollowToggle && onFollowToggle(targetName)}
+                              >
+                                {isUserFollowing ? "팔로잉 중" : "팔로우"}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      });
+                    }
+                  })()}
+                </div>
+              </section>
+            </div>
+          )}
         </section>
       );
     }
@@ -7677,9 +7892,15 @@ export class ErrorBoundary extends React.Component {
                 posts={posts}
                 creatorInfo={creatorsData[activeUser] || { bio: "플레이팅 크리에이터입니다.", followersCount: 15, followingCount: 8, avatarImg: "" }}
                 isFollowing={currentFollowing.includes(activeUser)}
-                onFollowToggle={() => handleFollowToggle(activeUser)}
+                onFollowToggle={(targetName) => handleFollowToggle(targetName || activeUser)}
                 onBack={() => setActiveTab("home")}
                 onCardClick={(post) => handleRecipePostClick(post.id)}
+                db={db}
+                auth={auth}
+                creatorsData={creatorsData}
+                followingList={followingList}
+                onAuthorClick={handleAuthorClick}
+                profile={profile}
               />
             )}
           </main>
