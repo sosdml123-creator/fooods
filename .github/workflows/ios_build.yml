@@ -46,3 +46,19 @@ jobs:
         with:
           name: ios-app-build
           path: mobile_app/plating.ipa
+
+      - name: Setup App Store Connect API Key
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          cat << 'EOF' > ~/.appstoreconnect/private_keys/AuthKey_Y4ARXJYB3K.p8
+          -----BEGIN PRIVATE KEY-----
+          MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgUCWEMaVMiyftL6d8
+          FojhlgRohwmrLB9Yp6QFSd/PfuqgCgYIKoZIzj0DAQehRANCAASq3pZmEYD3s+1L
+          wDcdTtDGuFUitBCo7wEzLAcOcLFR9hfNJYuYoudLSvsneRBObpoeQwoBtKKEYnhh
+          C+lN7qlk
+          -----END PRIVATE KEY-----
+          EOF
+
+      - name: Upload Build to App Store Connect
+        run: |
+          xcrun altool --upload-app -f mobile_app/plating.ipa -t ios --apiKey Y4ARXJYB3K --apiIssuer fbf3bd0d-0e16-4dea-9f5a-0ae313aa0d68
