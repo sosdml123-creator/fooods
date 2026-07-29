@@ -4047,15 +4047,10 @@ export class ErrorBoundary extends React.Component {
           return true;
         });
 
-        const createdMarkers = validPosts.map(post => {
-          const lat = Number(post.location.lat);
-          const lng = Number(post.location.lng);
-          const placeTitle = post.location.placeName || post.title || "등록 장소";
-
-          const marker = new window.naver.maps.Marker({
-            position: new window.naver.maps.LatLng(lat, lng),
-            title: placeTitle,
-            icon: {
+        // [줌 레벨 반응형 마커 아이콘 생성 헬퍼]
+        const getMarkerIconContent = (placeTitle, zoomLevel) => {
+          if (zoomLevel >= 15) {
+            return {
               content: `
                 <div style="
                   display: flex;
@@ -4071,24 +4066,113 @@ export class ErrorBoundary extends React.Component {
                   font-weight: 700;
                   color: #111827;
                   white-space: nowrap;
+                  transition: all 0.2s ease-out;
                 ">
                   <span style="color:#059669; font-size:12px;">📍</span>
                   <span>${placeTitle}</span>
                 </div>
               `,
               anchor: new window.naver.maps.Point(20, 15)
-            }
+            };
+          } else if (zoomLevel >= 13) {
+            const shortTitle = placeTitle.length > 7 ? placeTitle.slice(0, 7) + "…" : placeTitle;
+            return {
+              content: `
+                <div style="
+                  display: flex;
+                  align-items: center;
+                  gap: 3px;
+                  background: #ffffff;
+                  border: 1.5px solid #059669;
+                  padding: 3px 7px;
+                  border-radius: 9999px;
+                  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+                  cursor: pointer;
+                  font-size: 10px;
+                  font-weight: 700;
+                  color: #111827;
+                  white-space: nowrap;
+                  transition: all 0.2s ease-out;
+                ">
+                  <span style="color:#059669; font-size:10px;">📍</span>
+                  <span>${shortTitle}</span>
+                </div>
+              `,
+              anchor: new window.naver.maps.Point(15, 12)
+            };
+          } else if (zoomLevel >= 11) {
+            return {
+              content: `
+                <div style="
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  background: #ffffff;
+                  border: 1.5px solid #059669;
+                  width: 22px;
+                  height: 22px;
+                  border-radius: 50%;
+                  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+                  cursor: pointer;
+                  font-size: 11px;
+                  transition: all 0.2s ease-out;
+                ">
+                  <span style="color:#059669;">📍</span>
+                </div>
+              `,
+              anchor: new window.naver.maps.Point(11, 11)
+            };
+          } else {
+            return {
+              content: `
+                <div style="
+                  width: 10px;
+                  height: 10px;
+                  background-color: #059669;
+                  border: 2px solid #ffffff;
+                  border-radius: 50%;
+                  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                  cursor: pointer;
+                  transition: all 0.2s ease-out;
+                "></div>
+              `,
+              anchor: new window.naver.maps.Point(5, 5)
+            };
+          }
+        };
+
+        const currentZoom = map.getZoom();
+        const markerDataList = [];
+
+        const createdMarkers = validPosts.map(post => {
+          const lat = Number(post.location.lat);
+          const lng = Number(post.location.lng);
+          const placeTitle = post.location.placeName || post.title || "등록 장소";
+
+          const marker = new window.naver.maps.Marker({
+            position: new window.naver.maps.LatLng(lat, lng),
+            title: placeTitle,
+            icon: getMarkerIconContent(placeTitle, currentZoom)
           });
 
           window.naver.maps.Event.addListener(marker, 'click', () => {
-            // [수정 1] 클릭 시 상세로 직행하지 않고 슬라이드업 바텀 시트를 띄웁니다.
+            // 클릭 시 슬라이드업 바텀 시트를 띄웁니다.
             setSelectedMapPost(post);
           });
 
+          markerDataList.push({ marker, placeTitle });
           return marker;
         });
 
         markersRef.current = createdMarkers;
+
+        // [줌 변경 이벤트 리스너] 줌아웃 시 마커 크기 및 형태 동적 변환
+        const zoomListener = window.naver.maps.Event.addListener(map, 'zoom_changed', () => {
+          const newZoom = map.getZoom();
+          markerDataList.forEach(({ marker, placeTitle }) => {
+            marker.setIcon(getMarkerIconContent(placeTitle, newZoom));
+          });
+        });
 
         // [2] MarkerClustering 라이브러리 연동
         if (createdMarkers.length > 0) {
@@ -4106,6 +4190,7 @@ export class ErrorBoundary extends React.Component {
 
         return () => {
           try {
+            window.naver.maps.Event.removeListener(zoomListener);
             window.naver.maps.Event.removeListener(mapClick);
             markersRef.current.forEach(m => m.setMap(null));
             markersRef.current = [];
