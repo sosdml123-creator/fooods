@@ -49,7 +49,7 @@ jobs:
           tr -d '\r\n' < mobile_app/ios/certs/p12_b64.txt | base64 --decode > $HOME/certificate.p12
           ls -la $HOME/certificate.p12
           file $HOME/certificate.p12
-          security import $HOME/certificate.p12 -k $KEYCHAIN_PATH -P "1234" -T /usr/bin/codesign
+          security import $HOME/certificate.p12 -k $KEYCHAIN_PATH -P "${{ secrets.P12_PASSWORD }}" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "buildpass" $KEYCHAIN_PATH
           security list-keychains -s $KEYCHAIN_PATH
 

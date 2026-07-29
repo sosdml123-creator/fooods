@@ -19,4 +19,5 @@ uploads/
 /mobile_app/flutter_sdk/
 *.log
 reports.json
+/mobile_app/ios/certs/
 
