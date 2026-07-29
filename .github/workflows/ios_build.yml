@@ -24,19 +24,25 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Install dependencies & Configure iOS
+      - name: Install dependencies
         run: |
           cd mobile_app
           flutter pub get
-          flutter build ios --config-only --no-codesign
 
-      - name: Build iOS IPA (Unsigned / Release)
+      - name: Build iOS Release App (Unsigned)
         run: |
           cd mobile_app
-          flutter build ipa --release --no-codesign
+          flutter build ios --release --no-codesign
+
+      - name: Package IPA File
+        run: |
+          cd mobile_app/build/ios/iphoneos
+          mkdir -p Payload
+          cp -r Runner.app Payload/
+          zip -r ../../../plating.ipa Payload
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios-app-build
-          path: mobile_app/build/ios/ipa/*.ipa
+          path: mobile_app/plating.ipa
