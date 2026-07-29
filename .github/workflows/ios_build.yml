@@ -35,7 +35,7 @@ jobs:
       - name: Setup App Store Connect API Key
         run: |
           mkdir -p ~/.appstoreconnect/private_keys
-          printf "%s\n" "-----BEGIN PRIVATE KEY-----" "MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgUCWEMaVMiyftL6d8" "FojhlgRohwmrLB9Yp6QFSd/PfuqgCgYIKoZIzj0DAQehRANCAASq3pZmEYD3s+1L" "wDcdTtDGuFUitBCo7wEzLAcOcLFR9hfNJYuYoudLSvsneRBObpoeQwoBtKKEYnhh" "C+lN7qlk" "-----END PRIVATE KEY-----" > ~/.appstoreconnect/private_keys/AuthKey_Y4ARXJYB3K.p8
+          printf "%s\n" "-----BEGIN PRIVATE KEY-----" "MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgUCWEMaVMiyftL6d8" "FojhlgRohwmrLB9Yp6QFSd/PfuqgCgYIKoZIzj0DAQehRANCAASq3pZmEYD3s+1L" "wDcdTtDGuFUitBCo7wEzLAcOcLFR9hfNJYuYoudLSvsneRBObpoeQwoBtKKEYnhh" "C+lN7qlk" "-----END PRIVATE KEY-----" > ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}.p8
 
       - name: Import Signing Certificate (.p12) and Provisioning Profile
         run: |
@@ -86,4 +86,4 @@ jobs:
 
       - name: Upload Build to App Store Connect
         run: |
-          xcrun altool --upload-app -f mobile_app/plating.ipa -t ios --apiKey Y4ARXJYB3K --apiIssuer fbf3bd0d-0e16-4dea-9f5a-0ae313aa0d68
+          xcrun altool --upload-app -f mobile_app/plating.ipa -t ios --apiKey ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }} --apiIssuer ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
