@@ -12,6 +12,9 @@ workflows:
       - name: Get Flutter packages
         script: |
           flutter pub get
+      - name: Configure Flutter iOS
+        script: |
+          flutter build ios --config-only --release
       - name: Install CocoaPods
         script: |
           cd ios && pod install
