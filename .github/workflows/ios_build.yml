@@ -35,14 +35,7 @@ jobs:
       - name: Setup App Store Connect API Key
         run: |
           mkdir -p ~/.appstoreconnect/private_keys
-          cat << 'EOF' > ~/.appstoreconnect/private_keys/AuthKey_Y4ARXJYB3K.p8
------BEGIN PRIVATE KEY-----
-MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgUCWEMaVMiyftL6d8
-FojhlgRohwmrLB9Yp6QFSd/PfuqgCgYIKoZIzj0DAQehRANCAASq3pZmEYD3s+1L
-wDcdTtDGuFUitBCo7wEzLAcOcLFR9hfNJYuYoudLSvsneRBObpoeQwoBtKKEYnhh
-C+lN7qlk
------END PRIVATE KEY-----
-EOF
+          printf "%s\n" "-----BEGIN PRIVATE KEY-----" "MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgUCWEMaVMiyftL6d8" "FojhlgRohwmrLB9Yp6QFSd/PfuqgCgYIKoZIzj0DAQehRANCAASq3pZmEYD3s+1L" "wDcdTtDGuFUitBCo7wEzLAcOcLFR9hfNJYuYoudLSvsneRBObpoeQwoBtKKEYnhh" "C+lN7qlk" "-----END PRIVATE KEY-----" > ~/.appstoreconnect/private_keys/AuthKey_Y4ARXJYB3K.p8
 
       - name: Import Signing Certificate (.p12) and Provisioning Profile
         run: |
