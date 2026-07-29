@@ -24,10 +24,11 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Install dependencies
+      - name: Install dependencies & Configure iOS
         run: |
           cd mobile_app
           flutter pub get
+          flutter build ios --config-only --no-codesign
 
       - name: Build iOS IPA (Unsigned / Release)
         run: |
@@ -37,5 +38,5 @@ jobs:
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ios-build
+          name: ios-app-build
           path: mobile_app/build/ios/ipa/*.ipa
