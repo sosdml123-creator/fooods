@@ -1,4 +1,5 @@
-﻿name: iOS App Store Deploy
+# Trigger App Store deploy run
+name: iOS App Store Deploy
 
 on:
   push:
