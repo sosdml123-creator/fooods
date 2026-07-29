@@ -650,7 +650,7 @@ export class ErrorBoundary extends React.Component {
     
 
     // 내가 쓴 글 수정/삭제 옵션 및 이미지 카레셀 상세 렌더링을 내장한 디테일 시트 모달 (댓글 수정/삭제 지원)
-    function DetailModal({ postId, posts, onClose, onLike, onScrap, onComment, onEditComment, onDeleteComment, onTagClick, onAuthorClick, onDeletePost, onEditPost, currentUserName, currentUserRole }) {
+    function DetailModal({ postId, posts, onClose, onLike, onScrap, onComment, onEditComment, onDeleteComment, onTagClick, onAuthorClick, onDeletePost, onEditPost, currentUserName, currentUserRole, onOpenMap }) {
       const post = posts.find(p => p.id === postId);
 
       useEffect(() => {
@@ -798,6 +798,56 @@ export class ErrorBoundary extends React.Component {
                   <h2 className="text-base font-bold text-zinc-950 mb-2">{post.title}</h2>
                   <div className="text-xs text-zinc-700 leading-relaxed mb-4 whitespace-pre-wrap">
                     {renderParsedBody(post.body, onTagClick)}
+                  </div>
+                </div>
+              )}
+
+              {post.location && post.location.placeName && (
+                <div className="mb-4 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-3.5 shadow-2xs">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-zinc-900 flex items-center gap-1.5">
+                      <span className="w-6 h-6 rounded-lg bg-emerald-500 text-white flex items-center justify-center text-xs shadow-2xs">
+                        📍
+                      </span>
+                      등록된 추천 장소 / 위치
+                    </span>
+                    <span className="text-[10px] text-emerald-800 bg-emerald-100/90 px-2.5 py-0.5 rounded-full font-bold">
+                      장소 인증
+                    </span>
+                  </div>
+
+                  <div className="bg-white rounded-xl p-3 border border-emerald-100 mb-3 shadow-2xs">
+                    <div className="font-bold text-zinc-900 text-xs mb-0.5 flex items-center gap-1">
+                      <span>{post.location.placeName}</span>
+                    </div>
+                    {post.location.address && (
+                      <div className="text-[11px] text-zinc-400 truncate">{post.location.address}</div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2">
+                    {onOpenMap && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          onOpenMap(post);
+                        }}
+                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white text-xs font-bold py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-xs border-none cursor-pointer"
+                      >
+                        <i className="fa-solid fa-map-location-dot"></i>
+                        <span>앱 내 지도에서 보기</span>
+                      </button>
+                    )}
+                    <a
+                      href={`https://m.map.naver.com/search2/search.nhn?query=${encodeURIComponent(post.location.placeName)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 bg-white hover:bg-emerald-50 active:scale-98 border border-emerald-200 text-emerald-800 text-xs font-bold py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-2xs text-center cursor-pointer no-underline"
+                    >
+                      <i className="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                      <span>네이버 지도 열기</span>
+                    </a>
                   </div>
                 </div>
               )}
@@ -2873,7 +2923,8 @@ export class ErrorBoundary extends React.Component {
           const finalLocation = selectedLocation ? {
             lat: Number(selectedLocation.lat),
             lng: Number(selectedLocation.lng),
-            placeName: String(selectedLocation.placeName)
+            placeName: String(selectedLocation.placeName),
+            address: selectedLocation.address ? String(selectedLocation.address) : ""
           } : null;
 
           console.log("[SUBMIT] Invoking onCreate callback payload:", { title, category, imagesCount: finalImageUrls.length, location: finalLocation });
@@ -6790,6 +6841,9 @@ export class ErrorBoundary extends React.Component {
           mediaType: newPostData.mediaType || "image",
           image: newPostData.image || [],
           productLinks: newPostData.productLinks || [],
+          placeInfo: newPostData.placeInfo || null,
+          location: newPostData.location || null,
+          tags: newPostData.tags || [],
           likeCount: 0,
           likedBy: [],
           scrappedBy: [],
@@ -7992,6 +8046,9 @@ export class ErrorBoundary extends React.Component {
               onEditPost={handleEditPost}
               currentUserName={profile.name}
               currentUserRole={profile.role || "user"}
+              onOpenMap={(post) => {
+                setActiveTab("map");
+              }}
             />
           )}
 

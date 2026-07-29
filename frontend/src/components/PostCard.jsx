@@ -18,6 +18,8 @@ function PostCard({ post, onLike, onCardClick, onAuthorClick }) {
     badgeType = "shop";
   }
 
+  const hasLocation = post.location && post.location.placeName;
+
   return (
     <article className="feed-card" onClick={onCardClick}>
       <div className="feed-card-image-wrapper">
@@ -35,6 +37,13 @@ function PostCard({ post, onLike, onCardClick, onAuthorClick }) {
       <div className="feed-card-content">
         <h3 className="feed-card-title">{post.title}</h3>
         
+        {hasLocation && (
+          <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50/90 px-2 py-0.5 rounded-md my-1.5 w-fit border border-emerald-200/60">
+            <span className="text-[10px]">📍</span>
+            <span className="truncate max-w-[150px]">{post.location.placeName}</span>
+          </div>
+        )}
+
         <div className="feed-card-meta" onClick={(e) => e.stopPropagation()}>
           <div className="feed-card-author cursor-pointer" onClick={onAuthorClick}>
             <span className="feed-card-avatar overflow-hidden">
