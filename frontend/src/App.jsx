@@ -2488,7 +2488,7 @@ export class ErrorBoundary extends React.Component {
     }
 
     // 최대 10개 및 총 용량 20MB 제한 (초과 시 자동 압축 지원) 글쓰기 뷰 (전체 페이지)
-    function WriteView({ onClose, onBack, onCreate, initialImages = [] }) {
+    function WriteView({ onClose, onBack, onCreate, initialImages = [], initialLocation = null }) {
       const handleBack = onBack || onClose;
       console.log("[WRITE] mounted");
 
@@ -2512,7 +2512,7 @@ export class ErrorBoundary extends React.Component {
       const [uploadingCount, setUploadingCount] = useState(0); // 미리보기 중인 사진 수
 
       // [수정 1] 위치 추가 필드 상태 { lat: number, lng: number, placeName: string }
-      const [selectedLocation, setSelectedLocation] = useState(null);
+      const [selectedLocation, setSelectedLocation] = useState(initialLocation);
       const [showLocationSearchModal, setShowLocationSearchModal] = useState(false);
       const [locationQuery, setLocationQuery] = useState("");
       const [locationSearching, setLocationSearching] = useState(false);
@@ -2596,7 +2596,11 @@ export class ErrorBoundary extends React.Component {
                 lat,
                 lng,
                 placeName: item.title || queryToSearch,
-                address: item.roadAddress || item.address || ""
+                address: item.roadAddress || item.address || "",
+                roadAddress: item.roadAddress || "",
+                category: item.category || "",
+                telephone: item.telephone || "",
+                link: item.link || ""
               };
             });
             setLocationSearchResults(items);
@@ -2924,7 +2928,11 @@ export class ErrorBoundary extends React.Component {
             lat: Number(selectedLocation.lat),
             lng: Number(selectedLocation.lng),
             placeName: String(selectedLocation.placeName),
-            address: selectedLocation.address ? String(selectedLocation.address) : ""
+            address: selectedLocation.address ? String(selectedLocation.address) : "",
+            roadAddress: selectedLocation.roadAddress ? String(selectedLocation.roadAddress) : "",
+            category: selectedLocation.category ? String(selectedLocation.category) : "",
+            telephone: selectedLocation.telephone ? String(selectedLocation.telephone) : "",
+            link: selectedLocation.link ? String(selectedLocation.link) : ""
           } : null;
 
           console.log("[SUBMIT] Invoking onCreate callback payload:", { title, category, imagesCount: finalImageUrls.length, location: finalLocation });
@@ -3851,7 +3859,7 @@ export class ErrorBoundary extends React.Component {
       }
     }
 
-    const NaverMapView = React.memo(function NaverMapView({ posts, onPostClick, isActive }) {
+    const NaverMapView = React.memo(function NaverMapView({ posts, onPostClick, isActive, onOpenWriteModal }) {
       const mapRef = useRef(null);
       const mapInstanceRef = useRef(null);
       const markersRef = useRef([]);        // 게시글 마커 (useEffect 클리어 대상)
@@ -4467,73 +4475,148 @@ export class ErrorBoundary extends React.Component {
             ></div>
           )}
 
-          {/* [수정 1, 2, 3, 4] 마커 탭 시 슬라이드업 바텀 시트 */}
+          {/* [수정] 네이버 플레이스 스타일 장소 상세 바텀 시트 */}
           {selectedMapPost && (
             <div 
-              className="absolute bottom-4 left-4 right-4 z-30 animate-in slide-in-from-bottom duration-300"
+              className="absolute bottom-4 left-4 right-4 z-30 animate-in slide-in-from-bottom duration-300 max-h-[85vh] overflow-y-auto no-scrollbar"
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
             >
               <div 
-                className="bg-white/95 backdrop-blur-md rounded-3xl p-4 shadow-2xl border border-zinc-200 text-zinc-900 relative cursor-pointer active:scale-[0.99] transition-all"
-                onClick={() => {
-                  if (onPostClick) {
-                    onPostClick(selectedMapPost.id);
-                  }
-                }}
+                className="bg-white/95 backdrop-blur-md rounded-3xl p-4.5 shadow-2xl border border-zinc-200 text-zinc-900 relative space-y-3"
+                onClick={(e) => e.stopPropagation()}
               >
-                {/* 상단 스와이프 안내 데코레이션 바 */}
-                <div className="w-12 h-1.5 bg-zinc-300 rounded-full mx-auto mb-3" />
+                {/* 상단 스와이프 안내 바 */}
+                <div className="w-12 h-1.5 bg-zinc-300 rounded-full mx-auto mb-1" />
 
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedMapPost(null);
-                  }}
+                  onClick={() => setSelectedMapPost(null)}
                   className="absolute top-3.5 right-3.5 w-7 h-7 rounded-full bg-zinc-100 text-zinc-500 hover:bg-zinc-200 flex items-center justify-center text-xs transition-colors border-none cursor-pointer"
                 >
                   <i className="fa-solid fa-xmark"></i>
                 </button>
 
-                <div className="flex gap-4">
-                  {/* 대표 이미지 미리보기 */}
-                  <div className="w-20 h-20 rounded-2xl overflow-hidden bg-zinc-100 flex-shrink-0 border border-zinc-150 shadow-xs">
-                    <img 
-                      src={(selectedMapPost.image && selectedMapPost.image[0]) || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200"} 
-                      alt="" 
-                      className="w-full h-full object-cover" 
-                      onError={(e) => {
-                        e.target.src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200";
-                      }}
-                    />
+                {/* 1. 가게 메인 헤더 */}
+                <div>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold px-2 py-0.5 rounded-md">
+                      {selectedMapPost.location?.category || selectedMapPost.category || "맛집 추천 장소"}
+                    </span>
+                    <span className="text-[10px] text-zinc-400 font-bold">네이버 지도 인증</span>
+                  </div>
+                  <h3 className="text-base font-extrabold text-zinc-950 leading-tight">
+                    {selectedMapPost.location?.placeName || selectedMapPost.title}
+                  </h3>
+                  
+                  {/* 주소 & 전화번호 */}
+                  <div className="mt-1.5 space-y-0.5 text-xs text-zinc-600">
+                    {(selectedMapPost.location?.address || selectedMapPost.location?.roadAddress) && (
+                      <div className="flex items-center gap-1.5 text-zinc-600">
+                        <i className="fa-solid fa-location-dot text-emerald-600 text-[11px]"></i>
+                        <span className="truncate">{selectedMapPost.location?.address || selectedMapPost.location?.roadAddress}</span>
+                      </div>
+                    )}
+                    {selectedMapPost.location?.telephone && (
+                      <div className="flex items-center gap-1.5 text-zinc-600">
+                        <i className="fa-solid fa-phone text-emerald-600 text-[11px]"></i>
+                        <span>{selectedMapPost.location.telephone}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 2. Quick Action 버튼 바 (전화걸기 / 길찾기 / 이 장소 글쓰기) */}
+                <div className="grid grid-cols-3 gap-2 pt-1 border-t border-zinc-100">
+                  {selectedMapPost.location?.telephone ? (
+                    <a
+                      href={`tel:${selectedMapPost.location.telephone}`}
+                      className="flex flex-col items-center justify-center py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 rounded-xl text-emerald-800 transition-all cursor-pointer no-underline active:scale-95"
+                    >
+                      <i className="fa-solid fa-phone text-xs mb-0.5"></i>
+                      <span className="text-[11px] font-bold">전화 걸기</span>
+                    </a>
+                  ) : (
+                    <a
+                      href={`https://m.map.naver.com/search2/search.nhn?query=${encodeURIComponent(selectedMapPost.location?.placeName || selectedMapPost.title)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex flex-col items-center justify-center py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 rounded-xl text-emerald-800 transition-all cursor-pointer no-underline active:scale-95"
+                    >
+                      <i className="fa-solid fa-arrow-up-right-from-square text-xs mb-0.5"></i>
+                      <span className="text-[11px] font-bold">네이버 지도</span>
+                    </a>
+                  )}
+
+                  <a
+                    href={`https://m.map.naver.com/search2/search.nhn?query=${encodeURIComponent(selectedMapPost.location?.placeName || selectedMapPost.title)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex flex-col items-center justify-center py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200/80 rounded-xl text-blue-800 transition-all cursor-pointer no-underline active:scale-95"
+                  >
+                    <i className="fa-solid fa-route text-xs mb-0.5"></i>
+                    <span className="text-[11px] font-bold">길찾기</span>
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const loc = selectedMapPost.location || { placeName: selectedMapPost.title };
+                      setSelectedMapPost(null);
+                      if (onOpenWriteModal) {
+                        onOpenWriteModal(loc);
+                      }
+                    }}
+                    className="flex flex-col items-center justify-center py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all cursor-pointer border-none shadow-xs active:scale-95"
+                  >
+                    <i className="fa-solid fa-pen text-xs mb-0.5"></i>
+                    <span className="text-[11px] font-bold">글 쓰 기</span>
+                  </button>
+                </div>
+
+                {/* 3. 이 장소에 작성된 등록 포스팅 (커뮤니티 글 카드) */}
+                <div className="pt-2 border-t border-zinc-100">
+                  <div className="text-[11px] font-extrabold text-zinc-500 mb-2 flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <i className="fa-solid fa-comments text-emerald-600 text-[11px]"></i>
+                      이 장소에 작성된 등록 포스팅
+                    </span>
+                    <span className="text-[10px] text-zinc-400 font-normal">터치하여 상세보기</span>
                   </div>
 
-                  {/* 게시글 정보 미리보기 */}
-                  <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
-                    <div>
-                      <div className="text-[10px] text-emerald-600 font-bold tracking-wider mb-1 flex items-center gap-1">
-                        <span>📍</span>
-                        <span className="truncate">{selectedMapPost.location?.placeName || "추천 장소"}</span>
-                      </div>
-                      <h4 className="text-sm font-bold text-zinc-950 truncate tracking-tight mb-0.5">
-                        {selectedMapPost.title}
-                      </h4>
-                      <span className="text-[11px] text-zinc-500 font-medium">
-                        by {selectedMapPost.author}
-                      </span>
+                  <div 
+                    onClick={() => {
+                      if (onPostClick) {
+                        onPostClick(selectedMapPost.id);
+                      }
+                    }}
+                    className="bg-zinc-50 hover:bg-emerald-50/60 border border-zinc-200/90 rounded-2xl p-2.5 flex gap-3 items-center cursor-pointer transition-all active:scale-[0.98]"
+                  >
+                    <div className="w-16 h-16 rounded-xl overflow-hidden bg-zinc-200 flex-shrink-0 border border-zinc-200 shadow-2xs">
+                      <img 
+                        src={(selectedMapPost.image && selectedMapPost.image[0]) || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200"} 
+                        alt="" 
+                        className="w-full h-full object-cover" 
+                        onError={(e) => {
+                          e.target.src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200";
+                        }}
+                      />
                     </div>
 
-                    {/* 좋아요 & 댓글 수 */}
-                    <div className="flex items-center gap-3.5 text-xs text-zinc-500 font-semibold mt-1">
-                      <span className="flex items-center gap-1.5 bg-rose-50 text-rose-600 px-2 py-0.5 rounded-lg border border-rose-100/50">
-                        <i className="fa-solid fa-heart text-[10px]"></i>
-                        <span>{selectedMapPost.likeCount || 0}</span>
-                      </span>
-                      <span className="flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-lg border border-emerald-100/50">
-                        <i className="fa-solid fa-comment text-[10px]"></i>
-                        <span>{selectedMapPost.comments?.length || 0}</span>
-                      </span>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-xs font-bold text-zinc-950 truncate mb-1">
+                        {selectedMapPost.title}
+                      </h4>
+                      <p className="text-[11px] text-zinc-500 line-clamp-1 mb-1 font-normal">
+                        {selectedMapPost.body}
+                      </p>
+                      <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                        <span className="font-semibold text-zinc-700">by {selectedMapPost.author}</span>
+                        <div className="flex items-center gap-2 font-bold">
+                          <span className="text-rose-500"><i className="fa-solid fa-heart mr-0.5"></i>{selectedMapPost.likeCount || 0}</span>
+                          <span className="text-emerald-600"><i className="fa-solid fa-comment mr-0.5"></i>{selectedMapPost.comments?.length || 0}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -4541,18 +4624,18 @@ export class ErrorBoundary extends React.Component {
             </div>
           )}
 
-          {/* 선택된 음식점 상세 정보 바텀시트 카드 */}
+          {/* 선택된 검색 장소 상세 정보 바텀시트 카드 */}
           {selectedPlace && (
             <div className="absolute bottom-4 left-4 right-4 z-30 animate-in slide-in-from-bottom duration-300">
-              <div className="bg-white/95 backdrop-blur-md rounded-2xl p-5 shadow-2xl border border-zinc-200 text-zinc-900 relative">
+              <div className="bg-white/95 backdrop-blur-md rounded-3xl p-4.5 shadow-2xl border border-zinc-200 text-zinc-900 relative space-y-3">
                 <button
                   onClick={() => setSelectedPlace(null)}
-                  className="absolute top-3.5 right-3.5 w-7 h-7 rounded-full bg-zinc-100 text-zinc-500 hover:bg-zinc-200 flex items-center justify-center text-xs transition-colors"
+                  className="absolute top-3.5 right-3.5 w-7 h-7 rounded-full bg-zinc-100 text-zinc-500 hover:bg-zinc-200 flex items-center justify-center text-xs transition-colors border-none cursor-pointer"
                 >
                   <i className="fa-solid fa-xmark"></i>
                 </button>
 
-                <div className="flex items-start gap-3 pr-8 mb-3">
+                <div className="flex items-start gap-3 pr-8">
                   <div className="w-11 h-11 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 text-lg font-bold flex-shrink-0 shadow-sm">
                     <i className="fa-solid fa-store"></i>
                   </div>
@@ -4570,53 +4653,48 @@ export class ErrorBoundary extends React.Component {
                   </div>
                 </div>
 
-                <div className="space-y-2 pt-2 border-t border-zinc-100 text-xs">
-                  <div className="flex items-center gap-2 text-zinc-700 font-medium">
-                    <div className="w-5 text-center text-amber-500"><i className="fa-regular fa-clock"></i></div>
-                    <span>{selectedPlace.hours}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-zinc-700 font-medium">
-                    <div className="w-5 text-center text-emerald-600"><i className="fa-solid fa-phone"></i></div>
-                    <a href={`tel:${selectedPlace.phone}`} className="hover:underline text-emerald-600 font-semibold">{selectedPlace.phone}</a>
-                  </div>
-                  {selectedPlace.menus && selectedPlace.menus.length > 0 && (
-                    <div className="flex items-start gap-2 text-zinc-700 font-medium pt-1">
-                      <div className="w-5 text-center text-indigo-500 mt-0.5"><i className="fa-solid fa-utensils"></i></div>
-                      <div className="flex-1">
-                        <span className="font-bold text-zinc-900 block mb-1">대표 메뉴</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {selectedPlace.menus.map((m, idx) => (
-                            <span key={idx} className="bg-zinc-100 border border-zinc-200 text-zinc-700 px-2 py-0.5 rounded-md text-[11px]">
-                              {m}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                {/* Quick Action 버튼 바 (네이버 지도 / 길찾기 / 이 장소 포스팅 작성) */}
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-zinc-100">
+                  <a
+                    href={selectedPlace.mapUrl || `https://m.map.naver.com/search2/search.nhn?query=${encodeURIComponent(selectedPlace.name)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex flex-col items-center justify-center py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 rounded-xl text-emerald-800 transition-all cursor-pointer no-underline active:scale-95"
+                  >
+                    <i className="fa-solid fa-arrow-up-right-from-square text-xs mb-0.5"></i>
+                    <span className="text-[11px] font-bold">네이버 지도</span>
+                  </a>
 
-                <div className="mt-4 flex gap-2 pt-2">
-                  {selectedPlace.postId && (
-                    <button
-                      onClick={() => onPostClick && onPostClick(selectedPlace.postId)}
-                      className="flex-1 bg-zinc-900 hover:bg-black text-white font-extrabold text-xs py-2.5 rounded-xl shadow-md transition-all text-center flex items-center justify-center gap-1.5"
-                    >
-                      <i className="fa-solid fa-newspaper"></i>
-                      <span>플레이팅 리뷰 보기</span>
-                    </button>
-                  )}
-                  {selectedPlace.mapUrl && (
-                    <a
-                      href={selectedPlace.mapUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs py-2.5 rounded-xl shadow-md transition-all text-center flex items-center justify-center gap-1.5"
-                    >
-                      <i className="fa-solid fa-map-location-dot"></i>
-                      <span>네이버 지도 연결</span>
-                    </a>
-                  )}
+                  <a
+                    href={`https://m.map.naver.com/search2/search.nhn?query=${encodeURIComponent(selectedPlace.name)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex flex-col items-center justify-center py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200/80 rounded-xl text-blue-800 transition-all cursor-pointer no-underline active:scale-95"
+                  >
+                    <i className="fa-solid fa-route text-xs mb-0.5"></i>
+                    <span className="text-[11px] font-bold">길찾기</span>
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const loc = {
+                        lat: 37.5665,
+                        lng: 126.9780,
+                        placeName: selectedPlace.name,
+                        address: selectedPlace.address,
+                        category: selectedPlace.category
+                      };
+                      setSelectedPlace(null);
+                      if (onOpenWriteModal) {
+                        onOpenWriteModal(loc);
+                      }
+                    }}
+                    className="flex flex-col items-center justify-center py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all cursor-pointer border-none shadow-xs active:scale-95"
+                  >
+                    <i className="fa-solid fa-pen text-xs mb-0.5"></i>
+                    <span className="text-[11px] font-bold">글 쓰 기</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -5806,6 +5884,7 @@ export class ErrorBoundary extends React.Component {
         }
       }, [activeTab, isLoggedIn]);
       const [writeInitialImages, setWriteInitialImages] = useState([]);
+      const [writeInitialLocation, setWriteInitialLocation] = useState(null);
       const [communityInitialImages, setCommunityInitialImages] = useState([]);
 
       const [confirmState, setConfirmState] = useState({
@@ -8009,15 +8088,27 @@ export class ErrorBoundary extends React.Component {
 
             {activeTab === "write" && (
               <WriteView
-                onBack={() => { setActiveTab("home"); setWriteInitialImages([]); }}
-                onCreate={handleCreatePost}
+                onBack={() => { setActiveTab("home"); setWriteInitialImages([]); setWriteInitialLocation(null); }}
+                onCreate={(newPostData) => {
+                  handleCreatePost(newPostData);
+                  setWriteInitialLocation(null);
+                }}
                 initialImages={writeInitialImages}
+                initialLocation={writeInitialLocation}
               />
             )}
 
             {activeTab === "map" && (
               <div className="w-full h-full flex-1 flex flex-col min-h-0" style={{ flex: 1, width: "100%", height: "100%", minHeight: 0, overflow: "hidden" }}>
-                <NaverMapView posts={posts} onPostClick={handleRecipePostClick} isActive={true} />
+                <NaverMapView 
+                  posts={posts} 
+                  onPostClick={handleRecipePostClick} 
+                  isActive={true} 
+                  onOpenWriteModal={(loc) => {
+                    if (loc) setWriteInitialLocation(loc);
+                    setActiveTab("write");
+                  }}
+                />
               </div>
             )}
 
