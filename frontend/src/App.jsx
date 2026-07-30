@@ -17,6 +17,10 @@ import { getDeviceFingerprint } from './utils/fingerprint';
 // API URL 설정 (개발/배포 환경변수 연동)
 const API_URL = import.meta.env.PROD ? "" : (import.meta.env.VITE_API_URL || "");
 
+// 카카오 Auth 중복 생성 방지를 위한 동시성 제어 락 (In-flight Promise & Processed Tokens)
+const activeKakaoAuthPromises = new Map();
+const processedKakaoTokens = new Set();
+
 export class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -6388,10 +6392,14 @@ export class ErrorBoundary extends React.Component {
           setDbLoaded(true);
 
           // URL에 카카오 토큰 파라미터가 들어온 경우 (카카오 로그인 성공 후 리다이렉트 콜백)
-          if (urlToken) {
+          if (urlToken && !processedKakaoTokens.has(urlToken)) {
+            processedKakaoTokens.add(urlToken);
             kakaoSyncInProgressRef.current = true;
             console.log("[Kakao Callback] Detected URL token. Initiating backend sync...");
             
+            // 주소창에서 토큰 즉시 제거하여 이중 이벤트/재진입 차단
+            window.history.replaceState({}, document.title, window.location.pathname);
+
             try {
               await authReadyPromise;
               // 1. 카카오 유저 정보 조회
@@ -6399,23 +6407,45 @@ export class ErrorBoundary extends React.Component {
               const res = await response.json();
               if (res.isLoggedIn && res.user) {
                 console.log("[Kakao Callback] Successfully fetched Kakao user info. Linking to Firebase Auth...");
-                // 2. Firebase Auth 연동 및 로그인 처리
+                // 2. Firebase Auth 연동 및 로그인 처리 (동시성 제어 적용)
                 const email = `kakao_${res.user.kakao_id}@myplating.kr`;
                 const password = `kakao_${res.user.kakao_id}_plating`;
                 
                 let user;
-                try {
-                  const userCredential = await auth.signInWithEmailAndPassword(email, password);
-                  user = userCredential.user;
-                  console.log("[Firebase Auth] Signed in linked Kakao user:", email);
-                } catch (err) {
-                  if (err.code === "auth/user-not-found" || err.code === "auth/invalid-credential") {
-                    console.log("[Firebase Auth] Linked Kakao user not found. Creating user account...");
-                    const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-                    user = userCredential.user;
-                    console.log("[Firebase Auth] Created linked Kakao user account successfully");
-                  } else {
-                    throw err;
+                if (activeKakaoAuthPromises.has(email)) {
+                  console.log("[Firebase Auth] Concurrent Kakao linking in progress. Awaiting existing promise for:", email);
+                  user = await activeKakaoAuthPromises.get(email);
+                } else {
+                  const linkingPromise = (async () => {
+                    try {
+                      const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                      console.log("[Firebase Auth] Signed in linked Kakao user:", email);
+                      return userCredential.user;
+                    } catch (err) {
+                      if (err.code === "auth/user-not-found" || err.code === "auth/invalid-credential") {
+                        console.log("[Firebase Auth] Linked Kakao user not found. Creating user account...", email);
+                        try {
+                          const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                          console.log("[Firebase Auth] Created linked Kakao user account successfully:", email);
+                          return userCredential.user;
+                        } catch (createErr) {
+                          if (createErr.code === "auth/email-already-in-use" || createErr.code === "auth/credential-already-in-use") {
+                            console.log("[Firebase Auth] Account created concurrently by parallel call. Retrying sign in...", email);
+                            const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                            return userCredential.user;
+                          }
+                          throw createErr;
+                        }
+                      }
+                      throw err;
+                    }
+                  })();
+
+                  activeKakaoAuthPromises.set(email, linkingPromise);
+                  try {
+                    user = await linkingPromise;
+                  } finally {
+                    activeKakaoAuthPromises.delete(email);
                   }
                 }
 
@@ -6433,8 +6463,6 @@ export class ErrorBoundary extends React.Component {
             } catch (err) {
               console.error("[Kakao Callback] Linking process failed:", err);
             } finally {
-              // 모든 로그인 동기화 처리가 완료된 뒤에야 주소창 토큰 파라미터를 제거함
-              window.history.replaceState({}, document.title, window.location.pathname);
               kakaoSyncInProgressRef.current = false;
               if (resolveSessionSyncReady) resolveSessionSyncReady();
             }
