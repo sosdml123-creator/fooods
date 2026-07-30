@@ -307,12 +307,22 @@ class _WebViewScreenState extends State<WebViewScreen> {
                           // 1. 커스텀 스킴(nmap, coupang 등) 및 intent:// URL 감지
                           final isCustomScheme = !['http', 'https', 'file', 'chrome', 'data', 'about'].contains(scheme) || urlStr.startsWith('intent:');
 
+                          // Kakao, Naver, Google 등 OAuth 로그인/인증 도메인은 내부 웹뷰에서 처리하도록 허용
+                          final isAuthDomain = host.endsWith('kakao.com') ||
+                              host.endsWith('kakao.co.kr') ||
+                              host.endsWith('daum.net') ||
+                              host.endsWith('daumcdn.net') ||
+                              host.endsWith('naver.com') ||
+                              host.endsWith('google.com') ||
+                              host.endsWith('google.co.kr');
+
                           // 2. 외부 웹 도메인(myplating.kr 이외의 네이버지도/쿠팡 등 외부 링크) 감지
                           final isExternalWebLink = (scheme == 'http' || scheme == 'https') &&
                               host.isNotEmpty &&
                               !host.endsWith('myplating.kr') &&
                               host != 'localhost' &&
-                              host != '127.0.0.1';
+                              host != '127.0.0.1' &&
+                              !isAuthDomain;
 
                           if (isCustomScheme || isExternalWebLink) {
                             debugPrint('[External Link / Intent Intercepted] Scheme: $scheme, Host: $host, URL: $urlStr');

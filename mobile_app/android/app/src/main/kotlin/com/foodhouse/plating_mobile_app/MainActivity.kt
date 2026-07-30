@@ -140,7 +140,7 @@ class MainActivity: FlutterActivity() {
                 "nmap" -> "com.nhn.android.nmap"
                 "naversearchapp" -> "com.nhn.android.search"
                 "coupang" -> "com.coupang.mobile"
-                "kakaotalk", "kakaolink" -> "com.kakao.talk"
+                "kakaotalk", "kakaolink", "kakaokompassauth" -> "com.kakao.talk"
                 "toss", "supertoss" -> "viva.republica.toss"
                 else -> null
             }

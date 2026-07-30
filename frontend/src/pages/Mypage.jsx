@@ -24,9 +24,9 @@ function MyPage({
   usersList = []
 }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [editName, setEditName] = useState(profile.name);
-  const [editBio, setEditBio] = useState(profile.bio);
-  const [editPhoto, setEditPhoto] = useState(profile.avatarImg || "");
+  const [editName, setEditName] = useState(profile?.name || "");
+  const [editBio, setEditBio] = useState(profile?.bio || "");
+  const [editPhoto, setEditPhoto] = useState(profile?.avatarImg || "");
   const fileInputRef = useRef(null);
   
   const [myTab, setMyTab] = useState("posts");
@@ -99,8 +99,36 @@ function MyPage({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Canvas를 활용하여 300x300 경량화 썸네일 이미지로 즉시 압축 (용량 10MB -> ~20KB 감소)
     const reader = new FileReader();
-    reader.onload = () => setEditPhoto(reader.result);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX_SIZE = 300;
+        let width = img.width;
+        let height = img.height;
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height = Math.round((height * MAX_SIZE) / width);
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width = Math.round((width * MAX_SIZE) / height);
+            height = MAX_SIZE;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressedBase64 = canvas.toDataURL("image/jpeg", 0.8);
+        setEditPhoto(compressedBase64);
+      };
+      img.onerror = () => setEditPhoto(event.target.result);
+      img.src = event.target.result;
+    };
     reader.readAsDataURL(file);
   }
 
@@ -115,6 +143,30 @@ function MyPage({
     const trimmedName = editName.trim();
     if (!trimmedName) return;
 
+    if (initialCreatorsData) {
+      const isMockCreatorDuplicate = Object.keys(initialCreatorsData).some(
+        (name) => name !== profile.name && name.toLowerCase() === trimmedName.toLowerCase()
+      );
+      if (isMockCreatorDuplicate) {
+        alert("이미 사용 중인 닉네임입니다. 다른 닉네임을 사용해 주세요.");
+        return;
+      }
+    }
+
+    const updatedProfile = {
+      ...profile,
+      name: trimmedName,
+      bio: editBio.trim(),
+      avatar: trimmedName.slice(0, 1),
+      avatarImg: editPhoto,
+      role: profile.role || "user"
+    };
+
+    // 1. 저장 버튼 클릭 시 딜레이 없이 즉시 UI 반영 및 편집 모드 종료 (낙관적 업데이트)
+    setProfile(updatedProfile);
+    setIsEditing(false);
+
+    // 2. 백엔드 및 Firestore 업데이트는 백그라운드 비동기로 처리
     let token = "";
     if (auth && auth.currentUser) {
       try {
@@ -136,55 +188,22 @@ function MyPage({
     })
     .then(res => res.json())
     .then(res => {
-      if (res.success) {
-        if (auth.currentUser) {
-          db.collection("users").doc(auth.currentUser.uid).update({
-            nickname: trimmedName,
-            bio: editBio.trim(),
-            intro: editBio.trim(),
-            avatarImg: editPhoto,
-            profileImage: editPhoto,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-          }).catch(err => console.error("Firestore user profile update failed:", err));
-        }
-
-        setProfile({
-          name: trimmedName,
-          bio: editBio.trim(),
-          avatar: trimmedName.slice(0, 1),
-          avatarImg: editPhoto,
-          role: profile.role || "user"
-        });
-
-        setIsEditing(false);
-        alert("프로필이 저장되었습니다.");
-      } else {
-        alert(res.message || "프로필 저장 중 오류가 발생했습니다.");
+      if (!res.success) {
+        console.warn("[Profile Update] Backend error:", res.message);
       }
     })
-    .catch(err => {
-      console.error("프로필 저장 실패:", err);
-      if (auth.currentUser) {
-        db.collection("users").doc(auth.currentUser.uid).update({
-          nickname: trimmedName,
-          bio: editBio.trim(),
-          intro: editBio.trim(),
-          avatarImg: editPhoto,
-          profileImage: editPhoto,
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        }).catch(err => console.error("Firestore user profile update failed (fallback):", err));
-      }
+    .catch(err => console.error("[Profile Update] Background sync failed:", err));
 
-      setProfile({
-        name: trimmedName,
+    if (auth && auth.currentUser && db) {
+      db.collection("users").doc(auth.currentUser.uid).update({
+        nickname: trimmedName,
         bio: editBio.trim(),
-        avatar: trimmedName.slice(0, 1),
+        intro: editBio.trim(),
         avatarImg: editPhoto,
-        role: profile.role || "user"
-      });
-
-      setIsEditing(false);
-    });
+        profileImage: editPhoto,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }).catch(err => console.error("Firestore user profile update failed:", err));
+    }
   }
 
   return (

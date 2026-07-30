@@ -230,7 +230,7 @@ export class ErrorBoundary extends React.Component {
         await db.collection("notifications").add({
           targetUid: targetUid,
           senderUid: user ? user.uid : "anonymous",
-          senderName: (profile && profile.name && profile.name !== "나의 플레이팅") ? profile.name : "익명 플레이터",
+          senderName: (typeof profile !== "undefined" && profile && profile.name && profile.name !== "나의 플레이팅") ? profile.name : (user?.displayName || "익명 플레이터"),
           type: type, // "like" | "comment" | "follow"
           postId: postId || "",
           title: title,
@@ -681,7 +681,7 @@ export class ErrorBoundary extends React.Component {
 
       const isVideo = post.mediaType === "video";
       const isMyPost = post.author === "나" || post.author === currentUserName;
-      const isAdmin = currentUserRole === "admin" || currentUserRole === "SUPER_ADMIN" || profile?.role === "admin" || currentUserName === "어드민";
+      const isAdmin = currentUserRole === "admin" || currentUserRole === "SUPER_ADMIN" || currentUserName === "어드민";
 
       useEffect(() => {
         setEditTitle(post.title);
@@ -1552,7 +1552,7 @@ export class ErrorBoundary extends React.Component {
       const [openCommentKebabId, setOpenCommentKebabId] = useState(null);
 
       const isMyPost = post.author === "나" || post.author === currentUserName;
-      const isAdmin = currentUserRole === "admin" || currentUserRole === "SUPER_ADMIN" || profile?.role === "admin" || currentUserName === "어드민";
+      const isAdmin = currentUserRole === "admin" || currentUserRole === "SUPER_ADMIN" || currentUserName === "어드민";
 
       useEffect(() => {
         setEditComTitle(post.title);
@@ -1950,7 +1950,34 @@ export class ErrorBoundary extends React.Component {
         const file = e.target.files?.[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = () => setEditPhoto(reader.result);
+        reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            const MAX_SIZE = 300;
+            let width = img.width;
+            let height = img.height;
+            if (width > height) {
+              if (width > MAX_SIZE) {
+                height = Math.round((height * MAX_SIZE) / width);
+                width = MAX_SIZE;
+              }
+            } else {
+              if (height > MAX_SIZE) {
+                width = Math.round((width * MAX_SIZE) / height);
+                height = MAX_SIZE;
+              }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressedBase64 = canvas.toDataURL("image/jpeg", 0.8);
+            setEditPhoto(compressedBase64);
+          };
+          img.onerror = () => setEditPhoto(event.target.result);
+          img.src = event.target.result;
+        };
         reader.readAsDataURL(file);
       }
 
@@ -1974,7 +2001,17 @@ export class ErrorBoundary extends React.Component {
           return;
         }
 
-        // 2. 백엔드와 연동하여 세션/DB 중복체크 진행 후 최종 저장
+        // 2. 즉시 UI 반영 및 편집 모드 종료 (낙관적 업데이트)
+        setProfile({
+          name: targetName,
+          bio: editBio.trim(),
+          avatar: targetName.slice(0, 1),
+          avatarImg: editPhoto,
+          role: profile.role || "user"
+        });
+        setIsEditing(false);
+
+        // 3. 백그라운드 비동기 서버/DB 동기화
         fetch("/api/v1/users/profile/update", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1986,55 +2023,22 @@ export class ErrorBoundary extends React.Component {
         })
         .then(r => r.json())
         .then(res => {
-          if (res.success) {
-            // Firestore 사용자 정보 업데이트 추가
-            if (auth.currentUser) {
-              db.collection("users").doc(auth.currentUser.uid).update({
-                nickname: targetName,
-                bio: editBio.trim(),
-                intro: editBio.trim(),
-                avatarImg: editPhoto,
-                profileImage: editPhoto,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-              }).catch(e => console.error("Firestore user profile update failed:", e));
-            }
-
-            setProfile({
-              name: targetName,
-              bio: editBio.trim(),
-              avatar: targetName.slice(0, 1),
-              avatarImg: editPhoto,
-              role: profile.role || "user"
-            });
-            setIsEditing(false);
-            alert("프로필이 저장되었습니다.");
-          } else {
-            alert(res.message || "프로필 저장 중 오류가 발생했습니다.");
+          if (!res.success) {
+            console.warn("[Profile Update Legacy] Backend error:", res.message);
           }
         })
-        .catch(err => {
-          console.error("프로필 저장 실패:", err);
-          // 오프라인 혹은 개발 환경 폴백
-          if (auth.currentUser) {
-            db.collection("users").doc(auth.currentUser.uid).update({
-              nickname: targetName,
-              bio: editBio.trim(),
-              intro: editBio.trim(),
-              avatarImg: editPhoto,
-              profileImage: editPhoto,
-              updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            }).catch(e => console.error("Firestore user profile update failed (fallback):", e));
-          }
+        .catch(err => console.error("프로필 저장 백그라운드 연동 실패:", err));
 
-          setProfile({
-            name: targetName,
+        if (auth.currentUser) {
+          db.collection("users").doc(auth.currentUser.uid).update({
+            nickname: targetName,
             bio: editBio.trim(),
-            avatar: targetName.slice(0, 1),
+            intro: editBio.trim(),
             avatarImg: editPhoto,
-            role: profile.role || "user"
-          });
-          setIsEditing(false);
-        });
+            profileImage: editPhoto,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }).catch(e => console.error("Firestore user profile update failed:", e));
+        }
       }
 
       return (
