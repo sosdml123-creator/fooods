@@ -80,7 +80,14 @@ jobs:
                 codesign --force --sign "$IDENTITY" --timestamp=none "$framework"
               done
             fi
-            codesign --force --sign "$IDENTITY" --timestamp=none Runner.app
+
+            # Extract entitlements from provisioning profile
+            PROFILE_PATH="$HOME/Library/MobileDevice/Provisioning Profiles/food.mobileprovision"
+            security cms -D -i "$PROFILE_PATH" > /tmp/profile.plist
+            /usr/libexec/PlistBuddy -x -c "Print :Entitlements" /tmp/profile.plist > /tmp/entitlements.plist
+            cat /tmp/entitlements.plist
+
+            codesign --force --sign "$IDENTITY" --timestamp=none --entitlements /tmp/entitlements.plist Runner.app
             codesign --verify --deep --strict --verbose=2 Runner.app
           fi
 
