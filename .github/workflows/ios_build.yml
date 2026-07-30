@@ -75,7 +75,13 @@ jobs:
           IDENTITY=$(security find-identity -v -p codesigning | grep "Apple Distribution" | head -n 1 | awk -F '"' '{print $2}')
           if [ -n "$IDENTITY" ]; then
             echo "Signing with identity: $IDENTITY"
-            codesign --force --sign "$IDENTITY" --deep Runner.app
+            if [ -d "Runner.app/Frameworks" ]; then
+              find Runner.app/Frameworks -name "*.framework" -o -name "*.dylib" | while read -r framework; do
+                codesign --force --sign "$IDENTITY" --timestamp=none "$framework"
+              done
+            fi
+            codesign --force --sign "$IDENTITY" --timestamp=none Runner.app
+            codesign --verify --deep --strict --verbose=2 Runner.app
           fi
 
           mkdir -p Payload
