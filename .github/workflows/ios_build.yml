@@ -46,7 +46,7 @@ jobs:
           security unlock-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" $KEYCHAIN_PATH
 
           # 2. Decode and import p12 certificate
-          tr -d '\r\n' < mobile_app/ios/certs/p12_b64.txt | base64 --decode > $HOME/certificate.p12
+          echo "${{ secrets.P12_BASE64 }}" | tr -d '\r\n' | base64 --decode > $HOME/certificate.p12
           ls -la $HOME/certificate.p12
           file $HOME/certificate.p12
           security import $HOME/certificate.p12 -k $KEYCHAIN_PATH -P "${{ secrets.P12_PASSWORD }}" -T /usr/bin/codesign
@@ -55,7 +55,7 @@ jobs:
 
           # 3. Decode and install Provisioning Profile
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          tr -d '\r\n' < mobile_app/ios/certs/mobileprovision_b64.txt | base64 --decode > "$HOME/Library/MobileDevice/Provisioning Profiles/food.mobileprovision"
+          echo "${{ secrets.MOBILEPROVISION_BASE64 }}" | tr -d '\r\n' | base64 --decode > "$HOME/Library/MobileDevice/Provisioning Profiles/food.mobileprovision"
 
       - name: Build iOS Release App
         run: |
