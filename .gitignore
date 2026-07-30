@@ -20,4 +20,7 @@ uploads/
 *.log
 reports.json
 /mobile_app/ios/certs/
+p12_base64.txt
+mobileprovision_base64.txt
+*_base64.txt
 
