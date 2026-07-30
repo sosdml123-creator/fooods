@@ -38,6 +38,9 @@ jobs:
           echo "${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}" > ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}.p8
 
       - name: Import Signing Certificate (.p12) and Provisioning Profile
+        env:
+          P12_BASE64: ${{ secrets.P12_BASE64 }}
+          MOBILEPROVISION_BASE64: ${{ secrets.MOBILEPROVISION_BASE64 }}
         run: |
           # 1. Create temporary keychain
           KEYCHAIN_PATH=$HOME/Library/Keychains/build.keychain-db
@@ -46,7 +49,8 @@ jobs:
           security unlock-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" $KEYCHAIN_PATH
 
           # 2. Decode and import p12 certificate
-          echo "${{ secrets.P12_BASE64 }}" | tr -d '\r\n' | base64 --decode > $HOME/certificate.p12
+          echo "P12_BASE64 length: ${#P12_BASE64}"
+          echo "$P12_BASE64" | tr -d '\r\n' | base64 --decode > $HOME/certificate.p12
           ls -la $HOME/certificate.p12
           file $HOME/certificate.p12
           security import $HOME/certificate.p12 -k $KEYCHAIN_PATH -P "${{ secrets.P12_PASSWORD }}" -T /usr/bin/codesign
@@ -55,7 +59,7 @@ jobs:
 
           # 3. Decode and install Provisioning Profile
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          echo "${{ secrets.MOBILEPROVISION_BASE64 }}" | tr -d '\r\n' | base64 --decode > "$HOME/Library/MobileDevice/Provisioning Profiles/food.mobileprovision"
+          echo "$MOBILEPROVISION_BASE64" | tr -d '\r\n' | base64 --decode > "$HOME/Library/MobileDevice/Provisioning Profiles/food.mobileprovision"
 
       - name: Build iOS Release App
         run: |
