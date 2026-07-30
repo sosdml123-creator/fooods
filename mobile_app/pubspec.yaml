@@ -2,7 +2,7 @@ name: plating_mobile_app
 description: "Plating hybrid webview application for iOS and Android"
 publish_to: 'none'
 
-version: 1.0.0+67
+version: 1.0.0+68
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -40,6 +40,7 @@ flutter:
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
+  remove_alpha_ios: true
   image_path: "assets/icon.png"
   adaptive_icon_background: "#000000"
   adaptive_icon_foreground: "assets/icon_adaptive_foreground.png"
