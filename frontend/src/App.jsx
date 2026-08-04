@@ -2913,24 +2913,18 @@ export class ErrorBoundary extends React.Component {
           const detectedTags = extractHashtags(body);
           let placeInfo = null;
 
-          // 미업로드 사진들을 이 시점에 업로드
-          let uploadedImages = images;
-          if (images.some(img => !img.uploadedUrl)) {
-            console.log("[SUBMIT] 미업로드 사진 업로드 시작...");
-            try {
-              uploadedImages = await uploadPendingImages(images);
-              setImages(uploadedImages);
-            } catch (uploadErr) {
-              alert(`사진 업로드 중 오류가 발생했습니다: ${uploadErr.message || uploadErr}`);
-              setLoading(false);
-              return;
-            }
-          }
+          // 이미 업로드된 URL만 사용하고, 미업로드 파일은 백그라운드에서 처리
+          const alreadyUploadedUrls = images.filter(img => img.uploadedUrl).map(img => img.uploadedUrl);
+          const pendingFiles = images
+            .filter(img => !img.uploadedUrl && img.file)
+            .map(img => ({ file: img.file, previewUrl: img.previewUrl }));
 
-          let finalImageUrls = uploadedImages.map(img => img.uploadedUrl).filter(Boolean);
-          if (finalImageUrls.length === 0) {
-            finalImageUrls = [fallbackImages[Math.floor(Math.random() * fallbackImages.length)]];
-          }
+          // 사진이 없으면 fallback 이미지 사용 (업로드 중인 사진이 있으면 나중에 업데이트됨)
+          let initialImageUrls = alreadyUploadedUrls.length > 0
+            ? alreadyUploadedUrls
+            : (pendingFiles.length > 0
+              ? [] // 업로드 완료 후 채워질 예정
+              : [fallbackImages[Math.floor(Math.random() * fallbackImages.length)]]);
 
           const finalLocation = selectedLocation ? {
             lat: Number(selectedLocation.lat),
@@ -2943,21 +2937,24 @@ export class ErrorBoundary extends React.Component {
             link: selectedLocation.link ? String(selectedLocation.link) : ""
           } : null;
 
-          console.log("[SUBMIT] Invoking onCreate callback payload:", { title, category, imagesCount: finalImageUrls.length, location: finalLocation });
+          console.log("[SUBMIT] Invoking onCreate callback (background upload mode):", { title, category, imagesCount: initialImageUrls.length, pendingCount: pendingFiles.length, location: finalLocation });
           
-          await onCreate({
+          // 즉시 포스트 등록 (이미지는 나중에 채워짐)
+          onCreate({
             title: title.trim(),
             body: body.trim(),
             category,
             mediaType: "image",
-            image: finalImageUrls,
+            image: initialImageUrls,
             tags: detectedTags,
             productLinks,
             placeInfo,
-            location: finalLocation
+            location: finalLocation,
+            _pendingFiles: pendingFiles, // 백그라운드 업로드용
+            _alreadyUploadedUrls: alreadyUploadedUrls
           });
 
-          console.log("[SUBMIT] finished.");
+          console.log("[SUBMIT] finished (navigating home immediately).");
         } catch (err) {
           console.error("[SUBMIT ERROR] submit() failed with error:", err);
           alert(`포스팅 작성 중 오류가 발생했습니다: ${err.message || err}`);
@@ -3334,12 +3331,7 @@ export class ErrorBoundary extends React.Component {
               </div>
 
               <button className="primary full mt-5 text-xs font-bold py-3.5 rounded-xl shadow-md active:scale-98 transition-transform" type="button" onClick={submit} disabled={loading}>
-                {loading
-                  ? (images.some(img => !img.uploadedUrl && img.file)
-                      ? `사진 업로드 중... (${images.filter(img => !img.uploadedUrl && img.file).length}장)`
-                      : "등록 중...")
-                  : `글 등록 및 수익 모델 연동${images.some(img => !img.uploadedUrl && img.file) ? ` (사진 ${images.filter(img => !img.uploadedUrl && img.file).length}장 업로드 예정)` : ""}`
-                }
+                {loading ? "등록 중..." : "글 등록 및 수익 모델 연동"}
               </button>
             </div>
           </div>
@@ -7201,7 +7193,37 @@ export class ErrorBoundary extends React.Component {
         }
       }
 
+      // 백그라운드 업로드용 이미지 압축 (WriteView의 compressImageMobile과 동일한 로직)
+      function compressImageForUpload(file) {
+        return new Promise((resolve) => {
+          if (file.size < 2 * 1024 * 1024) return resolve(file);
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+              const canvas = document.createElement("canvas");
+              let width = img.width, height = img.height;
+              const maxDim = 1024;
+              if (width > maxDim || height > maxDim) {
+                if (width > height) { height = Math.round((height * maxDim) / width); width = maxDim; }
+                else { width = Math.round((width * maxDim) / height); height = maxDim; }
+              }
+              canvas.width = width; canvas.height = height;
+              canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+              canvas.toBlob((blob) => {
+                resolve(blob ? new File([blob], file.name || "photo.jpg", { type: "image/jpeg" }) : file);
+              }, "image/jpeg", 0.75);
+            };
+            img.onerror = () => resolve(file);
+            img.src = e.target.result;
+          };
+          reader.onerror = () => resolve(file);
+          reader.readAsDataURL(file);
+        });
+      }
+
       async function handleCreatePost(newPostData) {
+
         await authReadyPromise;
         await sessionSyncReadyPromise;
         const user = auth.currentUser;
@@ -7210,6 +7232,9 @@ export class ErrorBoundary extends React.Component {
           setLoginOpen(true);
           return;
         }
+
+        const pendingFiles = newPostData._pendingFiles || [];
+        const alreadyUploadedUrls = newPostData._alreadyUploadedUrls || [];
 
         const newPost = {
           author: profile.name,
@@ -7229,14 +7254,74 @@ export class ErrorBoundary extends React.Component {
           comments: [],
           createdAt: new Date().toLocaleDateString(),
           timestamp: new Date().toISOString(),
-          userId: user.uid
+          userId: user.uid,
+          imageUploading: pendingFiles.length > 0 // 업로드 중 표시용
         };
 
+        // 즉시 Firestore에 저장 후 홈으로 이동
         db.collection("posts").add(newPost)
-          .then((docRef) => {
+          .then(async (docRef) => {
             console.log("[Firestore] Post added with ID:", docRef.id);
             try { sessionStorage.removeItem("fooods_write_open"); } catch(e) {}
             setActiveTab("home");
+
+            // 백그라운드에서 미업로드 사진 업로드 후 Firestore 업데이트
+            if (pendingFiles.length > 0) {
+              console.log("[BG UPLOAD] 백그라운드 이미지 업로드 시작:", pendingFiles.length, "장");
+              try {
+                const uploadedUrls = await Promise.all(
+                  pendingFiles.map(async ({ file, previewUrl }) => {
+                    try {
+                      let fileToUpload = file;
+                      try {
+                        fileToUpload = await compressImageForUpload(file);
+                      } catch(e) { fileToUpload = file; }
+
+                      const formData = new FormData();
+                      formData.append("file", fileToUpload, file.name || `photo_${Date.now()}.jpg`);
+                      const response = await fetch("/api/v1/upload", { method: "POST", body: formData });
+                      const res = await response.json();
+                      if (res.success && res.url) {
+                        // blob URL 메모리 해제
+                        if (previewUrl && previewUrl.startsWith("blob:")) {
+                          try { URL.revokeObjectURL(previewUrl); } catch(e) {}
+                        }
+                        console.log("[BG UPLOAD] 업로드 성공:", file.name, "->", res.url);
+                        return res.url;
+                      }
+                      return null;
+                    } catch(err) {
+                      console.error("[BG UPLOAD] 업로드 실패:", file.name, err);
+                      return null;
+                    }
+                  })
+                );
+
+                const successUrls = uploadedUrls.filter(Boolean);
+                const finalUrls = [...alreadyUploadedUrls, ...successUrls];
+
+                if (finalUrls.length > 0) {
+                  await db.collection("posts").doc(docRef.id).update({
+                    image: finalUrls,
+                    imageUploading: false
+                  });
+                  console.log("[BG UPLOAD] Firestore 이미지 업데이트 완료:", finalUrls.length, "장");
+                } else {
+                  // 업로드가 모두 실패하면 fallback 이미지 사용
+                  const fallback = fallbackImages[Math.floor(Math.random() * fallbackImages.length)];
+                  await db.collection("posts").doc(docRef.id).update({
+                    image: [fallback],
+                    imageUploading: false
+                  });
+                }
+              } catch(bgErr) {
+                console.error("[BG UPLOAD] 백그라운드 업로드 전체 실패:", bgErr);
+                // 실패해도 포스트는 유지, imageUploading만 해제
+                try {
+                  await db.collection("posts").doc(docRef.id).update({ imageUploading: false });
+                } catch(e) {}
+              }
+            }
           })
           .catch((err) => {
             alert("포스트 추가 중 오류가 발생했습니다: " + err.message);
