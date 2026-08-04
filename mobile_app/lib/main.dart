@@ -4,6 +4,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -159,6 +160,126 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
   }
 
+  // ──────────────────────────────────────────────────────────────
+  // Sign in with Apple 네이티브 처리 (Guideline 4.8 준수)
+  // WKWebView 내부에서는 Firebase OAuth 팝업이 차단되므로,
+  // 반드시 네이티브 AuthenticationServices를 통해 인증해야 함.
+  // ──────────────────────────────────────────────────────────────
+  Future<void> _handleAppleSignIn() async {
+    debugPrint('[Apple Sign In] Native AuthenticationServices 시작...');
+
+    // iOS가 아닌 플랫폼에서는 미지원 오류 반환
+    if (!Platform.isIOS) {
+      debugPrint('[Apple Sign In] iOS 전용 기능입니다.');
+      _webViewController?.evaluateJavascript(source: '''
+        if (window._appleSignInCallback) {
+          window._appleSignInCallback({ error: "Sign in with Apple은 iOS 전용입니다." });
+        }
+      ''');
+      return;
+    }
+
+    try {
+      // 네이티브 Apple 인증 요청 (AuthenticationServices)
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      debugPrint('[Apple Sign In] 인증 성공. userIdentifier: ${credential.userIdentifier}');
+
+      // 이름 조합 (Apple은 최초 로그인 시에만 이름 제공)
+      final String? givenName = credential.givenName;
+      final String? familyName = credential.familyName;
+      String displayName = '';
+      if (givenName != null || familyName != null) {
+        displayName = '${familyName ?? ''}${givenName ?? ''}'.trim();
+      }
+
+      // 인증 결과를 웹앱 JavaScript로 전달
+      final String idToken = credential.identityToken ?? '';
+      final String authorizationCode = credential.authorizationCode ?? '';
+      final String email = credential.email ?? '';
+      final String userIdentifier = credential.userIdentifier ?? '';
+
+      // JSON 특수문자 이스케이프 처리
+      String escapeForJs(String s) => s
+          .replaceAll('\\', '\\\\')
+          .replaceAll('"', '\\"')
+          .replaceAll('\n', '\\n')
+          .replaceAll('\r', '\\r');
+
+      final jsPayload = '''
+        {
+          "idToken": "${escapeForJs(idToken)}",
+          "authorizationCode": "${escapeForJs(authorizationCode)}",
+          "email": "${escapeForJs(email)}",
+          "displayName": "${escapeForJs(displayName)}",
+          "userIdentifier": "${escapeForJs(userIdentifier)}"
+        }
+      ''';
+
+      debugPrint('[Apple Sign In] 웹앱으로 결과 전달 중...');
+      await _webViewController?.evaluateJavascript(source: '''
+        (function() {
+          var payload = $jsPayload;
+          if (window._appleSignInCallback) {
+            window._appleSignInCallback(payload);
+          } else {
+            // 콜백이 아직 등록되지 않은 경우 이벤트로 전달
+            window.dispatchEvent(new CustomEvent('appleSignInResult', { detail: payload }));
+          }
+        })();
+      ''');
+
+    } on SignInWithAppleAuthorizationException catch (e) {
+      debugPrint('[Apple Sign In] 사용자 취소 또는 인증 오류: ${e.code} - ${e.message}');
+
+      String errorMsg = '';
+      switch (e.code) {
+        case AuthorizationErrorCode.canceled:
+          errorMsg = 'canceled';
+          break;
+        case AuthorizationErrorCode.failed:
+          errorMsg = 'Apple 인증에 실패했습니다.';
+          break;
+        case AuthorizationErrorCode.invalidResponse:
+          errorMsg = '유효하지 않은 Apple 응답입니다.';
+          break;
+        case AuthorizationErrorCode.notHandled:
+          errorMsg = 'Apple 인증 요청이 처리되지 않았습니다.';
+          break;
+        default:
+          errorMsg = e.message ?? 'Apple 로그인 오류가 발생했습니다.';
+      }
+
+      await _webViewController?.evaluateJavascript(source: '''
+        (function() {
+          var payload = { "error": "${errorMsg.replaceAll('"', '\\"')}", "canceled": ${e.code == AuthorizationErrorCode.canceled} };
+          if (window._appleSignInCallback) {
+            window._appleSignInCallback(payload);
+          } else {
+            window.dispatchEvent(new CustomEvent('appleSignInResult', { detail: payload }));
+          }
+        })();
+      ''');
+    } catch (e) {
+      debugPrint('[Apple Sign In] 예상치 못한 오류: $e');
+      await _webViewController?.evaluateJavascript(source: '''
+        (function() {
+          var payload = { "error": "Apple 로그인 처리 중 오류가 발생했습니다." };
+          if (window._appleSignInCallback) {
+            window._appleSignInCallback(payload);
+          } else {
+            window.dispatchEvent(new CustomEvent('appleSignInResult', { detail: payload }));
+          }
+        })();
+      ''');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -204,6 +325,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
                         useShouldOverrideUrlLoading: true,
                         allowsInlineMediaPlayback: true, // iOS 동영상 인라인 재생 허용
                         allowsBackForwardNavigationGestures: Platform.isIOS, // iOS 스와이프 뒤로가기 제스처
+                        hardwareAcceleration: true, // GPU 하드웨어 가속 강제 (WebGL 및 지도 캔버스 60fps 렌더링)
+                        disallowOverScroll: true, // 오버스크롤 튕김으로 인한 지도 렉 제거
+                        overScrollMode: OverScrollMode.OVER_SCROLL_NEVER,
+                        verticalScrollBarEnabled: false, // 스크롤바 바운스 제거
+                        horizontalScrollBarEnabled: false,
+                        cacheEnabled: true,
                       ),
                       onWebViewCreated: (controller) {
                         _webViewController = controller;
@@ -263,6 +390,21 @@ class _WebViewScreenState extends State<WebViewScreen> {
                             return {'success': true};
                           },
                         );
+
+                        // ──────────────────────────────────────────────────
+                        // Sign in with Apple 네이티브 트리거 핸들러
+                        // 웹앱에서 Apple 버튼 클릭 시 이 핸들러를 호출하면
+                        // Flutter가 네이티브 AuthenticationServices를 실행함.
+                        // Guideline 4.8 준수를 위한 핵심 구현 포인트.
+                        // ──────────────────────────────────────────────────
+                        controller.addJavaScriptHandler(
+                          handlerName: 'triggerAppleSignIn',
+                          callback: (args) {
+                            debugPrint('[WebView JS Handler] triggerAppleSignIn signal received. Starting native Apple Sign In...');
+                            _handleAppleSignIn();
+                            return {'success': true};
+                          },
+                        );
                       },
                       onLoadStart: (controller, url) {
                         debugPrint('[WebView LoadStart] URL: ${url?.toString()}, current _isLoadingWeb: $_isLoadingWeb');
@@ -307,14 +449,17 @@ class _WebViewScreenState extends State<WebViewScreen> {
                           // 1. 커스텀 스킴(nmap, coupang 등) 및 intent:// URL 감지
                           final isCustomScheme = !['http', 'https', 'file', 'chrome', 'data', 'about'].contains(scheme) || urlStr.startsWith('intent:');
 
-                          // Kakao, Naver, Google 등 OAuth 로그인/인증 도메인은 내부 웹뷰에서 처리하도록 허용
+                          // Kakao, Naver, Google, Apple 등 OAuth 로그인/인증 도메인은 내부 웹뷰에서 처리하도록 허용
                           final isAuthDomain = host.endsWith('kakao.com') ||
                               host.endsWith('kakao.co.kr') ||
                               host.endsWith('daum.net') ||
                               host.endsWith('daumcdn.net') ||
                               host.endsWith('naver.com') ||
                               host.endsWith('google.com') ||
-                              host.endsWith('google.co.kr');
+                              host.endsWith('google.co.kr') ||
+                              host.endsWith('apple.com') ||
+                              host.endsWith('appleid.apple.com') ||
+                              host.endsWith('firebaseapp.com');
 
                           // 2. 외부 웹 도메인(myplating.kr 이외의 네이버지도/쿠팡 등 외부 링크) 감지
                           final isExternalWebLink = (scheme == 'http' || scheme == 'https') &&

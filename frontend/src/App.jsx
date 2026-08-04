@@ -3468,15 +3468,27 @@ export class ErrorBoundary extends React.Component {
               <div className="mt-4">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="flex-1 h-px bg-zinc-200"></div>
-                  <span className="text-xs text-zinc-400">또는</span>
+                  <span className="text-xs text-zinc-400 font-medium">소셜 계정으로 계속하기</span>
                   <div className="flex-1 h-px bg-zinc-200"></div>
                 </div>
-                <button
-                  className="w-full kakao-btn py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-[#FEE500] text-[#191919] hover:bg-[#FDD835] transition-colors"
-                  onClick={() => onLogin("kakao")}
-                >
-                  <i className="fa-solid fa-comment text-zinc-950 text-base"></i> 카카오톡 간편 시작하기
-                </button>
+                <div className="flex flex-col gap-2.5">
+                  {/* Apple로 계속하기 버튼 (App Store Review Guideline 4.8 필수) */}
+                  <button
+                    type="button"
+                    className="w-full apple-btn py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-black text-white hover:bg-zinc-800 transition-colors shadow-sm active:scale-98 cursor-pointer"
+                    onClick={() => onLogin("apple")}
+                  >
+                    <i className="fa-brands fa-apple text-lg"></i> Apple로 계속하기
+                  </button>
+                  {/* 카카오톡 간편 시작하기 버튼 */}
+                  <button
+                    type="button"
+                    className="w-full kakao-btn py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-[#FEE500] text-[#191919] hover:bg-[#FDD835] transition-colors shadow-sm active:scale-98 cursor-pointer"
+                    onClick={() => onLogin("kakao")}
+                  >
+                    <i className="fa-solid fa-comment text-zinc-950 text-base"></i> 카카오톡 간편 시작하기
+                  </button>
+                </div>
               </div>
             </div>
           </section>
@@ -3544,17 +3556,30 @@ export class ErrorBoundary extends React.Component {
               </div>
             </div>
 
-            {/* 카카오톡으로 계속하기 메인 버튼 */}
-            <button
-              type="button"
-              onClick={() => onLogin("kakao")}
-              className="w-full bg-[#FEE500] hover:bg-[#FADA00] text-[#191919] font-extrabold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2.5 text-sm shadow-sm active:scale-98 transition-all mb-6 cursor-pointer"
-            >
-              <div className="w-5 h-5 rounded-md bg-[#191919] flex items-center justify-center text-[#FEE500] text-[10px]">
-                <i className="fa-solid fa-comment"></i>
-              </div>
-              <span>카카오톡으로 계속하기</span>
-            </button>
+            {/* 소셜 로그인 버튼 영역 (Apple & 카카오 동등 배치 - Guideline 4.8 준수) */}
+            <div className="w-full flex flex-col gap-2.5 mb-6">
+              {/* Apple로 계속하기 버튼 */}
+              <button
+                type="button"
+                onClick={() => onLogin("apple")}
+                className="w-full bg-black hover:bg-zinc-800 text-white font-extrabold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2.5 text-sm shadow-sm active:scale-98 transition-all cursor-pointer"
+              >
+                <i className="fa-brands fa-apple text-lg"></i>
+                <span>Apple로 계속하기</span>
+              </button>
+
+              {/* 카카오톡으로 계속하기 버튼 */}
+              <button
+                type="button"
+                onClick={() => onLogin("kakao")}
+                className="w-full bg-[#FEE500] hover:bg-[#FADA00] text-[#191919] font-extrabold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2.5 text-sm shadow-sm active:scale-98 transition-all cursor-pointer"
+              >
+                <div className="w-5 h-5 rounded-md bg-[#191919] flex items-center justify-center text-[#FEE500] text-[10px]">
+                  <i className="fa-solid fa-comment"></i>
+                </div>
+                <span>카카오톡으로 계속하기</span>
+              </button>
+            </div>
 
             {/* 구분선 */}
             <div className="w-full flex items-center gap-3 mb-6">
@@ -3798,9 +3823,9 @@ export class ErrorBoundary extends React.Component {
       _bindEvents() {
         if (!this._map || !window.naver || !window.naver.maps) return;
         const map = this._map;
-        const listener1 = window.naver.maps.Event.addListener(map, 'zoom_changed', () => this.update());
-        const listener2 = window.naver.maps.Event.addListener(map, 'dragend', () => this.update());
-        this._listeners = [listener1, listener2];
+        // dragend / zoom_changed 대신 idle 이벤트 사용으로 이동 중 60fps 드래그 보장
+        const listener1 = window.naver.maps.Event.addListener(map, 'idle', () => this.update());
+        this._listeners = [listener1];
       }
 
       clear() {
@@ -4029,7 +4054,7 @@ export class ErrorBoundary extends React.Component {
             mapDataControl: false,
             logoControl: false,
             mapTypeControl: false,
-            tileTransition: true,           // 부드러운 타일 페이드/블렌딩 전환 켜기 (60fps 스무스 드래그)
+            tileTransition: false,          // 불필요한 타일 페이드/블렌딩 애니메이션 제거 (60fps 스무스 드래그)
             inertialPan: true,              // 관성 스크롤 유지
             inertialPanDuration: 400,       // 자연스러운 400ms 감속 관성
             disableKineticPan: false        // 손가락 터치 튕김 시 부드러운 관성 패닝 활성화
@@ -4182,12 +4207,17 @@ export class ErrorBoundary extends React.Component {
 
         markersRef.current = createdMarkers;
 
-        // [줌 변경 이벤트 리스너] 줌아웃 시 마커 크기 및 형태 동적 변환
-        const zoomListener = window.naver.maps.Event.addListener(map, 'zoom_changed', () => {
+        // [이동/줌 정지(idle) 이벤트 리스너] 드래그/줌 조작 중 마커 DOM 재생성을 차단하고 정지 시점에만 마커 변환
+        let lastZoomTier = Math.floor(currentZoom);
+        const idleListener = window.naver.maps.Event.addListener(map, 'idle', () => {
           const newZoom = map.getZoom();
-          markerDataList.forEach(({ marker, placeTitle }) => {
-            marker.setIcon(getMarkerIconContent(placeTitle, newZoom));
-          });
+          const newZoomTier = Math.floor(newZoom);
+          if (newZoomTier !== lastZoomTier) {
+            lastZoomTier = newZoomTier;
+            markerDataList.forEach(({ marker, placeTitle }) => {
+              marker.setIcon(getMarkerIconContent(placeTitle, newZoomTier));
+            });
+          }
         });
 
         // [2] MarkerClustering 라이브러리 연동
@@ -4206,7 +4236,7 @@ export class ErrorBoundary extends React.Component {
 
         return () => {
           try {
-            window.naver.maps.Event.removeListener(zoomListener);
+            window.naver.maps.Event.removeListener(idleListener);
             window.naver.maps.Event.removeListener(mapClick);
             markersRef.current.forEach(m => m.setMap(null));
             markersRef.current = [];
@@ -4471,14 +4501,9 @@ export class ErrorBoundary extends React.Component {
                 height: "100%", 
                 minHeight: 0, 
                 width: '100%', 
-                touchAction: 'pan-x pan-y', 
+                touchAction: 'none', 
                 WebkitUserSelect: 'none', 
-                userSelect: 'none', 
-                willChange: 'transform', 
-                transform: 'translate3d(0,0,0)',
-                WebkitTransform: 'translate3d(0,0,0)',
-                backfaceVisibility: 'hidden',
-                WebkitBackfaceVisibility: 'hidden'
+                userSelect: 'none'
               }}
             ></div>
           )}
@@ -6757,9 +6782,167 @@ export class ErrorBoundary extends React.Component {
         console.log(`[Toast ${type}]`, msg);
       };
 
+      // Apple Sign In 결과 처리 공통 헬퍼 (네이티브/웹 양쪽 공용)
+      async function _processAppleSignInUser(firebaseUser, displayName, email) {
+        const safeDisplayName = displayName || (email ? email.split('@')[0] : `플레이터_${firebaseUser.uid.slice(-4)}`);
+
+        const userRef = db.collection("users").doc(firebaseUser.uid);
+        const userSnap = await userRef.get();
+
+        if (!userSnap.exists) {
+          const newUserObj = {
+            uid: firebaseUser.uid,
+            nickname: safeDisplayName,
+            email: email,
+            name: safeDisplayName,
+            avatarImg: firebaseUser.photoURL || '',
+            provider: 'apple',
+            role: 'user',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            lastLoginAt: firebase.firestore.FieldValue.serverTimestamp()
+          };
+          await userRef.set(newUserObj);
+        } else {
+          await userRef.update({
+            lastLoginAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+        }
+
+        const updatedProfile = {
+          name: userSnap.exists && userSnap.data().nickname ? userSnap.data().nickname : safeDisplayName,
+          bio: userSnap.exists && userSnap.data().bio ? userSnap.data().bio : "소개글이 없습니다.",
+          avatar: (safeDisplayName || "플").slice(0, 1),
+          avatarImg: (userSnap.exists && userSnap.data().avatarImg) || firebaseUser.photoURL || "",
+          role: (userSnap.exists && userSnap.data().role) || "user"
+        };
+        setProfile(updatedProfile);
+        setDBData("foodhouse_profile", updatedProfile).catch(e => console.error(e));
+        setIsLoggedIn(true);
+        setShowLoginModal(false);
+        showToast("Apple 계정으로 성공적으로 로그인되었습니다.", "success");
+        console.log("[Apple Sign In] 로그인 완료:", firebaseUser.uid);
+      }
+
       async function handleLogin(type, loginId, password) {
         if (type === "kakao") {
           window.location.href = "/api/v1/auth/authorize";
+        } else if (type === "apple") {
+          console.log("[Apple Sign In] Flutter 네이티브 AuthenticationServices 호출...");
+
+          // ────────────────────────────────────────────────────────────────────
+          // WKWebView 내부에서는 Firebase signInWithPopup/Redirect가 차단됩니다.
+          // Flutter 네이티브 triggerAppleSignIn 핸들러를 통해 iOS AuthenticationServices를
+          // 직접 호출하고, 결과를 받아 Firebase OAuthCredential로 처리합니다.
+          // (App Store Guideline 4.8 준수 — 실제로 작동하는 Sign in with Apple 구현)
+          // ────────────────────────────────────────────────────────────────────
+          try {
+            // Flutter 네이티브 핸들러 가용 여부 확인
+            const isNativeAvailable = window.flutter_inappwebview &&
+              typeof window.flutter_inappwebview.callHandler === "function";
+
+            if (!isNativeAvailable) {
+              // 웹 브라우저 환경(비-앱) 폴백: Firebase signInWithPopup 사용
+              console.log("[Apple Sign In] 웹 브라우저 환경 감지. Firebase OAuth 팝업 사용...");
+              const provider = new firebase.auth.OAuthProvider('apple.com');
+              provider.addScope('email');
+              provider.addScope('name');
+              try {
+                const result = await auth.signInWithPopup(provider);
+                if (result && result.user) {
+                  await _processAppleSignInUser(result.user, result.user.displayName || '', result.user.email || '');
+                }
+              } catch (popupErr) {
+                if (popupErr.code === 'auth/popup-blocked' || popupErr.code === 'auth/operation-not-supported-in-this-environment') {
+                  await auth.signInWithRedirect(new firebase.auth.OAuthProvider('apple.com'));
+                  return;
+                }
+                throw popupErr;
+              }
+              return;
+            }
+
+            // Flutter 네이티브 Apple 인증 요청 (Promise 기반 결과 대기)
+            const appleResult = await new Promise((resolve, reject) => {
+              // 타임아웃 (60초)
+              const timeout = setTimeout(() => {
+                window._appleSignInCallback = null;
+                reject(new Error("Apple 로그인 시간이 초과되었습니다."));
+              }, 60000);
+
+              // Flutter로부터 결과를 받을 콜백 등록
+              window._appleSignInCallback = (payload) => {
+                clearTimeout(timeout);
+                window._appleSignInCallback = null;
+                if (payload.error) {
+                  if (payload.canceled) {
+                    resolve(null); // 사용자가 취소한 경우 조용히 처리
+                  } else {
+                    reject(new Error(payload.error));
+                  }
+                } else {
+                  resolve(payload);
+                }
+              };
+
+              // CustomEvent 폴백 리스너
+              const eventHandler = (e) => {
+                window.removeEventListener('appleSignInResult', eventHandler);
+                clearTimeout(timeout);
+                window._appleSignInCallback = null;
+                const payload = e.detail;
+                if (payload.error) {
+                  if (payload.canceled) {
+                    resolve(null);
+                  } else {
+                    reject(new Error(payload.error));
+                  }
+                } else {
+                  resolve(payload);
+                }
+              };
+              window.addEventListener('appleSignInResult', eventHandler);
+
+              // Flutter 네이티브 핸들러 호출
+              window.flutter_inappwebview.callHandler('triggerAppleSignIn')
+                .catch((err) => {
+                  clearTimeout(timeout);
+                  window._appleSignInCallback = null;
+                  window.removeEventListener('appleSignInResult', eventHandler);
+                  reject(new Error("Apple 로그인 실행 중 오류가 발생했습니다."));
+                });
+            });
+
+            // 사용자가 취소한 경우 조용히 종료
+            if (!appleResult) {
+              console.log("[Apple Sign In] 사용자가 로그인을 취소했습니다.");
+              return;
+            }
+
+            console.log("[Apple Sign In] 네이티브 인증 성공. Firebase OAuthCredential 생성...");
+            const { idToken, authorizationCode, email, displayName, userIdentifier } = appleResult;
+
+            // Firebase OAuthCredential 생성 (idToken 기반)
+            const provider = new firebase.auth.OAuthProvider('apple.com');
+            const credential = provider.credential({
+              idToken: idToken,
+              rawNonce: undefined,
+            });
+
+            // Firebase 인증
+            const result = await auth.signInWithCredential(credential);
+
+            if (result && result.user) {
+              const resolvedName = displayName ||
+                result.user.displayName ||
+                (email ? email.split('@')[0] : `플레이터_${result.user.uid.slice(-4)}`);
+              await _processAppleSignInUser(result.user, resolvedName, email || result.user.email || '');
+            }
+
+          } catch (err) {
+            console.error("[Apple Sign In Error]", err);
+            throw new Error(err.message || "Apple 로그인 처리 중 오류가 발생했습니다.");
+          }
+
         } else {
           // 일반 로그인 (이메일/비밀번호)
           loginId = (loginId || "").trim().toLowerCase();

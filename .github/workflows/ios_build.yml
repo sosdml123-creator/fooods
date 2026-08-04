@@ -64,7 +64,7 @@ jobs:
       - name: Build iOS Release App
         run: |
           cd mobile_app
-          flutter build ios --release --no-codesign
+          flutter build ios --release --no-codesign --build-number=${{ github.run_number }}
 
       - name: Code Sign and Package IPA File
         run: |
