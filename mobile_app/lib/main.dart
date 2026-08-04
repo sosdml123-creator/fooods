@@ -327,7 +327,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
                         allowsBackForwardNavigationGestures: Platform.isIOS, // iOS 스와이프 뒤로가기 제스처
                         hardwareAcceleration: true, // GPU 하드웨어 가속 강제 (WebGL 및 지도 캔버스 60fps 렌더링)
                         disallowOverScroll: true, // 오버스크롤 튕김으로 인한 지도 렉 제거
-                        overScrollMode: OverScrollMode.OVER_SCROLL_NEVER,
                         verticalScrollBarEnabled: false, // 스크롤바 바운스 제거
                         horizontalScrollBarEnabled: false,
                         cacheEnabled: true,

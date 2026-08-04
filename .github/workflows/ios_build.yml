@@ -65,6 +65,12 @@ jobs:
         run: |
           cd mobile_app
           BUILD_NUMBER=$((70 + ${{ github.run_number }}))
+          # Flutter 3.24+에서 --no-codesign 단독으로는 post-build 서명 검증을 통과하지 못함.
+          # xcconfig 레벨에서 서명을 명시적으로 비활성화하여 해결 (다음 step에서 수동 codesign 처리)
+          echo "" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGNING_ALLOWED=NO" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGNING_REQUIRED=NO" >> ios/Flutter/Release.xcconfig
+          echo "CODE_SIGN_IDENTITY=" >> ios/Flutter/Release.xcconfig
           flutter build ios --release --no-codesign --build-number=$BUILD_NUMBER
 
       - name: Code Sign and Package IPA File
