@@ -1,18 +1,29 @@
-const nodemailer = require("nodemailer");
-
 // 관리자 이메일 주소 (환경변수 ADMIN_EMAIL 또는 기본값 admin@myplating.kr)
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@myplating.kr";
 
-// Nodemailer Transporter 설정
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || "smtp.gmail.com",
-  port: parseInt(process.env.SMTP_PORT || "587", 10),
-  secure: process.env.SMTP_SECURE === "true", // true for 465, false for other ports
-  auth: process.env.SMTP_USER && process.env.SMTP_PASS ? {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  } : undefined,
-});
+let transporter = null;
+
+function getTransporter() {
+  if (transporter) return transporter;
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) return null;
+
+  try {
+    const nodemailer = require("nodemailer");
+    transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || "smtp.gmail.com",
+      port: parseInt(process.env.SMTP_PORT || "587", 10),
+      secure: process.env.SMTP_SECURE === "true",
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+    return transporter;
+  } catch (err) {
+    console.error("[Mailer Init Warning] Failed to load nodemailer module:", err.message);
+    return null;
+  }
+}
 
 /**
  * 관리자에게 알림 이메일 발송
@@ -132,7 +143,12 @@ async function sendAdminNotification(options) {
   }
 
   try {
-    const info = await transporter.sendMail(mailOptions);
+    const activeTransporter = getTransporter();
+    if (!activeTransporter) {
+      console.warn("[Admin Notification] Nodemailer transporter not available. Skipping email send.");
+      return { success: true, simulated: true, recipient: ADMIN_EMAIL };
+    }
+    const info = await activeTransporter.sendMail(mailOptions);
     console.log(`[Admin Notification] Email sent successfully: ${info.messageId}`);
     return { success: true, messageId: info.messageId, recipient: ADMIN_EMAIL };
   } catch (error) {
