@@ -1,6 +1,7 @@
 const app = require("../backend/server.js");
 
 const client_id = process.env.KAKAO_CLIENT_ID || "3c6b9b1d740c3c2cb76369773ea57471";
+const client_secret = process.env.KAKAO_CLIENT_SECRET || "W4bIVwKsOMri6cIZJaBZuxVFwSR1hMHt";
 
 function getRedirectUri(req) {
   if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
@@ -16,6 +17,9 @@ function getRedirectUri(req) {
 
 module.exports = (req, res) => {
   try {
+    if (!client_id) {
+      console.error("[Vercel Handler Warning] KAKAO_CLIENT_ID is undefined!");
+    }
     let reqUrl = req.url || "";
     
     // Vercel Serverless Rewrite 시 원래 요청 URL 추출
@@ -54,7 +58,7 @@ module.exports = (req, res) => {
 
     return app(req, res);
   } catch (err) {
-    console.error("[Vercel Handler Error]", err);
+    console.error("[Vercel Handler Error]", err.stack || err);
     if (!res.headersSent) {
       res.status(500).json({ success: false, message: "서버리스 처리 오류: " + err.message });
     }

@@ -60,7 +60,7 @@ async function call(method, uri, param, header) {
     });
   } catch (err) {
     rtn = err.response || { data: { error: "Network Error", error_description: err.message } };
-    console.error(`[API 요청 에러] URL: ${uri}, 상태코드: ${err.response ? err.response.status : 'N/A'}, 에러내용:`, rtn.data);
+    console.error(`[API 요청 에러] URL: ${uri}, 상태코드: ${err.response ? err.response.status : 'N/A'}, 에러내용:`, rtn.data, "Stack:", err.stack || err);
   }
   return rtn.data;
 }
@@ -68,6 +68,10 @@ async function call(method, uri, param, header) {
 // 1. 카카오 로그인 창으로 리다이렉트
 router.get("/authorize", function (req, res) {
   try {
+    if (!client_id) {
+      console.error("[Kakao Authorize Error] KAKAO_CLIENT_ID is undefined!");
+      return res.status(500).json({ success: false, message: "카카오 KAKAO_CLIENT_ID 환경변수가 설정되지 않았습니다." });
+    }
     let { scope } = req.query;
     var scopeParam = "";
     if (scope) {
@@ -78,7 +82,7 @@ router.get("/authorize", function (req, res) {
     const kakaoAuthUrl = `${kauth_host}/oauth/authorize?client_id=${client_id}&redirect_uri=${encodeURIComponent(active_redirect_uri)}&response_type=code${scopeParam}`;
     return res.redirect(kakaoAuthUrl);
   } catch (err) {
-    console.error("[Kakao Authorize Error]", err);
+    console.error("[Kakao Authorize Error]", err.stack || err);
     return res.status(500).json({ success: false, message: "카카오 인증 이동 중 오류가 발생했습니다: " + err.message });
   }
 });
@@ -88,6 +92,10 @@ router.get("/redirect", async function (req, res) {
   try {
     if (!req.query.code) {
       return res.status(400).send("인증 코드가 누락되었습니다.");
+    }
+    if (!client_id) {
+      console.error("[Kakao Redirect Error] KAKAO_CLIENT_ID is undefined!");
+      return res.status(500).send("카카오 KAKAO_CLIENT_ID 환경변수가 설정되지 않았습니다.");
     }
 
   const active_redirect_uri = getRedirectUri(req);
@@ -111,7 +119,7 @@ router.get("/redirect", async function (req, res) {
   const param = qs.stringify(tokenParams);
   const header = { "Content-Type": "application/x-www-form-urlencoded;charset=utf-8" };
   
-  console.log("[토큰 요청] 전송 파라미터:", { ...tokenParams, client_id: "3c6b...7471", client_secret: tokenParams.client_secret ? "PRESENT" : "ABSENT" });
+  console.log("[토큰 요청] 전송 파라미터:", { ...tokenParams, client_id: client_id ? `${client_id.slice(0, 4)}...` : "UNDEFINED", client_secret: tokenParams.client_secret ? "PRESENT" : "ABSENT" });
   var rtn = await call("POST", kauth_host + "/oauth/token", param, header);
 
   if (rtn && rtn.access_token) {
@@ -187,7 +195,7 @@ router.get("/redirect", async function (req, res) {
     res.status(400).send("카카오 토큰 발급에 실패했습니다: " + JSON.stringify(rtn));
   }
   } catch (err) {
-    console.error("[Kakao Redirect Error]", err);
+    console.error("[Kakao Redirect Error]", err.stack || err);
     return res.status(500).send("카카오 로그인 도중 오류가 발생했습니다: " + err.message);
   }
 });
