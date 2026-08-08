@@ -730,7 +730,7 @@ app.use("/api/v1", postsRouter); // postsRouter는 내부에 /posts 및 /communi
 
 // SPA Fallback: API/헬스체크 이외의 모든 GET 요청은 index.html을 반환하여 React가 라우팅을 처리하게 함
 app.get("*all", (req, res, next) => {
-  if (req.path.startsWith("/api") || req.path.startsWith("/health")) {
+  if (req.path.startsWith("/api") || req.path.startsWith("/health") || process.env.VERCEL || process.env.NOW_BUILDER) {
     return next();
   }
   
