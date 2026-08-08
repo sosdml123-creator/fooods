@@ -204,6 +204,35 @@ function AdminReportsView({
     }
   }
 
+  async function handleDeleteContentAndBanUser(targetId, targetType, targetParentId, targetUserUid) {
+    if (!confirm("정말 콘텐츠 삭제 및 작성자 추방(차단)을 실행하시겠습니까?\n\n선택한 콘텐츠가 삭제되고 해당 유저는 영구 차단 상태로 변경됩니다.")) return;
+    try {
+      await handleDeleteContent(targetId, targetType, targetParentId);
+      if (targetUserUid) {
+        await db.collection("users").doc(targetUserUid).set({
+          status: "permanent_suspended",
+          isBanned: true,
+          bannedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+      // 백엔드 수동 중재 API도 호출
+      fetch("/api/v1/admin/moderate/delete-and-ban", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetType,
+          targetId,
+          targetUserUid,
+          reason: "어드민 패널 신고 처리 (콘텐츠 삭제 + 사용자 추방)"
+        })
+      }).catch(e => console.error("Admin delete and ban error:", e));
+
+      alert("콘텐츠 삭제 및 회원 추방 처리가 완결되었습니다.");
+    } catch (err) {
+      alert("처리 중 오류 발생: " + err.message);
+    }
+  }
+
   async function handleToggleMemberRole(uid, currentRole) {
     const targetRole = currentRole === "admin" ? "user" : "admin";
     if (!confirm(`이 회원의 권한을 [${targetRole === 'admin' ? '관리자' : '일반회원'}]로 변경하시겠습니까?`)) return;
@@ -361,17 +390,22 @@ function AdminReportsView({
                         </div>
 
                         {reportSubTab === "waiting" && (
-                          <div className="flex gap-2 border-t border-zinc-100 pt-3 mt-1">
-                            <button className="admin-btn secondary flex-1" onClick={() => {
-                              const p = comPosts.find(x => x.id === g.targetId) || posts.find(x => x.id === g.targetId);
-                              if (p) {
-                                setViewingPost(p);
-                              } else {
-                                alert("이미 삭제되었거나 볼 수 없는 게시글입니다.");
-                              }
-                            }}>내용 보기</button>
-                            <button className="admin-btn danger flex-1" onClick={() => handleDeleteContent(g.targetId, g.targetType, g.targetParentId)}>콘텐츠 삭제</button>
-                            <button className="admin-btn secondary flex-1 text-zinc-500" onClick={() => handleDismissReports(g.targetId)}>신고 기각</button>
+                          <div className="flex flex-col gap-2 border-t border-zinc-100 pt-3 mt-1">
+                            <div className="flex gap-2">
+                              <button className="admin-btn secondary flex-1" onClick={() => {
+                                const p = comPosts.find(x => x.id === g.targetId) || posts.find(x => x.id === g.targetId);
+                                if (p) {
+                                  setViewingPost(p);
+                                } else {
+                                  alert("이미 삭제되었거나 볼 수 없는 게시글입니다.");
+                                }
+                              }}>내용 보기</button>
+                              <button className="admin-btn danger flex-1" onClick={() => handleDeleteContent(g.targetId, g.targetType, g.targetParentId)}>콘텐츠 삭제</button>
+                              <button className="admin-btn secondary flex-1 text-zinc-500" onClick={() => handleDismissReports(g.targetId)}>신고 기각</button>
+                            </div>
+                            <button className="admin-btn danger w-full text-center font-bold" style={{ backgroundColor: "#dc2626", color: "#ffffff" }} onClick={() => handleDeleteContentAndBanUser(g.targetId, g.targetType, g.targetParentId, g.targetUserUid)}>
+                              🚫 콘텐츠 삭제 + 사용자 추방
+                            </button>
                           </div>
                         )}
                       </div>

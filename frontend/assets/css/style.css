@@ -1345,3 +1345,32 @@ button:disabled {
 }
 
 
+/* ===================================================
+   지도 탭 모바일 퍼포먼스 최적화
+   =================================================== */
+
+/* 마커 바텀 시트 슬라이드업 애니메이션 (GPU 가속) */
+@keyframes slideUpSheet {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* 네이버 지도 캔버스 GPU 레이어 고정 */
+.naver-map-canvas,
+[ref="mapRef"] {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  will-change: transform;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 모바일 WebView: 지도 터치 스크롤 최적화 */
+.naver-map-container * {
+  -webkit-tap-highlight-color: transparent;
+}

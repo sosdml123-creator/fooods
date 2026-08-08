@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { db } from "../firebase";
 import { collection, query, onSnapshot, doc, updateDoc, addDoc } from "firebase/firestore";
-import { Search, Eye, AlertTriangle, CheckCircle, Trash } from "lucide-react";
+import { Search, Eye, AlertTriangle, CheckCircle, Trash, UserX } from "lucide-react";
 import { formatDate } from "../utils/date";
 
 export default function Reports({ navigateToUser }) {
@@ -87,6 +87,31 @@ export default function Reports({ navigateToUser }) {
             deletedByAdmin: true,
             deletedReason: actionReason
           });
+        }
+      } else if (actionType === "delete_and_ban") {
+        actionLabel = "콘텐츠 삭제 + 사용자 추방";
+        if (selectedReport.targetType === "post" && selectedReport.targetId) {
+          try {
+            await updateDoc(doc(db, "posts", selectedReport.targetId), { isHidden: true, deletedByAdmin: true, deletedReason: actionReason });
+          } catch(e) {}
+          try {
+            await updateDoc(doc(db, "community_posts", selectedReport.targetId), { isHidden: true, deletedByAdmin: true, deletedReason: actionReason });
+          } catch(e) {}
+        } else if (selectedReport.targetType === "comment" && selectedReport.targetId) {
+          try {
+            await updateDoc(doc(db, "comments", selectedReport.targetId), { isHidden: true, deletedByAdmin: true, deletedReason: actionReason });
+          } catch(e) {}
+        }
+        const targetUserUid = selectedReport.targetUserUid || selectedReport.reportUserUid || selectedReport.authorUid;
+        if (targetUserUid) {
+          try {
+            await updateDoc(doc(db, "users", targetUserUid), {
+              status: "permanent_suspended",
+              isBanned: true,
+              bannedAt: new Date().toISOString(),
+              banReason: actionReason
+            });
+          } catch(e) {}
         }
       } else if (actionType === "dismiss") {
         actionLabel = "신고 기각";
@@ -263,19 +288,23 @@ export default function Reports({ navigateToUser }) {
               {/* Action operations controls */}
               <div className="border-t border-zinc-150 dark:border-[#30363d] pt-4 space-y-3">
                 <span className="text-zinc-400 font-semibold">처리 행정 행위 선택</span>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {selectedReport.targetType === "post" ? (
-                    <button onClick={() => setActionType("delete_post")} className="flex items-center justify-center gap-1.5 p-2 rounded bg-red-500/10 text-red-500 border border-red-500/20 font-bold hover:bg-red-500/20">
+                    <button onClick={() => setActionType("delete_post")} className="flex items-center justify-center gap-1.5 p-2 rounded bg-red-500/10 text-red-500 border border-red-500/20 font-bold hover:bg-red-500/20 text-xs">
                       <Trash className="w-3.5 h-3.5" />
                       글 삭제
                     </button>
                   ) : (
-                    <button onClick={() => setActionType("delete_comment")} className="flex items-center justify-center gap-1.5 p-2 rounded bg-red-500/10 text-red-500 border border-red-500/20 font-bold hover:bg-red-500/20">
+                    <button onClick={() => setActionType("delete_comment")} className="flex items-center justify-center gap-1.5 p-2 rounded bg-red-500/10 text-red-500 border border-red-500/20 font-bold hover:bg-red-500/20 text-xs">
                       <Trash className="w-3.5 h-3.5" />
                       댓글 삭제
                     </button>
                   )}
-                  <button onClick={() => setActionType("dismiss")} className="flex items-center justify-center gap-1.5 p-2 rounded bg-zinc-100 dark:bg-[#30363d] text-zinc-700 dark:text-white font-bold hover:bg-zinc-200 dark:hover:bg-[#21262d]">
+                  <button onClick={() => setActionType("delete_and_ban")} className="flex items-center justify-center gap-1.5 p-2 rounded bg-red-600 text-white font-bold hover:bg-red-700 text-xs">
+                    <UserX className="w-3.5 h-3.5" />
+                    콘텐츠 삭제 + 사용자 추방
+                  </button>
+                  <button onClick={() => setActionType("dismiss")} className="col-span-2 flex items-center justify-center gap-1.5 p-2 rounded bg-zinc-100 dark:bg-[#30363d] text-zinc-700 dark:text-white font-bold hover:bg-zinc-200 dark:hover:bg-[#21262d] text-xs">
                     <CheckCircle className="w-3.5 h-3.5" />
                     기각(무시)
                   </button>

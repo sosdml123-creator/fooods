@@ -6,6 +6,13 @@
   <title>플레이팅 - 오늘의집 스타일 푸드 커뮤니티</title>
   <link rel="icon" type="image/svg+xml" href="/logo.svg">
   
+  <!-- iOS 웹 앱 및 PWA 설정 -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="플레이팅">
+  <link rel="apple-touch-icon" href="/logo.png">
+
   <!-- SEO 메타 태그 -->
   <meta name="description" content="나만의 레시피와 조리도구를 공유하고 수익을 창출하는 푸드 커뮤니티">
   <meta name="keywords" content="요리, 레시피, 주방용품, 조리도구, 음식 커뮤니티, 플레이팅">
@@ -117,17 +124,30 @@
     }
   </style>
   <script>
-    // 핀치 줌 및 두 손가락 확대 방지 스크립트
-    document.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
-    document.addEventListener('gesturechange', function (e) { e.preventDefault(); }, { passive: false });
-    document.addEventListener('gestureend', function (e) { e.preventDefault(); }, { passive: false });
+    // 핀치 줌 및 두 손가락 확대 방지 스크립트 (지도 컨테이너 제외)
+    function _isInMapContainer(el) {
+      while (el) {
+        if (el.getAttribute && el.getAttribute('data-map-container') === 'true') return true;
+        el = el.parentElement;
+      }
+      return false;
+    }
+    document.addEventListener('gesturestart', function (e) {
+      if (!_isInMapContainer(e.target)) e.preventDefault();
+    }, { passive: false });
+    document.addEventListener('gesturechange', function (e) {
+      if (!_isInMapContainer(e.target)) e.preventDefault();
+    }, { passive: false });
+    document.addEventListener('gestureend', function (e) {
+      if (!_isInMapContainer(e.target)) e.preventDefault();
+    }, { passive: false });
     
-    // 더블 탭 확대 방지
+    // 더블 탭 확대 방지 (지도 컨테이너 제외)
     let lastTouchEnd = 0;
     document.addEventListener('touchend', function (event) {
       const now = (new Date()).getTime();
       if (now - lastTouchEnd <= 300) {
-        if (event.target.tagName !== 'INPUT' && event.target.tagName !== 'TEXTAREA') {
+        if (event.target.tagName !== 'INPUT' && event.target.tagName !== 'TEXTAREA' && !_isInMapContainer(event.target)) {
           event.preventDefault();
         }
       }

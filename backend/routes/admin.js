@@ -3,6 +3,7 @@ const router = express.Router();
 const crypto = require("crypto");
 const axios = require("axios");
 const { requireAdmin, requireLogin, reportLimiter } = require("../middlewares");
+const { sendAdminNotification } = require("../utils/mailer");
 const {
   readJsonFile,
   writeJsonFile,
@@ -62,6 +63,18 @@ router.post("/reports", requireLogin, async (req, res) => {
 
     reports.unshift(newReport);
     writeJsonFile(REPORTS_DB_PATH, reports);
+
+    // 관리자 이메일 알림 발송
+    sendAdminNotification({
+      type: "report",
+      reporterId: newReport.reporter,
+      targetId: newReport.targetId,
+      targetType: newReport.targetType,
+      targetUserUid: newReport.author,
+      reason: newReport.reason,
+      text: newReport.text,
+      timestamp: newReport.timestamp
+    }).catch(err => console.error("Report mail notification error:", err));
 
     return res.json({ success: true, message: "신고가 정상 접수되었습니다." });
   } catch (error) {
@@ -462,10 +475,70 @@ router.post("/report", reportLimiter, async function (req, res) {
       } catch(e) {}
     }
 
+    // 관리자 이메일 알림 발송
+    sendAdminNotification({
+      type: "report",
+      reporterId: finalReporterId,
+      targetId: postId,
+      targetType: commentId ? "comment" : "post",
+      reason: reason,
+      timestamp: new Date().toISOString()
+    }).catch(err => console.error("Report notification mail error:", err));
+
     return res.json({ success: true, message: "신고가 정상 접수되었습니다." });
   } catch (err) {
     console.error("[Report API] Error handling report:", err.message);
     return res.status(500).json({ success: false, message: "신고 처리 중 내부 오류가 발생했습니다." });
+  }
+});
+
+// 12. 사용자 차단 및 관리자 알림 API
+router.post("/block", async function (req, res) {
+  const { blockerId, blockedId, reason, timestamp } = req.body;
+  if (!blockerId || !blockedId) {
+    return res.status(400).json({ success: false, message: "blockerId와 blockedId는 필수입니다." });
+  }
+
+  try {
+    const rules = readJsonFile(MODERATION_RULES_PATH, { deletedPosts: [], deletedComments: [], blockedUsers: [], hiddenPosts: [] });
+    const logs = readJsonFile(ADMIN_LOGS_PATH, []);
+
+    const isAlreadyBlocked = rules.blockedUsers.some(b => typeof b === "string" ? b === blockedId : b.nickname === blockedId);
+    if (!isAlreadyBlocked) {
+      rules.blockedUsers.push({
+        blockerId,
+        nickname: blockedId,
+        blocked_at: timestamp || new Date().toISOString(),
+        reason: reason || "사용자 직접 차단"
+      });
+      writeJsonFile(MODERATION_RULES_PATH, rules);
+    }
+
+    const newLog = {
+      id: crypto.randomUUID(),
+      action: "block",
+      targetType: "user",
+      targetId: blockedId,
+      detail: `사용자 차단 접수 (차단한 사람: ${blockerId}, 차단된 사람: ${blockedId})`,
+      reason: reason || "사용자 직접 차단",
+      timestamp: timestamp || new Date().toISOString()
+    };
+    logs.unshift(newLog);
+    writeJsonFile(ADMIN_LOGS_PATH, logs);
+
+    // 관리자 이메일 알림 발송
+    sendAdminNotification({
+      type: "block",
+      blockerId: blockerId,
+      blockedId: blockedId,
+      reason: reason || "사용자 직접 차단",
+      timestamp: timestamp || new Date().toISOString()
+    }).catch(err => console.error("Block notification mail error:", err));
+
+    return res.json({ success: true, message: "차단 건이 정상 접수되고 관리자 알림이 전송되었습니다." });
+  } catch (err) {
+    console.error("[Block API] Error handling block:", err.message);
+    return res.status(500).json({ success: false, message: "차단 처리 중 내부 오류가 발생했습니다." });
   }
 });
 

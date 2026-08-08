@@ -6,7 +6,10 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
+import 'package:crypto/crypto.dart';
 
 Future<void> main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
@@ -161,6 +164,29 @@ class _WebViewScreenState extends State<WebViewScreen> {
   }
 
   // ──────────────────────────────────────────────────────────────
+  // nonce 유틸리티 (Sign in with Apple + Firebase 연동 필수)
+  // ──────────────────────────────────────────────────────────────
+
+  /// 32바이트 cryptographically secure 랜덤 데이터를
+  /// Base64url (패딩 없음) 문자열로 반환한다.
+  /// 이 값이 Firebase에 넘겨질 rawNonce(원본)이다.
+  String _generateRawNonce() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(32, (_) => random.nextInt(256));
+    // base64Url 인코딩 후 '=' 패딩 제거
+    return base64Url.encode(bytes).replaceAll('=', '');
+  }
+
+  /// rawNonce 문자열을 UTF-8 → SHA-256 → lowercase hex 로 변환한다.
+  /// Apple의 getAppleIDCredential(nonce:) 파라미터에 이 값을 전달해야
+  /// Apple이 발급하는 idToken 내부에 nonce claim을 포함시킨다.
+  String _sha256OfString(String input) {
+    final bytes = utf8.encode(input);
+    final digest = sha256.convert(bytes);
+    return digest.toString(); // lowercase hex string
+  }
+
+  // ──────────────────────────────────────────────────────────────
   // Sign in with Apple 네이티브 처리 (Guideline 4.8 준수)
   // WKWebView 내부에서는 Firebase OAuth 팝업이 차단되므로,
   // 반드시 네이티브 AuthenticationServices를 통해 인증해야 함.
@@ -180,12 +206,24 @@ class _WebViewScreenState extends State<WebViewScreen> {
     }
 
     try {
+      // ── nonce 생성 ──────────────────────────────────────────────────────────
+      // Firebase Apple 로그인은 rawNonce(원본) + sha256(rawNonce)(Apple 전달용)
+      // 두 값이 반드시 짝을 이뤄야 auth/argument-error 없이 인증된다.
+      // 32바이트 랜덤 데이터를 Base64url(no-padding)로 인코딩해 rawNonce를 생성하고,
+      // 그 SHA-256 해시를 hex 문자열로 Apple에 전달한다.
+      final rawNonce = _generateRawNonce();
+      final hashedNonce = _sha256OfString(rawNonce);
+      debugPrint('[Apple Sign In] rawNonce 생성 완료. hashedNonce: $hashedNonce');
+      // ────────────────────────────────────────────────────────────────────────
+
       // 네이티브 Apple 인증 요청 (AuthenticationServices)
+      // nonce 파라미터에 sha256(rawNonce) hex 값을 전달해야 Apple이 idToken에 nonce claim을 포함시킨다.
       final credential = await SignInWithApple.getAppleIDCredential(
         scopes: [
           AppleIDAuthorizationScopes.email,
           AppleIDAuthorizationScopes.fullName,
         ],
+        nonce: hashedNonce,
       );
 
       debugPrint('[Apple Sign In] 인증 성공. userIdentifier: ${credential.userIdentifier}');
@@ -211,9 +249,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
           .replaceAll('\n', '\\n')
           .replaceAll('\r', '\\r');
 
+      // rawNonce(해시 전 원본)를 payload에 포함시켜 React가
+      // Firebase OAuthProvider.credential({ idToken, rawNonce }) 에 그대로 전달할 수 있게 한다.
       final jsPayload = '''
         {
           "idToken": "${escapeForJs(idToken)}",
+          "rawNonce": "${escapeForJs(rawNonce)}",
           "authorizationCode": "${escapeForJs(authorizationCode)}",
           "email": "${escapeForJs(email)}",
           "displayName": "${escapeForJs(displayName)}",

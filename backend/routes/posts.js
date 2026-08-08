@@ -3,6 +3,7 @@ const router = express.Router();
 const crypto = require("crypto");
 const axios = require("axios");
 const { communityWriteLimiter, likeLimiter, commentLimiter } = require("../middlewares");
+const { sendAdminNotification } = require("../utils/mailer");
 const {
   readJsonFile,
   writeJsonFile,
@@ -713,6 +714,67 @@ router.get("/search/users", async function (req, res) {
   } catch (err) {
     console.error("[Search Users API] Error performing search:", err.message);
     return res.status(500).json({ success: false, message: "검색 중 내부 오류가 발생했습니다." });
+  }
+});
+
+// 차단 및 관리자 알림 API
+router.post("/block", async function (req, res) {
+  const { blockerId, blockedId, reason, timestamp } = req.body;
+  if (!blockerId || !blockedId) {
+    return res.status(400).json({ success: false, message: "blockerId와 blockedId는 필수입니다." });
+  }
+
+  try {
+    const rules = readJsonFile(MODERATION_RULES_PATH, { deletedPosts: [], deletedComments: [], blockedUsers: [], hiddenPosts: [] });
+    const isAlreadyBlocked = rules.blockedUsers.some(b => typeof b === "string" ? b === blockedId : b.nickname === blockedId);
+    if (!isAlreadyBlocked) {
+      rules.blockedUsers.push({
+        blockerId,
+        nickname: blockedId,
+        blocked_at: timestamp || new Date().toISOString(),
+        reason: reason || "사용자 직접 차단"
+      });
+      writeJsonFile(MODERATION_RULES_PATH, rules);
+    }
+
+    sendAdminNotification({
+      type: "block",
+      blockerId,
+      blockedId,
+      reason: reason || "사용자 직접 차단",
+      timestamp: timestamp || new Date().toISOString()
+    }).catch(err => console.error("Block email notification error:", err));
+
+    return res.json({ success: true, message: "차단이 접수되고 관리자에게 알림이 전송되었습니다." });
+  } catch (err) {
+    console.error("[Posts /block API Error]", err);
+    return res.status(500).json({ success: false, message: "차단 알림 처리 중 오류 발생" });
+  }
+});
+
+// 신고 및 관리자 알림 API
+router.post("/report", async function (req, res) {
+  const { postId, commentId, reason, reporterId, text, targetUserUid, targetType } = req.body;
+  if ((!postId && !targetType) || !reason) {
+    return res.status(400).json({ success: false, message: "신고 대상 정보와 사유는 필수입니다." });
+  }
+
+  try {
+    sendAdminNotification({
+      type: "report",
+      reporterId: reporterId || req.ip,
+      targetId: postId || req.body.targetId,
+      targetType: targetType || (commentId ? "comment" : "post"),
+      targetUserUid: targetUserUid || req.body.author,
+      reason: reason,
+      text: text || req.body.description,
+      timestamp: new Date().toISOString()
+    }).catch(err => console.error("Report email notification error:", err));
+
+    return res.json({ success: true, message: "신고가 정상 접수되었습니다." });
+  } catch (err) {
+    console.error("[Posts /report API Error]", err);
+    return res.status(500).json({ success: false, message: "신고 처리 중 오류 발생" });
   }
 });
 

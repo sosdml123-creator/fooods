@@ -6,6 +6,7 @@ import Home from './pages/Home';
 import MyPage from './pages/Mypage';
 import { CommunityView, CommunityDetailView } from './pages/Community';
 import AdminReportsView from './pages/Admin';
+import EULAConsent from './components/EULAConsent';
 import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import firebase from 'firebase/compat/app';
@@ -746,18 +747,32 @@ export class ErrorBoundary extends React.Component {
                         {isMyPost && <button onClick={() => { setIsEditingMode(true); setShowKebabMenu(false); }}>수정</button>}
                         {(isMyPost || isAdmin) && <button className="delete-btn" onClick={() => { handleDelete(); setShowKebabMenu(false); }}>삭제</button>}
                         {!isMyPost && (
-                          <button 
-                            type="button"
-                            className="text-red-500 font-bold" 
-                            onClick={() => {
-                              setShowKebabMenu(false);
-                              if (window.openReportModal) {
-                                window.openReportModal("post", post.id, post.author, post.title + "\n" + post.body);
-                              }
-                            }}
-                          >
-                            신고하기
-                          </button>
+                          <>
+                            <button 
+                              type="button"
+                              className="text-red-500 font-bold" 
+                              onClick={() => {
+                                setShowKebabMenu(false);
+                                if (window.openReportModal) {
+                                  window.openReportModal("post", post.id, post.author, post.title + "\n" + post.body);
+                                }
+                              }}
+                            >
+                              신고하기
+                            </button>
+                            <button 
+                              type="button"
+                              className="text-zinc-600 font-bold" 
+                              onClick={() => {
+                                setShowKebabMenu(false);
+                                if (window.handleBlockUser) {
+                                  window.handleBlockUser(post.author, post.author);
+                                }
+                              }}
+                            >
+                              🚫 차단하기
+                            </button>
+                          </>
                         )}
                       </div>
                     )}
@@ -926,6 +941,18 @@ export class ErrorBoundary extends React.Component {
                                 >
                                   <i className="fa-regular fa-bell text-[10px] text-rose-500 mr-0.5"></i>신고
                                 </button>
+                                <button 
+                                  type="button"
+                                  className="comment-action-btn text-zinc-500 font-semibold ml-1"
+                                  onClick={() => {
+                                    if (window.handleBlockUser) {
+                                      window.handleBlockUser(c.author, c.author);
+                                    }
+                                  }}
+                                  title="차단"
+                                >
+                                  <i className="fa-solid fa-user-slash text-[10px] text-zinc-500 mr-0.5"></i>차단
+                                </button>
                               </div>
                             )}
                           </div>
@@ -1075,12 +1102,28 @@ export class ErrorBoundary extends React.Component {
                 </div>
               </div>
               
-              <button 
-                className={`text-[11px] font-bold px-4 py-1.5 rounded-full transition-colors flex-shrink-0 ${isFollowing ? 'secondary' : 'primary'}`}
-                onClick={() => onFollowToggle && onFollowToggle(userName)}
-              >
-                {isFollowing ? "팔로잉" : "팔로우"}
-              </button>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <button 
+                  className={`text-[11px] font-bold px-3.5 py-1.5 rounded-full transition-colors ${isFollowing ? 'secondary' : 'primary'}`}
+                  onClick={() => onFollowToggle && onFollowToggle(userName)}
+                >
+                  {isFollowing ? "팔로잉" : "팔로우"}
+                </button>
+                {currentLoggedUser !== userName && (
+                  <button 
+                    type="button"
+                    className="text-[11px] font-bold px-2.5 py-1.5 rounded-full border border-zinc-200 text-zinc-600 hover:text-zinc-950 transition-colors"
+                    onClick={() => {
+                      if (window.handleBlockUser) {
+                        window.handleBlockUser(userName, userName);
+                      }
+                    }}
+                    title="사용자 차단"
+                  >
+                    🚫 차단
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="stats mt-4 border-t border-zinc-100 pt-3 text-center">
@@ -1657,18 +1700,32 @@ export class ErrorBoundary extends React.Component {
                           </>
                         )}
                         {!isAdmin && !isMyPost && (
-                          <button 
-                            type="button"
-                            className="text-red-500 font-bold"
-                            onClick={() => {
-                              setShowKebabMenu(false);
-                              if (window.openReportModal) {
-                                window.openReportModal("post", post.id, post.author, post.title + "\n" + post.body);
-                              }
-                            }}
-                          >
-                            🚩 신고하기
-                          </button>
+                          <>
+                            <button 
+                              type="button"
+                              className="text-red-500 font-bold"
+                              onClick={() => {
+                                setShowKebabMenu(false);
+                                if (window.openReportModal) {
+                                  window.openReportModal("post", post.id, post.author, post.title + "\n" + post.body);
+                                }
+                              }}
+                            >
+                              🚩 신고하기
+                            </button>
+                            <button 
+                              type="button"
+                              className="text-zinc-600 font-bold"
+                              onClick={() => {
+                                setShowKebabMenu(false);
+                                if (window.handleBlockUser) {
+                                  window.handleBlockUser(post.author, post.author);
+                                }
+                              }}
+                            >
+                              🚫 차단하기
+                            </button>
+                          </>
                         )}
                         {isAdmin && (
                           <>
@@ -1805,17 +1862,30 @@ export class ErrorBoundary extends React.Component {
                                   </button>
                                 )}
                                 {!isMyComment && (
-                                  <button 
-                                    className="text-red-500 font-bold"
-                                    onClick={() => {
-                                      setOpenCommentKebabId(null);
-                                      if (window.openReportModal) {
-                                        window.openReportModal("comment", c.id, c.author, c.text, post.id);
-                                      }
-                                    }}
-                                  >
-                                    🚩 신고하기
-                                  </button>
+                                  <>
+                                    <button 
+                                      className="text-red-500 font-bold"
+                                      onClick={() => {
+                                        setOpenCommentKebabId(null);
+                                        if (window.openReportModal) {
+                                          window.openReportModal("comment", c.id, c.author, c.text, post.id);
+                                        }
+                                      }}
+                                    >
+                                      🚩 신고하기
+                                    </button>
+                                    <button 
+                                      className="text-zinc-600 font-bold"
+                                      onClick={() => {
+                                        setOpenCommentKebabId(null);
+                                        if (window.handleBlockUser) {
+                                          window.handleBlockUser(c.author, c.author);
+                                        }
+                                      }}
+                                    >
+                                      🚫 차단하기
+                                    </button>
+                                  </>
                                 )}
                               </div>
                             )}
@@ -3338,6 +3408,41 @@ export class ErrorBoundary extends React.Component {
         </section>
       );
     }
+    // ── 이용약관 모달 (App Store Guideline 1.2: zero-tolerance 명시) ───────────────
+    function TermsModal({ onClose }) {
+      return (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[1100] flex items-center justify-center p-4" onClick={onClose}>
+          <div className="bg-white rounded-2xl w-full max-w-sm max-h-[80vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100">
+              <h3 className="text-sm font-bold text-zinc-950">📋 서비스 이용약관</h3>
+              <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700 text-lg leading-none">×</button>
+            </div>
+            <div className="overflow-y-auto flex-1 px-5 py-4 text-[11px] text-zinc-600 leading-relaxed space-y-3">
+              <p className="font-bold text-zinc-900 text-xs">제1조 (목적)</p>
+              <p>본 약관은 플레이팅(이하 "서비스")이 제공하는 커뮤니티 및 관련 서비스의 이용 조건과 절차, 이용자와 서비스 간의 권리·의무 및 책임사항을 규정함을 목적으로 합니다.</p>
+              <p className="font-bold text-zinc-900 text-xs">제2조 (부적절 콘텐츠 무관용 원칙)</p>
+              <p>플레이팅은 사용자 생성 콘텐츠에 대해 <span className="font-bold text-rose-600">무관용 원칙(Zero Tolerance Policy)</span>을 적용합니다. 욕설·혐오·음란물·개인정보 침해·허위사실 유포 등 부적절한 콘텐츠를 게시하거나 타 이용자를 어뷰징하는 행위는 즉시 콘텐츠 삭제 및 계정 제재(최대 영구 이용 정지) 조치가 취해집니다.</p>
+              <p className="font-bold text-zinc-900 text-xs">제3조 (신고 및 24시간 처리 원칙)</p>
+              <p>모든 이용자는 부적절한 콘텐츠 및 이용자를 신고할 수 있으며, 접수된 신고는 <span className="font-bold text-zinc-900">24시간 이내</span>에 검토·처리됩니다. 위반이 확인된 콘텐츠는 즉시 블라인드 처리되며, 해당 사용자는 커뮤니티 이용 제한 또는 영구 정지될 수 있습니다.</p>
+              <p className="font-bold text-zinc-900 text-xs">제4조 (이용자 차단)</p>
+              <p>이용자는 부적절한 행동을 하는 다른 이용자를 차단할 수 있습니다. 차단 시 해당 이용자의 콘텐츠는 즉시 피드에서 제외되며, 차단 사실은 서비스 운영팀에 알림으로 전달됩니다.</p>
+              <p className="font-bold text-zinc-900 text-xs">제5조 (약관 동의)</p>
+              <p>회원가입 또는 소셜 로그인(Apple, 카카오) 진행 시 본 약관과 개인정보 처리방침에 동의한 것으로 간주됩니다. 약관에 동의하지 않을 경우 서비스 이용이 제한됩니다.</p>
+            </div>
+            <div className="px-5 py-4 border-t border-zinc-100">
+              <button onClick={onClose} className="w-full bg-zinc-950 text-white rounded-xl py-2.5 text-xs font-bold hover:bg-zinc-800 transition-colors">확인</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ── EULA(이용약관) 재동의 팝업 모달 (기존 회원 중 agreedToEULA 미동의 사용자용) ──
+    function EulaConsentModal({ onAgree, onLogout }) {
+      return <EULAConsent onAgree={onAgree} onCancel={onLogout} />;
+    }
+    // ────────────────────────────────────────────────────────────────────────────
+
     function LoginModal({ onClose, onLogin, onRegister, isGate = false, defaultTab = "login" }) {
       const [tab, setTab] = React.useState(defaultTab); // "login" | "register"
       const [loginId, setLoginId] = React.useState("");
@@ -3347,10 +3452,30 @@ export class ErrorBoundary extends React.Component {
       const [showPassword, setShowPassword] = React.useState(false);
       const [error, setError] = React.useState("");
       const [loading, setLoading] = React.useState(false);
+      // ── 약관 동의 및 EULA 팝업 상태 ──────────────────────────────────────────
+      const [agreedToTerms, setAgreedToTerms] = React.useState(false);
+      const [showTermsModal, setShowTermsModal] = React.useState(false);
+      const [showEulaConsentModal, setShowEulaConsentModal] = React.useState(false);
+      const [pendingLoginType, setPendingLoginType] = React.useState(null);
+      // ──────────────────────────────────────────────────────────────────────────
+
+      const handleTriggerSocialLogin = (type) => {
+        if (agreedToTerms) {
+          onLogin(type, loginId, password);
+        } else {
+          setPendingLoginType(type);
+          setShowEulaConsentModal(true);
+        }
+      };
 
       async function handleSubmitLogin(e) {
         e.preventDefault();
         setError("");
+        if (!agreedToTerms) {
+          setPendingLoginType("local");
+          setShowEulaConsentModal(true);
+          return;
+        }
         setLoading(true);
         try {
           await onLogin("local", loginId, password);
@@ -3364,6 +3489,11 @@ export class ErrorBoundary extends React.Component {
       async function handleSubmitRegister(e) {
         e.preventDefault();
         setError("");
+        if (!agreedToTerms) {
+          setPendingLoginType("register");
+          setShowEulaConsentModal(true);
+          return;
+        }
         if (password !== confirmPassword) {
           setError("비밀번호가 일치하지 않습니다.");
           return;
@@ -3379,112 +3509,170 @@ export class ErrorBoundary extends React.Component {
       }
 
       const inputCls = "w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 mb-3";
-      const btnCls = "w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl text-sm transition-colors disabled:opacity-50";
+      const btnCls = "w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
+
+    // ── 공통 약관 동의 체크박스 UI (App Store Guideline 1.2) ─────────────────
+      const TermsCheckbox = ({ id }) => (
+        <div className="mb-3 space-y-1.5">
+          <div className="text-[10px] text-rose-600 font-semibold bg-rose-50 border border-rose-100 rounded-lg p-2 leading-tight">
+            ⚠️ 부적절한 콘텐츠 및 학대적 사용자에 대해 무관용 원칙을 적용하며, 24시간 내 신고 검토 및 즉시 차단 조치됩니다.
+          </div>
+          <label className="flex items-start gap-2.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              id={id}
+              checked={agreedToTerms}
+              onChange={e => setAgreedToTerms(e.target.checked)}
+              className="mt-0.5 w-4 h-4 accent-orange-500 cursor-pointer flex-shrink-0"
+            />
+            <span className="text-[11px] text-zinc-500 leading-relaxed">
+              플레이팅의{" "}
+              <button type="button" onClick={() => setShowTermsModal(true)} className="underline text-zinc-700 font-semibold hover:text-orange-600 transition-colors">이용약관 및 EULA</button>
+              {" "}및{" "}
+              <button type="button" onClick={() => window.open('/privacy', '_blank')} className="underline text-zinc-700 font-semibold hover:text-orange-600 transition-colors">개인정보 처리방침</button>
+              에 동의합니다. <span className="text-rose-500 font-bold">(필수)</span>
+            </span>
+          </label>
+        </div>
+      );
+      // ──────────────────────────────────────────────────────────────────────────
 
       return (
-        <div className="sheet-backdrop" onClick={() => { if (!isGate && onClose) onClose(); }}>
-          <section className="sheet" onClick={(e) => e.stopPropagation()}>
-            <header className="sheet-head">
-              <h2>{tab === "login" ? "로그인" : "회원가입"}</h2>
-              {!isGate && <button type="button" onClick={() => onClose && onClose()}>×</button>}
-            </header>
-            <div className="py-4 px-4">
-              {/* 탭 전환 */}
-              <div className="flex rounded-xl overflow-hidden border border-zinc-200 mb-5">
-                <button
-                  className={`flex-1 py-2 text-sm font-bold transition-colors ${tab === "login" ? "bg-orange-500 text-white" : "bg-white text-zinc-500"}`}
-                  onClick={() => { setTab("login"); setError(""); }}
-                >로그인</button>
-                <button
-                  className={`flex-1 py-2 text-sm font-bold transition-colors ${tab === "register" ? "bg-orange-500 text-white" : "bg-white text-zinc-500"}`}
-                  onClick={() => { setTab("register"); setError(""); }}
-                >회원가입</button>
-              </div>
+        <>
+          <div className="sheet-backdrop" onClick={() => { if (!isGate && onClose) onClose(); }}>
+            <section className="sheet" onClick={(e) => e.stopPropagation()}>
+              <header className="sheet-head">
+                <h2>{tab === "login" ? "로그인" : "회원가입"}</h2>
+                {!isGate && <button type="button" onClick={() => onClose && onClose()}>×</button>}
+              </header>
+              <div className="py-4 px-4">
+                {/* 탭 전환 */}
+                <div className="flex rounded-xl overflow-hidden border border-zinc-200 mb-5">
+                  <button
+                    className={`flex-1 py-2 text-sm font-bold transition-colors ${tab === "login" ? "bg-orange-500 text-white" : "bg-white text-zinc-500"}`}
+                    onClick={() => { setTab("login"); setError(""); }}
+                  >로그인</button>
+                  <button
+                    className={`flex-1 py-2 text-sm font-bold transition-colors ${tab === "register" ? "bg-orange-500 text-white" : "bg-white text-zinc-500"}`}
+                    onClick={() => { setTab("register"); setError(""); }}
+                  >회원가입</button>
+                </div>
 
-              {tab === "login" ? (
-                <form onSubmit={handleSubmitLogin}>
-                  <input className={inputCls} type="text" placeholder="아이디" value={loginId}
-                    onChange={e => setLoginId(e.target.value)} autoComplete="username" />
-                  <div className="relative mb-3">
-                    <input className="w-full border border-zinc-200 rounded-xl pl-4 pr-11 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" 
-                      type={showPassword ? "text" : "password"} 
-                      placeholder="비밀번호" 
-                      value={password}
-                      onChange={e => setPassword(e.target.value)} 
-                      autoComplete="current-password" />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-3.5 text-zinc-400 hover:text-zinc-600 text-sm">
-                      <i className={`fa-solid ${showPassword ? "fa-eye-slash" : "fa-eye"}`}></i>
+                {tab === "login" ? (
+                  <form onSubmit={handleSubmitLogin}>
+                    <input className={inputCls} type="text" placeholder="아이디" value={loginId}
+                      onChange={e => setLoginId(e.target.value)} autoComplete="username" />
+                    <div className="relative mb-3">
+                      <input className="w-full border border-zinc-200 rounded-xl pl-4 pr-11 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="비밀번호"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        autoComplete="current-password" />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-3.5 text-zinc-400 hover:text-zinc-600 text-sm">
+                        <i className={`fa-solid ${showPassword ? "fa-eye-slash" : "fa-eye"}`}></i>
+                      </button>
+                    </div>
+                    {error && (
+                      <div className="bg-red-50 border border-red-200 text-red-600 rounded-xl p-3 mb-4 text-xs font-bold flex items-center gap-2">
+                        <i className="fa-solid fa-circle-exclamation text-red-500 text-sm flex-shrink-0"></i>
+                        <span>{error}</span>
+                      </div>
+                    )}
+                    {/* 약관 동의 체크박스 */}
+                    <TermsCheckbox id="terms-login-modal" />
+                    <button type="submit" className={btnCls} disabled={loading}>
+                      {loading ? "로그인 중..." : "로그인"}
+                    </button>
+                  </form>
+                ) : (
+                  <form onSubmit={handleSubmitRegister}>
+                    <input className={inputCls} type="text" placeholder="아이디 (영문·숫자)" value={loginId}
+                      onChange={e => setLoginId(e.target.value)} autoComplete="username" />
+                    <div className="relative mb-3">
+                      <input className="w-full border border-zinc-200 rounded-xl pl-4 pr-11 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="비밀번호 (6자 이상)"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        autoComplete="new-password" />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-3.5 text-zinc-400 hover:text-zinc-600 text-sm">
+                        <i className={`fa-solid ${showPassword ? "fa-eye-slash" : "fa-eye"}`}></i>
+                      </button>
+                    </div>
+                    <input className={inputCls} type={showPassword ? "text" : "password"} placeholder="비밀번호 확인" value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)} autoComplete="new-password" />
+                    <input className={inputCls} type="text" placeholder="닉네임" value={nickname}
+                      onChange={e => setNickname(e.target.value)} />
+                    {error && (
+                      <div className="bg-red-50 border border-red-200 text-red-600 rounded-xl p-3 mb-4 text-xs font-bold flex items-center gap-2">
+                        <i className="fa-solid fa-circle-exclamation text-red-500 text-sm flex-shrink-0"></i>
+                        <span>{error}</span>
+                      </div>
+                    )}
+                    {/* 약관 동의 체크박스 */}
+                    <TermsCheckbox id="terms-register-modal" />
+                    <button type="submit" className={btnCls} disabled={loading}>
+                      {loading ? "가입 중..." : "회원가입"}
+                    </button>
+                  </form>
+                )}
+
+                <div className="mt-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="flex-1 h-px bg-zinc-200"></div>
+                    <span className="text-xs text-zinc-400 font-medium">소셜 계정으로 계속하기</span>
+                    <div className="flex-1 h-px bg-zinc-200"></div>
+                  </div>
+                  <div className="flex flex-col gap-2.5">
+                    {/* Apple로 계속하기 버튼 (App Store Review Guideline 4.8 필수) */}
+                    <button
+                      type="button"
+                      className="w-full apple-btn py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-black hover:bg-zinc-800 text-white transition-colors shadow-sm active:scale-98 cursor-pointer"
+                      onClick={() => handleTriggerSocialLogin("apple")}
+                    >
+                      <i className="fa-brands fa-apple text-lg"></i> Apple로 계속하기
+                    </button>
+                    {/* 카카오톡 간편 시작하기 버튼 */}
+                    <button
+                      type="button"
+                      className="w-full kakao-btn py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-[#FEE500] hover:bg-[#FDD835] text-[#191919] transition-colors shadow-sm active:scale-98 cursor-pointer"
+                      onClick={() => handleTriggerSocialLogin("kakao")}
+                    >
+                      <i className="fa-solid fa-comment text-zinc-950 text-base"></i> 카카오톡 간편 시작하기
                     </button>
                   </div>
-                  {error && (
-                    <div className="bg-red-50 border border-red-200 text-red-600 rounded-xl p-3 mb-4 text-xs font-bold flex items-center gap-2">
-                      <i className="fa-solid fa-circle-exclamation text-red-500 text-sm flex-shrink-0"></i>
-                      <span>{error}</span>
-                    </div>
-                  )}
-                  <button type="submit" className={btnCls} disabled={loading}>
-                    {loading ? "로그인 중..." : "로그인"}
-                  </button>
-                </form>
-              ) : (
-                <form onSubmit={handleSubmitRegister}>
-                  <input className={inputCls} type="text" placeholder="아이디 (영문·숫자)" value={loginId}
-                    onChange={e => setLoginId(e.target.value)} autoComplete="username" />
-                  <div className="relative mb-3">
-                    <input className="w-full border border-zinc-200 rounded-xl pl-4 pr-11 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" 
-                      type={showPassword ? "text" : "password"} 
-                      placeholder="비밀번호 (6자 이상)" 
-                      value={password}
-                      onChange={e => setPassword(e.target.value)} 
-                      autoComplete="new-password" />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-3.5 text-zinc-400 hover:text-zinc-600 text-sm">
-                      <i className={`fa-solid ${showPassword ? "fa-eye-slash" : "fa-eye"}`}></i>
-                    </button>
-                  </div>
-                  <input className={inputCls} type={showPassword ? "text" : "password"} placeholder="비밀번호 확인" value={confirmPassword}
-                    onChange={e => setConfirmPassword(e.target.value)} autoComplete="new-password" />
-                  <input className={inputCls} type="text" placeholder="닉네임" value={nickname}
-                    onChange={e => setNickname(e.target.value)} />
-                  {error && (
-                    <div className="bg-red-50 border border-red-200 text-red-600 rounded-xl p-3 mb-4 text-xs font-bold flex items-center gap-2">
-                      <i className="fa-solid fa-circle-exclamation text-red-500 text-sm flex-shrink-0"></i>
-                      <span>{error}</span>
-                    </div>
-                  )}
-                  <button type="submit" className={btnCls} disabled={loading}>
-                    {loading ? "가입 중..." : "회원가입"}
-                  </button>
-                </form>
-              )}
-
-              <div className="mt-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="flex-1 h-px bg-zinc-200"></div>
-                  <span className="text-xs text-zinc-400 font-medium">소셜 계정으로 계속하기</span>
-                  <div className="flex-1 h-px bg-zinc-200"></div>
-                </div>
-                <div className="flex flex-col gap-2.5">
-                  {/* Apple로 계속하기 버튼 (App Store Review Guideline 4.8 필수) */}
-                  <button
-                    type="button"
-                    className="w-full apple-btn py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-black text-white hover:bg-zinc-800 transition-colors shadow-sm active:scale-98 cursor-pointer"
-                    onClick={() => onLogin("apple")}
-                  >
-                    <i className="fa-brands fa-apple text-lg"></i> Apple로 계속하기
-                  </button>
-                  {/* 카카오톡 간편 시작하기 버튼 */}
-                  <button
-                    type="button"
-                    className="w-full kakao-btn py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 bg-[#FEE500] text-[#191919] hover:bg-[#FDD835] transition-colors shadow-sm active:scale-98 cursor-pointer"
-                    onClick={() => onLogin("kakao")}
-                  >
-                    <i className="fa-solid fa-comment text-zinc-950 text-base"></i> 카카오톡 간편 시작하기
-                  </button>
                 </div>
               </div>
-            </div>
-          </section>
-        </div>
+            </section>
+          </div>
+          {/* 이용약관 전문 모달 */}
+          {showTermsModal && <TermsModal onClose={() => setShowTermsModal(false)} />}
+          {/* 소셜 로그인 전 EULA 동의 팝업 모달 */}
+          {showEulaConsentModal && (
+            <EULAConsent
+              onAgree={async () => {
+                setAgreedToTerms(true);
+                setShowEulaConsentModal(false);
+                if (pendingLoginType) {
+                  const type = pendingLoginType;
+                  setPendingLoginType(null);
+                  if (type === "local") {
+                    await onLogin("local", loginId, password);
+                  } else if (type === "register") {
+                    await onRegister(loginId, password, nickname, confirmPassword);
+                  } else {
+                    await onLogin(type);
+                  }
+                }
+              }}
+              onCancel={() => {
+                setShowEulaConsentModal(false);
+                setPendingLoginType(null);
+              }}
+            />
+          )}
+        </>
       );
     }
 
@@ -3497,6 +3685,10 @@ export class ErrorBoundary extends React.Component {
       const [showPassword, setShowPassword] = React.useState(false);
       const [error, setError] = React.useState("");
       const [loading, setLoading] = React.useState(false);
+      // ── 약관 동의 상태 (App Store Guideline 1.2) ──────────────────────────────
+      const [agreedToTerms, setAgreedToTerms] = React.useState(false);
+      const [showTermsModal, setShowTermsModal] = React.useState(false);
+      // ──────────────────────────────────────────────────────────────────────────
 
       async function handleSubmitRegister(e) {
         e.preventDefault();
@@ -3532,7 +3724,8 @@ export class ErrorBoundary extends React.Component {
       const btnCls = "w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3.5 rounded-xl text-sm transition-all shadow-md active:scale-98 disabled:opacity-50 mt-1 cursor-pointer";
 
       return (
-        <div className="min-h-screen bg-white flex flex-col justify-center items-center px-6 py-10 text-zinc-900 select-none overflow-y-auto">
+        <>
+          <div className="min-h-screen bg-white flex flex-col justify-center items-center px-6 py-10 text-zinc-900 select-none overflow-y-auto">
           {/* 중앙 영역 */}
           <div className="w-full max-w-sm flex flex-col items-center text-center my-auto py-4">
             {/* 브랜드 로고 (공식 포크 로고 적용) */}
@@ -3553,8 +3746,9 @@ export class ErrorBoundary extends React.Component {
               {/* Apple로 계속하기 버튼 */}
               <button
                 type="button"
-                onClick={() => onLogin("apple")}
-                className="w-full bg-black hover:bg-zinc-800 text-white font-extrabold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2.5 text-sm shadow-sm active:scale-98 transition-all cursor-pointer"
+                onClick={() => agreedToTerms && onLogin("apple")}
+                disabled={!agreedToTerms}
+                className={`w-full bg-black text-white font-extrabold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2.5 text-sm shadow-sm active:scale-98 transition-all ${agreedToTerms ? "hover:bg-zinc-800 cursor-pointer" : "opacity-40 cursor-not-allowed"}`}
               >
                 <i className="fa-brands fa-apple text-lg"></i>
                 <span>Apple로 계속하기</span>
@@ -3563,8 +3757,9 @@ export class ErrorBoundary extends React.Component {
               {/* 카카오톡으로 계속하기 버튼 */}
               <button
                 type="button"
-                onClick={() => onLogin("kakao")}
-                className="w-full bg-[#FEE500] hover:bg-[#FADA00] text-[#191919] font-extrabold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2.5 text-sm shadow-sm active:scale-98 transition-all cursor-pointer"
+                onClick={() => agreedToTerms && onLogin("kakao")}
+                disabled={!agreedToTerms}
+                className={`w-full bg-[#FEE500] text-[#191919] font-extrabold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2.5 text-sm shadow-sm active:scale-98 transition-all ${agreedToTerms ? "hover:bg-[#FADA00] cursor-pointer" : "opacity-40 cursor-not-allowed"}`}
               >
                 <div className="w-5 h-5 rounded-md bg-[#191919] flex items-center justify-center text-[#FEE500] text-[10px]">
                   <i className="fa-solid fa-comment"></i>
@@ -3635,7 +3830,26 @@ export class ErrorBoundary extends React.Component {
                   </div>
                 )}
 
-                <button type="submit" className={btnCls} disabled={loading}>
+                {/* ── 약관 동의 체크박스 (App Store Guideline 1.2) ── */}
+                <label className="flex items-start gap-2.5 mb-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    id="terms-landing-register"
+                    checked={agreedToTerms}
+                    onChange={e => setAgreedToTerms(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 accent-orange-500 cursor-pointer flex-shrink-0"
+                  />
+                  <span className="text-[11px] text-zinc-500 leading-relaxed">
+                    플레이팅의{" "}
+                    <button type="button" onClick={() => setShowTermsModal(true)} className="underline text-zinc-700 font-semibold hover:text-orange-600 transition-colors">이용약관</button>
+                    {" "}및{" "}
+                    <button type="button" onClick={() => window.open('/privacy', '_blank')} className="underline text-zinc-700 font-semibold hover:text-orange-600 transition-colors">개인정보 처리방침</button>
+                    에 동의합니다. <span className="text-rose-500 font-bold">(필수)</span>
+                  </span>
+                </label>
+                {/* ────────────────────────────────────────────────────── */}
+
+                <button type="submit" className={btnCls} disabled={loading || !agreedToTerms}>
                   {loading ? "가입 처리 중..." : "회원가입하기"}
                 </button>
 
@@ -3686,7 +3900,26 @@ export class ErrorBoundary extends React.Component {
                   </div>
                 )}
 
-                <button type="submit" className={btnCls} disabled={loading}>
+                {/* ── 약관 동의 체크박스 (App Store Guideline 1.2) ── */}
+                <label className="flex items-start gap-2.5 mb-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    id="terms-landing-login"
+                    checked={agreedToTerms}
+                    onChange={e => setAgreedToTerms(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 accent-orange-500 cursor-pointer flex-shrink-0"
+                  />
+                  <span className="text-[11px] text-zinc-500 leading-relaxed">
+                    플레이팅의{" "}
+                    <button type="button" onClick={() => setShowTermsModal(true)} className="underline text-zinc-700 font-semibold hover:text-orange-600 transition-colors">이용약관</button>
+                    {" "}및{" "}
+                    <button type="button" onClick={() => window.open('/privacy', '_blank')} className="underline text-zinc-700 font-semibold hover:text-orange-600 transition-colors">개인정보 처리방침</button>
+                    에 동의합니다. <span className="text-rose-500 font-bold">(필수)</span>
+                  </span>
+                </label>
+                {/* ────────────────────────────────────────────────────── */}
+
+                <button type="submit" className={btnCls} disabled={loading || !agreedToTerms}>
                   {loading ? "로그인 중..." : "로그인하기"}
                 </button>
 
@@ -3708,7 +3941,10 @@ export class ErrorBoundary extends React.Component {
             © PLAYTING. All rights reserved.
           </div>
         </div>
-      );
+        {/* 이용약관 전문 모달 */}
+        {showTermsModal && <TermsModal onClose={() => setShowTermsModal(false)} />}
+      </>
+    );
     }
 
     // 네이버 지도 마커 클러스터링 유틸리티 클래스 (MarkerClustering)
@@ -3815,8 +4051,13 @@ export class ErrorBoundary extends React.Component {
       _bindEvents() {
         if (!this._map || !window.naver || !window.naver.maps) return;
         const map = this._map;
-        // dragend / zoom_changed 대신 idle 이벤트 사용으로 이동 중 60fps 드래그 보장
-        const listener1 = window.naver.maps.Event.addListener(map, 'idle', () => this.update());
+        // idle 이벤트에 debounce 적용 → 드래그 중 불필요한 연산 차단
+        let _idleTimer = null;
+        const debouncedUpdate = () => {
+          if (_idleTimer) clearTimeout(_idleTimer);
+          _idleTimer = setTimeout(() => this.update(), 120);
+        };
+        const listener1 = window.naver.maps.Event.addListener(map, 'idle', debouncedUpdate);
         this._listeners = [listener1];
       }
 
@@ -3906,6 +4147,7 @@ export class ErrorBoundary extends React.Component {
 
       // [수정 1] 마커 터치 시 슬라이드업 바텀 시트 상태 및 터치 감지
       const [selectedMapPost, setSelectedMapPost] = useState(null);
+      const [isListViewOpen, setIsListViewOpen] = useState(false);
       const touchStartY = useRef(0);
 
       const handleTouchStart = (e) => {
@@ -4082,26 +4324,20 @@ export class ErrorBoundary extends React.Component {
 
         // [줌 레벨 반응형 마커 아이콘 생성 헬퍼]
         const getMarkerIconContent = (placeTitle, zoomLevel) => {
+          // transition 제거 - 모바일 GPU composite layer 폭발 방지
           if (zoomLevel >= 15) {
             return {
               content: `
                 <div style="
-                  display: flex;
-                  align-items: center;
-                  gap: 5px;
-                  background: #ffffff;
-                  border: 1.5px solid #059669;
-                  padding: 5px 10px;
-                  border-radius: 9999px;
-                  box-shadow: 0 4px 12px rgba(0,0,0,0.18);
-                  cursor: pointer;
-                  font-size: 11px;
-                  font-weight: 700;
-                  color: #111827;
-                  white-space: nowrap;
-                  transition: all 0.2s ease-out;
+                  display:flex;align-items:center;gap:5px;
+                  background:#ffffff;border:1.5px solid #059669;
+                  padding:5px 10px;border-radius:9999px;
+                  box-shadow:0 4px 12px rgba(0,0,0,0.18);
+                  cursor:pointer;font-size:11px;font-weight:700;
+                  color:#111827;white-space:nowrap;
+                  will-change:transform;
                 ">
-                  <span style="color:#059669; font-size:12px;">📍</span>
+                  <span style="color:#059669;font-size:12px;">📍</span>
                   <span>${placeTitle}</span>
                 </div>
               `,
@@ -4112,22 +4348,15 @@ export class ErrorBoundary extends React.Component {
             return {
               content: `
                 <div style="
-                  display: flex;
-                  align-items: center;
-                  gap: 3px;
-                  background: #ffffff;
-                  border: 1.5px solid #059669;
-                  padding: 3px 7px;
-                  border-radius: 9999px;
-                  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-                  cursor: pointer;
-                  font-size: 10px;
-                  font-weight: 700;
-                  color: #111827;
-                  white-space: nowrap;
-                  transition: all 0.2s ease-out;
+                  display:flex;align-items:center;gap:3px;
+                  background:#ffffff;border:1.5px solid #059669;
+                  padding:3px 7px;border-radius:9999px;
+                  box-shadow:0 2px 8px rgba(0,0,0,0.15);
+                  cursor:pointer;font-size:10px;font-weight:700;
+                  color:#111827;white-space:nowrap;
+                  will-change:transform;
                 ">
-                  <span style="color:#059669; font-size:10px;">📍</span>
+                  <span style="color:#059669;font-size:10px;">📍</span>
                   <span>${shortTitle}</span>
                 </div>
               `,
@@ -4137,18 +4366,12 @@ export class ErrorBoundary extends React.Component {
             return {
               content: `
                 <div style="
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  background: #ffffff;
-                  border: 1.5px solid #059669;
-                  width: 22px;
-                  height: 22px;
-                  border-radius: 50%;
-                  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
-                  cursor: pointer;
-                  font-size: 11px;
-                  transition: all 0.2s ease-out;
+                  display:flex;align-items:center;justify-content:center;
+                  background:#ffffff;border:1.5px solid #059669;
+                  width:22px;height:22px;border-radius:50%;
+                  box-shadow:0 2px 8px rgba(0,0,0,0.18);
+                  cursor:pointer;font-size:11px;
+                  will-change:transform;
                 ">
                   <span style="color:#059669;">📍</span>
                 </div>
@@ -4159,14 +4382,10 @@ export class ErrorBoundary extends React.Component {
             return {
               content: `
                 <div style="
-                  width: 10px;
-                  height: 10px;
-                  background-color: #059669;
-                  border: 2px solid #ffffff;
-                  border-radius: 50%;
-                  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-                  cursor: pointer;
-                  transition: all 0.2s ease-out;
+                  width:10px;height:10px;
+                  background-color:#059669;border:2px solid #ffffff;
+                  border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.3);
+                  cursor:pointer;will-change:transform;
                 "></div>
               `,
               anchor: new window.naver.maps.Point(5, 5)
@@ -4189,8 +4408,15 @@ export class ErrorBoundary extends React.Component {
           });
 
           window.naver.maps.Event.addListener(marker, 'click', () => {
-            // 클릭 시 슬라이드업 바텀 시트를 띄웁니다.
+            // 클릭 시 슬라이드업 바텀 시트를 띄우고 지도를 마커 중심으로 가볍게 이동 (바텀시트에 가려지지 않게 약간 위로)
             setSelectedMapPost(post);
+            setSelectedPlace(null);
+            setIsListViewOpen(false);
+            if (mapInstanceRef.current && window.naver && window.naver.maps) {
+              const targetLatLng = new window.naver.maps.LatLng(lat, lng);
+              mapInstanceRef.current.setCenter(targetLatLng);
+              mapInstanceRef.current.panBy(0, -70);
+            }
           });
 
           markerDataList.push({ marker, placeTitle });
@@ -4224,6 +4450,8 @@ export class ErrorBoundary extends React.Component {
         // [수정 4] 지도 빈 영역을 클릭하면 바텀 시트가 닫힙니다.
         const mapClick = window.naver.maps.Event.addListener(map, 'click', () => {
           setSelectedMapPost(null);
+          setSelectedPlace(null);
+          setIsListViewOpen(false);
         });
 
         return () => {
@@ -4328,10 +4556,14 @@ export class ErrorBoundary extends React.Component {
 
 
       const applyPlaceData = (lat, lng, fullRealAddress, titleName) => {
+        setSelectedMapPost(null);
+        setIsListViewOpen(false);
+
         if (mapInstanceRef.current && window.naver && window.naver.maps) {
           const newCenter = new window.naver.maps.LatLng(lat, lng);
           mapInstanceRef.current.setCenter(newCenter);
           mapInstanceRef.current.setZoom(16);
+          mapInstanceRef.current.panBy(0, -70);
 
           // 기존 검색 마커 모두 제거 (게시글 마커 markersRef와 독립적으로 관리)
           searchMarkersRef.current.forEach(m => { try { m.setMap(null); } catch(e) {} });
@@ -4437,41 +4669,61 @@ export class ErrorBoundary extends React.Component {
             )}
           </div>
 
-          {/* 우측 플로팅 컨트롤 버튼 (GPS + 줌) */}
-          <div className="absolute right-4 bottom-24 z-20 flex flex-col gap-2">
-            {/* 내 위치 GPS 버튼 */}
-            <button
-              type="button"
-              onClick={handleMyLocation}
-              disabled={locating}
-              title="내 위치로 이동"
-              className="w-11 h-11 rounded-2xl bg-white/95 backdrop-blur-md shadow-xl border border-zinc-200 flex items-center justify-center text-blue-600 hover:bg-blue-50 hover:border-blue-300 transition-all active:scale-95 disabled:opacity-50"
-            >
-              {locating ? (
-                <i className="fa-solid fa-spinner animate-spin text-sm"></i>
-              ) : (
-                <i className="fa-solid fa-location-crosshairs text-sm"></i>
-              )}
-            </button>
-            {/* 줌인 버튼 */}
-            <button
-              type="button"
-              onClick={() => handleZoom(1)}
-              title="확대"
-              className="w-11 h-11 rounded-t-2xl rounded-b-none bg-white/95 backdrop-blur-md shadow-xl border border-b-0 border-zinc-200 flex items-center justify-center text-zinc-700 hover:bg-zinc-50 transition-all active:scale-95 text-lg font-bold"
-            >
-              +
-            </button>
-            {/* 줌아웃 버튼 */}
-            <button
-              type="button"
-              onClick={() => handleZoom(-1)}
-              title="축소"
-              className="w-11 h-11 rounded-b-2xl rounded-t-none bg-white/95 backdrop-blur-md shadow-xl border border-zinc-200 flex items-center justify-center text-zinc-700 hover:bg-zinc-50 transition-all active:scale-95 text-lg font-bold"
-            >
-              −
-            </button>
-          </div>
+          {/* 바텀 시트 열림 여부 판별 (하단 컨트롤 및 시트 위치 계산용) */}
+          {(() => {
+            const hasSheetOpen = !!selectedMapPost || !!selectedPlace || isListViewOpen;
+            return (
+              <>
+                {/* 좌측 플로팅 "음식점 목록" 버튼 */}
+                {!selectedMapPost && !selectedPlace && (
+                  <button
+                    type="button"
+                    onClick={() => setIsListViewOpen(!isListViewOpen)}
+                    className={`absolute left-4 ${isListViewOpen ? 'bottom-[340px]' : 'bottom-[80px]'} z-20 bg-zinc-950/90 hover:bg-black text-white text-xs font-extrabold px-4 py-2.5 rounded-full shadow-2xl backdrop-blur-md border border-zinc-700/60 flex items-center gap-2 active:scale-95 transition-all duration-300 cursor-pointer`}
+                  >
+                    <i className={`fa-solid ${isListViewOpen ? 'fa-xmark' : 'fa-list-ul'} text-emerald-400 text-xs`}></i>
+                    <span>{isListViewOpen ? '목록 닫기' : `음식점 목록 (${validPosts.length}곳)`}</span>
+                  </button>
+                )}
+
+                {/* 우측 플로팅 컨트롤 버튼 (GPS + 줌) - 시트가 열리면 위로 동적 이격 */}
+                <div className={`absolute right-4 ${hasSheetOpen ? 'bottom-[340px]' : 'bottom-[80px]'} z-20 flex flex-col gap-2 transition-all duration-300`}>
+                  {/* 내 위치 GPS 버튼 */}
+                  <button
+                    type="button"
+                    onClick={handleMyLocation}
+                    disabled={locating}
+                    title="내 위치로 이동"
+                    className="w-11 h-11 rounded-2xl bg-white/95 backdrop-blur-md shadow-xl border border-zinc-200 flex items-center justify-center text-blue-600 hover:bg-blue-50 hover:border-blue-300 transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    {locating ? (
+                      <i className="fa-solid fa-spinner animate-spin text-sm"></i>
+                    ) : (
+                      <i className="fa-solid fa-location-crosshairs text-sm"></i>
+                    )}
+                  </button>
+                  {/* 줌인 버튼 */}
+                  <button
+                    type="button"
+                    onClick={() => handleZoom(1)}
+                    title="확대"
+                    className="w-11 h-11 rounded-t-2xl rounded-b-none bg-white/95 backdrop-blur-md shadow-xl border border-b-0 border-zinc-200 flex items-center justify-center text-zinc-700 hover:bg-zinc-50 transition-all active:scale-95 text-lg font-bold"
+                  >
+                    +
+                  </button>
+                  {/* 줌아웃 버튼 */}
+                  <button
+                    type="button"
+                    onClick={() => handleZoom(-1)}
+                    title="축소"
+                    className="w-11 h-11 rounded-b-2xl rounded-t-none bg-white/95 backdrop-blur-md shadow-xl border border-zinc-200 flex items-center justify-center text-zinc-700 hover:bg-zinc-50 transition-all active:scale-95 text-lg font-bold"
+                  >
+                    −
+                  </button>
+                </div>
+              </>
+            );
+          })()}
 
           {/* 지도 메인 캔버스 */}
           {authError ? (
@@ -4486,24 +4738,107 @@ export class ErrorBoundary extends React.Component {
             </div>
           ) : (
             <div 
-              ref={mapRef} 
+              ref={mapRef}
+              data-map-container="true"
               className="w-full h-full flex-1 min-h-0" 
               style={{ 
                 flex: 1, 
                 height: "100%", 
                 minHeight: 0, 
                 width: '100%', 
-                touchAction: 'none', 
+                touchAction: 'pan-x pan-y',
                 WebkitUserSelect: 'none', 
-                userSelect: 'none'
+                userSelect: 'none',
+                willChange: 'transform',
+                WebkitOverflowScrolling: 'touch'
               }}
             ></div>
           )}
 
-          {/* [수정] 네이버 플레이스 스타일 장소 상세 바텀 시트 */}
+          {/* [목록보기] 현재 카테고리 음식점 전체 리스트 슬라이드업 드로어 */}
+          {isListViewOpen && !selectedMapPost && !selectedPlace && (
+            <div 
+              className="absolute bottom-[80px] left-4 right-4 z-30 max-h-[55vh] overflow-y-auto no-scrollbar"
+              style={{ animation: 'slideUpSheet 0.25s cubic-bezier(0.25,0.46,0.45,0.94) both' }}
+            >
+              <div className="bg-white/95 backdrop-blur-md rounded-3xl p-4 shadow-2xl border border-zinc-200 text-zinc-900 relative space-y-3">
+                <div className="w-12 h-1.5 bg-zinc-300 rounded-full mx-auto mb-1" />
+                
+                <div className="flex items-center justify-between pb-2 border-b border-zinc-100">
+                  <div className="flex items-center gap-2">
+                    <i className="fa-solid fa-utensils text-emerald-600 text-sm"></i>
+                    <h3 className="font-extrabold text-sm text-zinc-900">
+                      주변 등록 음식점 <span className="text-emerald-600">({validPosts.length}곳)</span>
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsListViewOpen(false)}
+                    className="w-7 h-7 rounded-full bg-zinc-100 text-zinc-500 hover:bg-zinc-200 flex items-center justify-center text-xs transition-colors border-none cursor-pointer"
+                  >
+                    <i className="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+
+                {validPosts.length === 0 ? (
+                  <div className="text-center py-8 text-xs text-zinc-400">
+                    선택한 카테고리에 등록된 음식점이 없습니다.
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2.5 max-h-[40vh] overflow-y-auto pr-1 no-scrollbar">
+                    {validPosts.map(post => (
+                      <div
+                        key={post.id}
+                        onClick={() => {
+                          setSelectedMapPost(post);
+                          setIsListViewOpen(false);
+                          if (mapInstanceRef.current && window.naver && window.naver.maps && post.location?.lat) {
+                            const latlng = new window.naver.maps.LatLng(Number(post.location.lat), Number(post.location.lng));
+                            mapInstanceRef.current.setCenter(latlng);
+                            mapInstanceRef.current.setZoom(16);
+                            mapInstanceRef.current.panBy(0, -70);
+                          }
+                        }}
+                        className="flex items-center gap-3 p-2.5 bg-zinc-50 hover:bg-emerald-50/70 border border-zinc-200/90 rounded-2xl cursor-pointer transition-all active:scale-[0.98]"
+                      >
+                        <div className="w-14 h-14 rounded-xl overflow-hidden bg-zinc-200 flex-shrink-0 border border-zinc-200">
+                          <img 
+                            src={(post.image && post.image[0]) || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200"} 
+                            alt="" 
+                            className="w-full h-full object-cover" 
+                            onError={(e) => { e.target.src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200"; }}
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className="bg-emerald-100 text-emerald-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded">
+                              {post.location?.category || post.category || "맛집"}
+                            </span>
+                            <h4 className="text-xs font-bold text-zinc-950 truncate">
+                              {post.location?.placeName || post.title}
+                            </h4>
+                          </div>
+                          <p className="text-[11px] text-zinc-500 truncate mb-1 font-normal">
+                            {post.location?.address || post.location?.roadAddress || post.body}
+                          </p>
+                          <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                            <span className="font-medium text-zinc-600">by {post.author}</span>
+                            <span className="text-emerald-700 font-bold">위치 보기 <i className="fa-solid fa-chevron-right text-[9px] ml-0.5"></i></span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* [수정] 네이버 플레이스 스타일 장소 상세 바텀 시트 (하단 네비바 위 bottom-[80px]로 배치) */}
           {selectedMapPost && (
             <div 
-              className="absolute bottom-4 left-4 right-4 z-30 animate-in slide-in-from-bottom duration-300 max-h-[85vh] overflow-y-auto no-scrollbar"
+              className="absolute bottom-[80px] left-4 right-4 z-30 max-h-[calc(100vh-210px)] overflow-y-auto no-scrollbar"
+              style={{ animation: 'slideUpSheet 0.25s cubic-bezier(0.25,0.46,0.45,0.94) both' }}
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
             >
@@ -4649,9 +4984,9 @@ export class ErrorBoundary extends React.Component {
             </div>
           )}
 
-          {/* 선택된 검색 장소 상세 정보 바텀시트 카드 */}
+          {/* 선택된 검색 장소 상세 정보 바텀시트 카드 (하단 네비바 위 bottom-[80px]로 배치) */}
           {selectedPlace && (
-            <div className="absolute bottom-4 left-4 right-4 z-30 animate-in slide-in-from-bottom duration-300">
+            <div className="absolute bottom-[80px] left-4 right-4 z-30 animate-in slide-in-from-bottom duration-300 max-h-[calc(100vh-210px)] overflow-y-auto no-scrollbar">
               <div className="bg-white/95 backdrop-blur-md rounded-3xl p-4.5 shadow-2xl border border-zinc-200 text-zinc-900 relative space-y-3">
                 <button
                   onClick={() => setSelectedPlace(null)}
@@ -5888,8 +6223,27 @@ export class ErrorBoundary extends React.Component {
       }, [activeTab]);
 
       const [loginOpen, setLoginOpen] = useState(false);
+      const [showEulaModal, setShowEulaModal] = useState(false);
       const [isLoggedIn, setIsLoggedIn] = useState(false);
       const [appInitializing, setAppInitializing] = useState(true);
+
+      const handleAgreeEula = async () => {
+        const user = auth.currentUser;
+        if (user) {
+          try {
+            await db.collection("users").doc(user.uid).update({
+              agreedToEULA: true,
+              agreedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+          } catch (err) {
+            await db.collection("users").doc(user.uid).set({
+              agreedToEULA: true,
+              agreedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+          }
+        }
+        setShowEulaModal(false);
+      };
 
       // 네이티브 앱(Flutter WebView)으로 로그인 상태 변경 알림
       useEffect(() => {
@@ -6046,6 +6400,8 @@ export class ErrorBoundary extends React.Component {
       const [deviceId, setDeviceId] = useState("");
       const [reportModalData, setReportModalData] = useState({ isOpen: false, targetType: "post", targetId: "", author: "", text: "", targetParentId: "" });
 
+      const [blockedUsers, setBlockedUsers] = useState([]);
+
       const [profile, setProfile] = useState({
         name: "나의 플레이팅",
         bio: "내가 올린 레시피와 구매 링크를 관리합니다.",
@@ -6101,6 +6457,102 @@ export class ErrorBoundary extends React.Component {
       const isPoppingState = useRef(false);
       const isSelectingPhotos = useRef(false);
 
+      // Firestore에서 차단 사용자 목록 실시간 동기화
+      useEffect(() => {
+        if (!dbLoaded || !auth || !auth.currentUser) {
+          setBlockedUsers([]);
+          return;
+        }
+        const uid = auth.currentUser.uid;
+        const unsubUsers = db.collection("users").doc(uid)
+          .onSnapshot((doc) => {
+            if (doc.exists) {
+              const data = doc.data();
+              if (Array.isArray(data.blockedUsers)) {
+                setBlockedUsers(prev => Array.from(new Set([...prev, ...data.blockedUsers])));
+              }
+            }
+          }, (err) => console.error("[BlockedUsers] error:", err));
+
+        const unsubBlocks = db.collection("blocks")
+          .where("blockerId", "==", uid)
+          .onSnapshot((snap) => {
+            const blockedIds = snap.docs.map(d => d.data().blockedId).filter(Boolean);
+            setBlockedUsers(prev => Array.from(new Set([...prev, ...blockedIds])));
+          }, (err) => console.error("[Blocks Collection] error:", err));
+
+        return () => {
+          unsubUsers();
+          unsubBlocks();
+        };
+      }, [dbLoaded, isLoggedIn]);
+
+      // 사용자 차단 기능 (App Store Review Guideline 1.2 필수 요건)
+      const handleBlockUser = async (targetIdOrName, targetDisplayName = "") => {
+        const user = auth.currentUser;
+        if (!user) {
+          setLoginOpen(true);
+          return;
+        }
+        const blockName = targetDisplayName || targetIdOrName;
+        if (!blockName) return;
+        if (blockName === profile.name || targetIdOrName === user.uid) {
+          alert("자기 자신은 차단할 수 없습니다.");
+          return;
+        }
+
+        if (!confirm(`정말 '${blockName}' 님을 차단하시겠습니까?\n\n차단된 사용자의 글과 댓글은 내 피드에서 즉시 숨겨지며, 관리자 센터에 차단 내역이 접수됩니다.`)) {
+          return;
+        }
+
+        try {
+          // 1. Firestore 'blocks' 컬렉션에 차단 기록 저장 (blockerId, blockedId, createdAt)
+          await db.collection("blocks").add({
+            blockerId: user.uid,
+            blockedId: targetIdOrName,
+            blockedName: blockName,
+            createdAt: new Date().toISOString()
+          });
+
+          // 기존 users 문서 blockedUsers 필드에 차단 대상 추가
+          await db.collection("users").doc(user.uid).set({
+            blockedUsers: firebase.firestore.FieldValue.arrayUnion(blockName, targetIdOrName)
+          }, { merge: true });
+
+          // 2. Firestore 'reports' 컬렉션에 알림 기록 저장
+          await db.collection("reports").add({
+            targetType: "user_block",
+            targetId: targetIdOrName,
+            author: blockName,
+            text: `[사용자 차단 접수] ${profile.name || user.uid} 님이 ${blockName} 님을 차단하였습니다.`,
+            reporterUid: user.uid,
+            reporterEmail: user.email || "",
+            createdAt: new Date().toISOString(),
+            status: "waiting",
+            reason: "사용자 차단 및 피드 조치"
+          });
+
+          // 3. Express 백엔드 차단 API 호출 (nodemailer 관리자 이메일 발송)
+          fetch("/api/v1/block", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              blockerId: profile.name || user.uid,
+              blockedId: blockName || targetIdOrName,
+              reason: "사용자 직접 차단 및 피드 제외",
+              timestamp: new Date().toISOString()
+            })
+          }).catch(e => console.error("Express block notify error:", e));
+
+          // 4. 로컬 상태 즉시 반영 (즉시 피드에서 제거)
+          setBlockedUsers(prev => Array.from(new Set([...prev, blockName, targetIdOrName])));
+          alert(`'${blockName}' 님이 차단되었습니다. 해당 사용자의 모든 게시글과 댓글이 피드에서 제외되었습니다.`);
+        } catch (err) {
+          console.error("[Block User Error]", err);
+          alert("차단 처리 중 오류가 발생했습니다: " + err.message);
+        }
+      };
+
       useEffect(() => {
         window.openReportModal = (targetType, targetId, author, text, targetParentId = "") => {
           setReportModalData({
@@ -6115,11 +6567,13 @@ export class ErrorBoundary extends React.Component {
         window.openAdminCenter = () => {
           setActiveTab("admin_reports");
         };
+        window.handleBlockUser = handleBlockUser;
         return () => {
           delete window.openReportModal;
           delete window.openAdminCenter;
+          delete window.handleBlockUser;
         };
-      }, []);
+      }, [profile, isLoggedIn]);
 
       useEffect(() => {
         if (dbLoaded) {
@@ -6278,6 +6732,12 @@ export class ErrorBoundary extends React.Component {
                 };
                 setProfile(updatedProfile);
                 setDBData("foodhouse_profile", updatedProfile).catch(e => console.error(e));
+
+                // EULA 동의 여부 검사 (미동의 시 동의 팝업 띄움)
+                if (!userData || !userData.agreedToEULA) {
+                  console.log("[EULA Check] User has not agreed to EULA yet. Opening EulaConsentModal...");
+                  setShowEulaModal(true);
+                }
 
                 // --- FCM 디바이스 토큰 획득 및 Firestore users 컬렉션 동기화 ---
                 if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
@@ -6791,13 +7251,23 @@ export class ErrorBoundary extends React.Component {
             provider: 'apple',
             role: 'user',
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            lastLoginAt: firebase.firestore.FieldValue.serverTimestamp()
+            lastLoginAt: firebase.firestore.FieldValue.serverTimestamp(),
+            // App Store Guideline 1.2: 약관 동의 타임스탬프 및 버전 기록
+            agreedToTermsAt: firebase.firestore.FieldValue.serverTimestamp(),
+            termsVersion: "1.0",
+            agreedToEULA: true,
+            agreedAt: firebase.firestore.FieldValue.serverTimestamp()
           };
           await userRef.set(newUserObj);
         } else {
-          await userRef.update({
+          const updateData = {
             lastLoginAt: firebase.firestore.FieldValue.serverTimestamp()
-          });
+          };
+          if (!userSnap.data().agreedToEULA) {
+            updateData.agreedToEULA = true;
+            updateData.agreedAt = firebase.firestore.FieldValue.serverTimestamp();
+          }
+          await userRef.update(updateData);
         }
 
         const updatedProfile = {
@@ -6911,13 +7381,16 @@ export class ErrorBoundary extends React.Component {
             }
 
             console.log("[Apple Sign In] 네이티브 인증 성공. Firebase OAuthCredential 생성...");
-            const { idToken, authorizationCode, email, displayName, userIdentifier } = appleResult;
+            const { idToken, rawNonce, authorizationCode, email, displayName, userIdentifier } = appleResult;
 
-            // Firebase OAuthCredential 생성 (idToken 기반)
+            // Firebase OAuthCredential 생성 (idToken + rawNonce 쌍 필수)
+            // rawNonce: Flutter가 Apple 요청 시 sha256(rawNonce)를 nonce 파라미터로 전달했으므로
+            // Apple의 idToken 내부에 nonce claim이 포함되어 있다.
+            // Firebase는 이 claim과 rawNonce의 SHA-256 해시를 대조하여 검증한다.
             const provider = new firebase.auth.OAuthProvider('apple.com');
             const credential = provider.credential({
               idToken: idToken,
-              rawNonce: undefined,
+              rawNonce: rawNonce,
             });
 
             // Firebase 인증
@@ -6988,10 +7461,15 @@ export class ErrorBoundary extends React.Component {
               setDBData("foodhouse_profile", updatedProfile).catch(e => console.error(e));
             }
 
-            // lastLoginAt 업데이트
-            await db.collection("users").doc(user.uid).update({
+            // lastLoginAt 및 EULA 동의 상태 업데이트
+            const userUpdateObj = {
               lastLoginAt: firebase.firestore.FieldValue.serverTimestamp()
-            }).catch(err => console.warn("lastLoginAt 업데이트 실패:", err));
+            };
+            if (!userSnap.exists || !userSnap.data().agreedToEULA) {
+              userUpdateObj.agreedToEULA = true;
+              userUpdateObj.agreedAt = firebase.firestore.FieldValue.serverTimestamp();
+            }
+            await db.collection("users").doc(user.uid).update(userUpdateObj).catch(err => console.warn("유저 정보 업데이트 실패:", err));
 
             // 네이티브 자동 로그인 토큰 저장
             if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
@@ -7100,7 +7578,12 @@ export class ErrorBoundary extends React.Component {
             role: "user",
             status: "active",
             photoURL: "",
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            // App Store Guideline 1.2: 약관 동의 타임스탬프 및 버전 기록
+            agreedToTermsAt: firebase.firestore.FieldValue.serverTimestamp(),
+            termsVersion: "1.0",
+            agreedToEULA: true,
+            agreedAt: firebase.firestore.FieldValue.serverTimestamp()
           });
           isFirestoreSaved = true;
 
@@ -7633,11 +8116,28 @@ export class ErrorBoundary extends React.Component {
             targetParentId: targetParentId || "",
             reportUserUid: user.uid,
             targetUserUid,
+            author: author || "",
             reason,
             description: description || "",
             createdAt: new Date().toISOString(),
             status: "waiting"
           });
+
+          // Express 백엔드 신고 접수 API 호출 (nodemailer 관리자 이메일 발송)
+          fetch("/api/v1/report", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              reporterId: profile.name || user.uid,
+              targetId,
+              targetType,
+              targetUserUid: targetUserUid || author,
+              reason,
+              text: description || "",
+              timestamp: new Date().toISOString()
+            })
+          }).catch(e => console.error("Express report notify error:", e));
+
           alert("신고가 정상 접수되었습니다. 깨끗한 플레이팅 환경을 위해 힘써주셔서 감사합니다.");
         } catch (err) {
           console.error("Report error:", err);
@@ -7909,12 +8409,13 @@ export class ErrorBoundary extends React.Component {
       }
 
       const currentFollowing = Array.isArray(followingList) ? followingList : [];
-      let filteredPosts = posts;
+      const unblockedPosts = posts.filter(p => !blockedUsers.includes(p.author) && !blockedUsers.includes(p.userId) && !blockedUsers.includes(p.uid));
+      let filteredPosts = unblockedPosts;
       if (activeTab === "home") {
         if (selectedCategory === "팔로잉") {
-          filteredPosts = posts.filter(post => currentFollowing.includes(post.author));
+          filteredPosts = unblockedPosts.filter(post => currentFollowing.includes(post.author));
         } else if (selectedCategory !== "전체") {
-          filteredPosts = posts.filter(post => post.category === selectedCategory);
+          filteredPosts = unblockedPosts.filter(post => post.category === selectedCategory);
         }
       }
 
@@ -8331,10 +8832,17 @@ export class ErrorBoundary extends React.Component {
               </div>
             )}
 
+            {/* ── 차단된 사용자의 글 필터링 (App Store Review Guideline 1.2) ── */}
+            {(() => {
+              const displayPosts = posts.filter(p => !blockedUsers.includes(p.author) && !blockedUsers.includes(p.userId) && !blockedUsers.includes(p.uid));
+              const displayCommunityPosts = communityPosts.filter(p => !blockedUsers.includes(p.author) && !blockedUsers.includes(p.userId) && !blockedUsers.includes(p.uid));
+              return null;
+            })()}
+
             {/* 에타 스타일 익명 제거 커뮤니티 탭 */}
             {activeTab === "community" && (
               <CommunityView 
-                communityPosts={communityPosts}
+                communityPosts={communityPosts.filter(p => !blockedUsers.includes(p.author) && !blockedUsers.includes(p.userId) && !blockedUsers.includes(p.uid))}
                 onPostClick={handleCommunityPostClick}
                 onOpenCommunityWrite={async () => {
                   await authReadyPromise;
@@ -8355,7 +8863,7 @@ export class ErrorBoundary extends React.Component {
             {activeTab === "community_detail" && activeComPostId && (
               <CommunityDetailView 
                 activeComPostId={activeComPostId}
-                communityPosts={communityPosts}
+                communityPosts={communityPosts.filter(p => !blockedUsers.includes(p.author) && !blockedUsers.includes(p.userId) && !blockedUsers.includes(p.uid))}
                 onBack={() => {
                   setActiveTab("community");
                   setActiveComPostId(null);
@@ -8398,19 +8906,24 @@ export class ErrorBoundary extends React.Component {
               />
             )}
 
-            {activeTab === "map" && (
-              <div className="w-full h-full flex-1 flex flex-col min-h-0" style={{ flex: 1, width: "100%", height: "100%", minHeight: 0, overflow: "hidden" }}>
-                <NaverMapView 
-                  posts={posts} 
-                  onPostClick={handleRecipePostClick} 
-                  isActive={true} 
-                  onOpenWriteModal={(loc) => {
-                    if (loc) setWriteInitialLocation(loc);
-                    setActiveTab("write");
-                  }}
-                />
-              </div>
-            )}
+            {/* 지도 탭: display:none으로 숨기되 언마운트하지 않음 → 탭 전환 시 재마운트/SDK재초기화 방지 */}
+            <div
+              className="w-full h-full flex-1 flex flex-col min-h-0"
+              style={{
+                flex: 1, width: "100%", height: "100%", minHeight: 0, overflow: "hidden",
+                display: activeTab === "map" ? "flex" : "none"
+              }}
+            >
+              <NaverMapView 
+                posts={posts.filter(p => !blockedUsers.includes(p.author) && !blockedUsers.includes(p.userId) && !blockedUsers.includes(p.uid))} 
+                onPostClick={handleRecipePostClick} 
+                isActive={activeTab === "map"} 
+                onOpenWriteModal={(loc) => {
+                  if (loc) setWriteInitialLocation(loc);
+                  setActiveTab("write");
+                }}
+              />
+            </div>
 
             {activeTab === "mypage" && (
               <MyPage 
@@ -8529,6 +9042,13 @@ export class ErrorBoundary extends React.Component {
           )}
 
 
+
+          {showEulaModal && (
+            <EulaConsentModal
+              onAgree={handleAgreeEula}
+              onLogout={handleLogout}
+            />
+          )}
 
           {loginOpen && (
             <LoginModal 
