@@ -353,19 +353,23 @@ router.post("/signup", signupLimiter, async function (req, res) {
   return res.status(500).json({ success: false, message: "회원가입 처리 중 오류가 발생했습니다." });
 });
 
-// 6. 로그아웃 API
-router.get("/logout", async function (req, res) {
-  if (req.session.user) {
+// 6. 로그아웃 API (GET, POST 등 모든 HTTP 메서드 호환)
+router.all("/logout", async function (req, res) {
+  if (req.session && req.session.user) {
     console.log(`[로그아웃] 사용자: ${req.session.user.nickname}`);
   }
-  req.session.destroy(function (err) {
-    if (err) {
-      console.error("세션 삭제 오류:", err);
-      return res.status(500).json({ success: false, message: "로그아웃 중 세션 오류가 발생했습니다." });
-    }
+  if (req.session && typeof req.session.destroy === "function") {
+    req.session.destroy(function (err) {
+      if (err) {
+        console.error("세션 삭제 오류:", err);
+      }
+      res.clearCookie("connect.sid");
+      return res.json({ success: true, message: "로그아웃 되었습니다." });
+    });
+  } else {
     res.clearCookie("connect.sid");
     return res.json({ success: true, message: "로그아웃 되었습니다." });
-  });
+  }
 });
 
 // 8. 회원 탈퇴 및 사용자 Firestore/로컬 데이터 완전 삭제 API
