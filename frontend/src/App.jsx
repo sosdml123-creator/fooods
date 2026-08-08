@@ -3453,29 +3453,19 @@ export class ErrorBoundary extends React.Component {
       const [error, setError] = React.useState("");
       const [loading, setLoading] = React.useState(false);
       // ── 약관 동의 및 EULA 팝업 상태 ──────────────────────────────────────────
-      const [agreedToTerms, setAgreedToTerms] = React.useState(false);
+      const [agreedToTerms, setAgreedToTerms] = React.useState(true);
       const [showTermsModal, setShowTermsModal] = React.useState(false);
       const [showEulaConsentModal, setShowEulaConsentModal] = React.useState(false);
       const [pendingLoginType, setPendingLoginType] = React.useState(null);
       // ──────────────────────────────────────────────────────────────────────────
 
       const handleTriggerSocialLogin = (type) => {
-        if (agreedToTerms) {
-          onLogin(type, loginId, password);
-        } else {
-          setPendingLoginType(type);
-          setShowEulaConsentModal(true);
-        }
+        onLogin(type, loginId, password);
       };
 
       async function handleSubmitLogin(e) {
         e.preventDefault();
         setError("");
-        if (!agreedToTerms) {
-          setPendingLoginType("local");
-          setShowEulaConsentModal(true);
-          return;
-        }
         setLoading(true);
         try {
           await onLogin("local", loginId, password);
@@ -3489,11 +3479,6 @@ export class ErrorBoundary extends React.Component {
       async function handleSubmitRegister(e) {
         e.preventDefault();
         setError("");
-        if (!agreedToTerms) {
-          setPendingLoginType("register");
-          setShowEulaConsentModal(true);
-          return;
-        }
         if (password !== confirmPassword) {
           setError("비밀번호가 일치하지 않습니다.");
           return;
@@ -3510,32 +3495,6 @@ export class ErrorBoundary extends React.Component {
 
       const inputCls = "w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 mb-3";
       const btnCls = "w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
-
-    // ── 공통 약관 동의 체크박스 UI (App Store Guideline 1.2) ─────────────────
-      const TermsCheckbox = ({ id }) => (
-        <div className="mb-3 space-y-1.5">
-          <div className="text-[10px] text-rose-600 font-semibold bg-rose-50 border border-rose-100 rounded-lg p-2 leading-tight">
-            ⚠️ 부적절한 콘텐츠 및 학대적 사용자에 대해 무관용 원칙을 적용하며, 24시간 내 신고 검토 및 즉시 차단 조치됩니다.
-          </div>
-          <label className="flex items-start gap-2.5 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              id={id}
-              checked={agreedToTerms}
-              onChange={e => setAgreedToTerms(e.target.checked)}
-              className="mt-0.5 w-4 h-4 accent-orange-500 cursor-pointer flex-shrink-0"
-            />
-            <span className="text-[11px] text-zinc-500 leading-relaxed">
-              플레이팅의{" "}
-              <button type="button" onClick={() => setShowTermsModal(true)} className="underline text-zinc-700 font-semibold hover:text-orange-600 transition-colors">이용약관 및 EULA</button>
-              {" "}및{" "}
-              <button type="button" onClick={() => window.open('/privacy', '_blank')} className="underline text-zinc-700 font-semibold hover:text-orange-600 transition-colors">개인정보 처리방침</button>
-              에 동의합니다. <span className="text-rose-500 font-bold">(필수)</span>
-            </span>
-          </label>
-        </div>
-      );
-      // ──────────────────────────────────────────────────────────────────────────
 
       return (
         <>
@@ -3579,8 +3538,6 @@ export class ErrorBoundary extends React.Component {
                         <span>{error}</span>
                       </div>
                     )}
-                    {/* 약관 동의 체크박스 */}
-                    <TermsCheckbox id="terms-login-modal" />
                     <button type="submit" className={btnCls} disabled={loading}>
                       {loading ? "로그인 중..." : "로그인"}
                     </button>
@@ -3610,8 +3567,6 @@ export class ErrorBoundary extends React.Component {
                         <span>{error}</span>
                       </div>
                     )}
-                    {/* 약관 동의 체크박스 */}
-                    <TermsCheckbox id="terms-register-modal" />
                     <button type="submit" className={btnCls} disabled={loading}>
                       {loading ? "가입 중..." : "회원가입"}
                     </button>
@@ -3646,32 +3601,6 @@ export class ErrorBoundary extends React.Component {
               </div>
             </section>
           </div>
-          {/* 이용약관 전문 모달 */}
-          {showTermsModal && <TermsModal onClose={() => setShowTermsModal(false)} />}
-          {/* 소셜 로그인 전 EULA 동의 팝업 모달 */}
-          {showEulaConsentModal && (
-            <EULAConsent
-              onAgree={async () => {
-                setAgreedToTerms(true);
-                setShowEulaConsentModal(false);
-                if (pendingLoginType) {
-                  const type = pendingLoginType;
-                  setPendingLoginType(null);
-                  if (type === "local") {
-                    await onLogin("local", loginId, password);
-                  } else if (type === "register") {
-                    await onRegister(loginId, password, nickname, confirmPassword);
-                  } else {
-                    await onLogin(type);
-                  }
-                }
-              }}
-              onCancel={() => {
-                setShowEulaConsentModal(false);
-                setPendingLoginType(null);
-              }}
-            />
-          )}
         </>
       );
     }
@@ -3685,10 +3614,6 @@ export class ErrorBoundary extends React.Component {
       const [showPassword, setShowPassword] = React.useState(false);
       const [error, setError] = React.useState("");
       const [loading, setLoading] = React.useState(false);
-      // ── 약관 동의 상태 (App Store Guideline 1.2) ──────────────────────────────
-      const [agreedToTerms, setAgreedToTerms] = React.useState(false);
-      const [showTermsModal, setShowTermsModal] = React.useState(false);
-      // ──────────────────────────────────────────────────────────────────────────
 
       async function handleSubmitRegister(e) {
         e.preventDefault();
@@ -3746,9 +3671,8 @@ export class ErrorBoundary extends React.Component {
               {/* Apple로 계속하기 버튼 */}
               <button
                 type="button"
-                onClick={() => agreedToTerms && onLogin("apple")}
-                disabled={!agreedToTerms}
-                className={`w-full bg-black text-white font-extrabold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2.5 text-sm shadow-sm active:scale-98 transition-all ${agreedToTerms ? "hover:bg-zinc-800 cursor-pointer" : "opacity-40 cursor-not-allowed"}`}
+                onClick={() => onLogin("apple")}
+                className="w-full bg-black text-white font-extrabold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2.5 text-sm shadow-sm active:scale-98 transition-all hover:bg-zinc-800 cursor-pointer"
               >
                 <i className="fa-brands fa-apple text-lg"></i>
                 <span>Apple로 계속하기</span>
@@ -3830,26 +3754,7 @@ export class ErrorBoundary extends React.Component {
                   </div>
                 )}
 
-                {/* ── 약관 동의 체크박스 (App Store Guideline 1.2) ── */}
-                <label className="flex items-start gap-2.5 mb-3 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    id="terms-landing-register"
-                    checked={agreedToTerms}
-                    onChange={e => setAgreedToTerms(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 accent-orange-500 cursor-pointer flex-shrink-0"
-                  />
-                  <span className="text-[11px] text-zinc-500 leading-relaxed">
-                    플레이팅의{" "}
-                    <button type="button" onClick={() => setShowTermsModal(true)} className="underline text-zinc-700 font-semibold hover:text-orange-600 transition-colors">이용약관</button>
-                    {" "}및{" "}
-                    <button type="button" onClick={() => window.open('/privacy', '_blank')} className="underline text-zinc-700 font-semibold hover:text-orange-600 transition-colors">개인정보 처리방침</button>
-                    에 동의합니다. <span className="text-rose-500 font-bold">(필수)</span>
-                  </span>
-                </label>
-                {/* ────────────────────────────────────────────────────── */}
-
-                <button type="submit" className={btnCls} disabled={loading || !agreedToTerms}>
+                <button type="submit" className={btnCls} disabled={loading}>
                   {loading ? "가입 처리 중..." : "회원가입하기"}
                 </button>
 
@@ -3900,26 +3805,7 @@ export class ErrorBoundary extends React.Component {
                   </div>
                 )}
 
-                {/* ── 약관 동의 체크박스 (App Store Guideline 1.2) ── */}
-                <label className="flex items-start gap-2.5 mb-3 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    id="terms-landing-login"
-                    checked={agreedToTerms}
-                    onChange={e => setAgreedToTerms(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 accent-orange-500 cursor-pointer flex-shrink-0"
-                  />
-                  <span className="text-[11px] text-zinc-500 leading-relaxed">
-                    플레이팅의{" "}
-                    <button type="button" onClick={() => setShowTermsModal(true)} className="underline text-zinc-700 font-semibold hover:text-orange-600 transition-colors">이용약관</button>
-                    {" "}및{" "}
-                    <button type="button" onClick={() => window.open('/privacy', '_blank')} className="underline text-zinc-700 font-semibold hover:text-orange-600 transition-colors">개인정보 처리방침</button>
-                    에 동의합니다. <span className="text-rose-500 font-bold">(필수)</span>
-                  </span>
-                </label>
-                {/* ────────────────────────────────────────────────────── */}
-
-                <button type="submit" className={btnCls} disabled={loading || !agreedToTerms}>
+                <button type="submit" className={btnCls} disabled={loading}>
                   {loading ? "로그인 중..." : "로그인하기"}
                 </button>
 
