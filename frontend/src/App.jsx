@@ -3826,8 +3826,6 @@ export class ErrorBoundary extends React.Component {
             © PLAYTING. All rights reserved.
           </div>
         </div>
-        {/* 이용약관 전문 모달 */}
-        {showTermsModal && <TermsModal onClose={() => setShowTermsModal(false)} />}
       </>
     );
     }
@@ -4600,132 +4598,99 @@ export class ErrorBoundary extends React.Component {
         <div className="w-full h-full relative bg-zinc-900 select-none overflow-hidden flex flex-col flex-1 min-h-0" style={{ flex: 1, height: "100%", minHeight: 0 }}>
 
           {/* ── 지도 서브탭 헤더 ── */}
-          <div style={{
-            position: 'absolute', top: 0, left: 0, right: 0, zIndex: 50,
-            background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-            borderBottom: '1px solid rgba(255,255,255,0.08)',
-            display: 'flex', alignItems: 'stretch', height: 50,
-            boxShadow: '0 2px 16px rgba(0,0,0,0.4)'
-          }}>
+          <div className="absolute top-0 left-0 right-0 z-50 bg-white border-b border-zinc-100 flex" style={{ height: 46, boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
             <button
               type="button"
               onClick={() => setMapSubTab("map")}
-              style={{
-                flex: 1, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                background: mapSubTab === 'map' ? 'rgba(5,150,105,0.18)' : 'transparent',
-                borderBottom: mapSubTab === 'map' ? '2.5px solid #10b981' : '2.5px solid transparent',
-                color: mapSubTab === 'map' ? '#34d399' : 'rgba(255,255,255,0.45)',
-                fontSize: 13, fontWeight: 700, letterSpacing: '-0.2px',
-                transition: 'all 0.2s'
-              }}
+              className={`flex-1 flex items-center justify-center gap-1.5 text-[13px] font-bold border-none cursor-pointer transition-all ${
+                mapSubTab === 'map'
+                  ? 'text-emerald-600 border-b-2 border-emerald-500 bg-emerald-50/60'
+                  : 'text-zinc-400 bg-transparent hover:bg-zinc-50'
+              }`}
+              style={{ borderBottom: mapSubTab === 'map' ? '2.5px solid #059669' : '2.5px solid transparent' }}
             >
-              <i className="fa-solid fa-map-location-dot" style={{ fontSize: 14 }} />
+              <i className="fa-solid fa-map-location-dot text-xs" />
               지도 보기
             </button>
-            <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', margin: '10px 0' }} />
+            <div className="w-px bg-zinc-100 my-2" />
             <button
               type="button"
               onClick={() => setMapSubTab("register")}
-              style={{
-                flex: 1, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                background: mapSubTab === 'register' ? 'rgba(99,102,241,0.18)' : 'transparent',
-                borderBottom: mapSubTab === 'register' ? '2.5px solid #818cf8' : '2.5px solid transparent',
-                color: mapSubTab === 'register' ? '#a5b4fc' : 'rgba(255,255,255,0.45)',
-                fontSize: 13, fontWeight: 700, letterSpacing: '-0.2px',
-                transition: 'all 0.2s'
-              }}
+              className={`flex-1 flex items-center justify-center gap-1.5 text-[13px] font-bold border-none cursor-pointer transition-all ${
+                mapSubTab === 'register'
+                  ? 'text-emerald-600 bg-emerald-50/60'
+                  : 'text-zinc-400 bg-transparent hover:bg-zinc-50'
+              }`}
+              style={{ borderBottom: mapSubTab === 'register' ? '2.5px solid #059669' : '2.5px solid transparent' }}
             >
-              <i className="fa-solid fa-store" style={{ fontSize: 13 }} />
+              <i className="fa-solid fa-store text-xs" />
               음식점 등록
             </button>
           </div>
 
           {/* ── 음식점 등록 탭 ── */}
           {mapSubTab === 'register' && (
-            <div style={{
-              position: 'absolute', top: 50, left: 0, right: 0, bottom: 0,
-              background: 'linear-gradient(160deg, #0f172a 0%, #1a1f35 50%, #0f1a2e 100%)',
-              overflowY: 'auto', zIndex: 40,
-              fontFamily: "'Pretendard', 'Inter', sans-serif"
-            }}>
+            <div className="absolute left-0 right-0 bottom-0 bg-zinc-50 overflow-y-auto" style={{ top: 46, zIndex: 40 }}>
 
               {/* 내 등록 / 새 등록 미니 탭 */}
-              <div style={{ display: 'flex', gap: 8, padding: '16px 16px 0' }}>
+              <div className="flex gap-2 px-4 pt-4 pb-3">
                 <button
                   type="button"
                   onClick={() => setRegSubView("form")}
-                  style={{
-                    flex: 1, padding: '10px 0', borderRadius: 12, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13,
-                    background: regSubView === 'form' ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'rgba(255,255,255,0.06)',
-                    color: regSubView === 'form' ? '#fff' : 'rgba(255,255,255,0.5)',
-                    boxShadow: regSubView === 'form' ? '0 4px 16px rgba(99,102,241,0.35)' : 'none',
-                    transition: 'all 0.2s'
-                  }}
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all border-none cursor-pointer flex items-center justify-center gap-1.5 ${
+                    regSubView === 'form'
+                      ? 'bg-emerald-500 text-white shadow-md'
+                      : 'bg-white text-zinc-500 border border-zinc-200 hover:bg-zinc-50'
+                  }`}
                 >
-                  <i className="fa-solid fa-plus" style={{ marginRight: 6, fontSize: 12 }} />
+                  <i className="fa-solid fa-plus text-[10px]" />
                   새 음식점 등록
                 </button>
                 <button
                   type="button"
                   onClick={() => { setRegSubView("mylist"); loadMyRestaurants(); }}
-                  style={{
-                    flex: 1, padding: '10px 0', borderRadius: 12, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13,
-                    background: regSubView === 'mylist' ? 'linear-gradient(135deg, #0ea5e9, #06b6d4)' : 'rgba(255,255,255,0.06)',
-                    color: regSubView === 'mylist' ? '#fff' : 'rgba(255,255,255,0.5)',
-                    boxShadow: regSubView === 'mylist' ? '0 4px 16px rgba(14,165,233,0.35)' : 'none',
-                    transition: 'all 0.2s'
-                  }}
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all border-none cursor-pointer flex items-center justify-center gap-1.5 ${
+                    regSubView === 'mylist'
+                      ? 'bg-emerald-500 text-white shadow-md'
+                      : 'bg-white text-zinc-500 border border-zinc-200 hover:bg-zinc-50'
+                  }`}
                 >
-                  <i className="fa-solid fa-list-ul" style={{ marginRight: 6, fontSize: 12 }} />
+                  <i className="fa-solid fa-list-ul text-[10px]" />
                   내 등록 목록
                 </button>
               </div>
 
               {/* ── 새 음식점 등록 폼 ── */}
               {regSubView === 'form' && (
-                <form onSubmit={handleRegSubmit} style={{ padding: '16px 16px 32px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <form onSubmit={handleRegSubmit} className="px-4 pb-10 space-y-4">
 
                   {/* 안내 배너 */}
-                  <div style={{
-                    background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1))',
-                    border: '1px solid rgba(99,102,241,0.25)',
-                    borderRadius: 16, padding: '14px 16px',
-                    display: 'flex', alignItems: 'flex-start', gap: 12
-                  }}>
-                    <div style={{
-                      width: 38, height: 38, borderRadius: 10,
-                      background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                      boxShadow: '0 4px 12px rgba(99,102,241,0.4)'
-                    }}>
-                      <i className="fa-solid fa-store" style={{ color: '#fff', fontSize: 16 }} />
+                  <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-3.5 flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
+                      <i className="fa-solid fa-store text-sm" />
                     </div>
                     <div>
-                      <p style={{ color: '#c7d2fe', fontWeight: 700, fontSize: 13, marginBottom: 2 }}>음식점을 지도에 등록해보세요!</p>
-                      <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, lineHeight: 1.5 }}>등록한 음식점은 검토 후 지도에 핀으로 표시됩니다.</p>
+                      <p className="text-xs font-bold text-zinc-800 mb-0.5">이 음식점을 지도에 등록해보세요!</p>
+                      <p className="text-[11px] text-zinc-400 leading-relaxed">등록된 음식점은 검토 후 지도에 핀으로 표시됩니다.</p>
                     </div>
                   </div>
 
                   {/* 성공 메시지 */}
                   {regSuccess && (
-                    <div style={{
-                      background: 'linear-gradient(135deg, rgba(16,185,129,0.2), rgba(5,150,105,0.15))',
-                      border: '1px solid rgba(16,185,129,0.35)',
-                      borderRadius: 14, padding: '13px 16px',
-                      display: 'flex', alignItems: 'center', gap: 10
-                    }}>
-                      <i className="fa-solid fa-circle-check" style={{ color: '#34d399', fontSize: 18 }} />
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 flex items-center gap-2.5">
+                      <i className="fa-solid fa-circle-check text-emerald-500 text-lg flex-shrink-0" />
                       <div>
-                        <p style={{ color: '#6ee7b7', fontWeight: 700, fontSize: 13 }}>등록 신청이 완료되었습니다! 🎉</p>
-                        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>검토 후 지도에 표시될 예정입니다.</p>
+                        <p className="text-xs font-bold text-emerald-700">등록 신청 완료! 🎉</p>
+                        <p className="text-[11px] text-zinc-400">검토 후 지도에 표시될 예정입니다.</p>
                       </div>
                     </div>
                   )}
 
                   {/* 음식점 이름 */}
-                  <div>
-                    <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: 700, marginBottom: 7, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-                      <i className="fa-solid fa-utensils" style={{ marginRight: 5, color: '#818cf8' }} />음식점 이름 <span style={{ color: '#f87171' }}>*</span>
+                  <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm space-y-2">
+                    <label className="block text-xs font-bold text-zinc-700 flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px]"><i className="fa-solid fa-utensils" /></span>
+                      음식점 이름 <span className="text-rose-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -4733,35 +4698,27 @@ export class ErrorBoundary extends React.Component {
                       onChange={e => setRegName(e.target.value)}
                       placeholder="예: 맛있는 파스타 강남점"
                       required
-                      style={{
-                        width: '100%', boxSizing: 'border-box',
-                        background: 'rgba(255,255,255,0.07)', border: '1.5px solid rgba(255,255,255,0.12)',
-                        borderRadius: 14, padding: '13px 15px', color: '#fff', fontSize: 14, fontWeight: 500,
-                        outline: 'none', transition: 'border-color 0.2s'
-                      }}
-                      onFocus={e => e.target.style.borderColor = '#6366f1'}
-                      onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.12)'}
+                      className="w-full border border-zinc-200 rounded-xl p-2.5 text-xs font-normal outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30"
                     />
                   </div>
 
                   {/* 카테고리 */}
-                  <div>
-                    <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: 700, marginBottom: 7, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-                      <i className="fa-solid fa-tag" style={{ marginRight: 5, color: '#818cf8' }} />카테고리 <span style={{ color: '#f87171' }}>*</span>
+                  <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm space-y-2.5">
+                    <label className="block text-xs font-bold text-zinc-700 flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px]"><i className="fa-solid fa-tag" /></span>
+                      카테고리 <span className="text-rose-500">*</span>
                     </label>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                    <div className="flex flex-wrap gap-1.5">
                       {regCategories.map(cat => (
                         <button
                           key={cat}
                           type="button"
                           onClick={() => setRegCategory(cat)}
-                          style={{
-                            padding: '8px 14px', borderRadius: 999, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700,
-                            background: regCategory === cat ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'rgba(255,255,255,0.08)',
-                            color: regCategory === cat ? '#fff' : 'rgba(255,255,255,0.5)',
-                            boxShadow: regCategory === cat ? '0 3px 10px rgba(99,102,241,0.4)' : 'none',
-                            transition: 'all 0.18s', transform: regCategory === cat ? 'scale(1.05)' : 'scale(1)'
-                          }}
+                          className={`px-3 py-1.5 rounded-full text-[11px] font-bold border-none cursor-pointer transition-all ${
+                            regCategory === cat
+                              ? 'bg-emerald-500 text-white shadow-sm scale-105'
+                              : 'bg-zinc-100 text-zinc-500 hover:bg-emerald-50 hover:text-emerald-700'
+                          }`}
                         >
                           {cat}
                         </button>
@@ -4770,77 +4727,70 @@ export class ErrorBoundary extends React.Component {
                   </div>
 
                   {/* 위치 / 주소 */}
-                  <div>
-                    <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: 700, marginBottom: 7, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-                      <i className="fa-solid fa-location-dot" style={{ marginRight: 5, color: '#818cf8' }} />위치 / 주소 <span style={{ color: '#f87171' }}>*</span>
+                  <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm space-y-2.5">
+                    <label className="block text-xs font-bold text-zinc-700 flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px]"><i className="fa-solid fa-location-dot" /></span>
+                      위치 / 주소 <span className="text-rose-500">*</span>
                     </label>
                     {regLocation ? (
-                      <div style={{
-                        background: 'rgba(16,185,129,0.1)', border: '1.5px solid rgba(16,185,129,0.35)',
-                        borderRadius: 14, padding: '12px 15px',
-                        display: 'flex', alignItems: 'center', gap: 10
-                      }}>
-                        <i className="fa-solid fa-circle-check" style={{ color: '#34d399', fontSize: 16, flexShrink: 0 }} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ color: '#6ee7b7', fontWeight: 700, fontSize: 13, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{regLocation.placeName}</p>
-                          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{regLocation.address}</p>
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center text-sm flex-shrink-0">📍</div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-zinc-900 truncate">{regLocation.placeName}</p>
+                          <p className="text-[11px] text-zinc-400 truncate">{regLocation.address}</p>
                         </div>
-                        <button type="button" onClick={() => setRegLocation(null)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 8, padding: '5px 9px', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: 11 }}>변경</button>
+                        <button
+                          type="button"
+                          onClick={() => setRegLocation(null)}
+                          className="text-[11px] text-zinc-500 hover:text-rose-500 bg-white border border-zinc-200 hover:border-rose-200 px-2 py-1 rounded-lg font-semibold transition-all cursor-pointer flex-shrink-0"
+                        >
+                          변경
+                        </button>
                       </div>
                     ) : (
                       <>
-                        <form onSubmit={handleRegLocationSearch} style={{ display: 'flex', gap: 8 }}>
-                          <input
-                            type="text"
-                            value={regLocationQuery}
-                            onChange={e => setRegLocationQuery(e.target.value)}
-                            placeholder="음식점 이름 또는 주소 검색"
-                            style={{
-                              flex: 1, background: 'rgba(255,255,255,0.07)', border: '1.5px solid rgba(255,255,255,0.12)',
-                              borderRadius: 14, padding: '12px 14px', color: '#fff', fontSize: 13, outline: 'none',
-                              transition: 'border-color 0.2s'
-                            }}
-                            onFocus={e => e.target.style.borderColor = '#6366f1'}
-                            onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.12)'}
-                          />
+                        <form onSubmit={handleRegLocationSearch} className="flex gap-2">
+                          <div className="relative flex-1">
+                            <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-[10px]" />
+                            <input
+                              type="text"
+                              value={regLocationQuery}
+                              onChange={e => setRegLocationQuery(e.target.value)}
+                              placeholder="음식점 이름 또는 주소 검색"
+                              className="w-full border border-zinc-200 rounded-xl pl-8 pr-3 py-2.5 text-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30"
+                            />
+                          </div>
                           <button
                             type="submit"
                             disabled={regLocationSearching}
-                            style={{
-                              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                              border: 'none', borderRadius: 14, padding: '0 16px', color: '#fff',
-                              fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0,
-                              display: 'flex', alignItems: 'center', gap: 6,
-                              boxShadow: '0 4px 12px rgba(99,102,241,0.35)', transition: 'opacity 0.2s'
-                            }}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 rounded-xl flex items-center gap-1 flex-shrink-0 border-none cursor-pointer shadow-sm disabled:opacity-50 transition-colors"
                           >
-                            {regLocationSearching ? <i className="fa-solid fa-spinner fa-spin" /> : <i className="fa-solid fa-magnifying-glass" />}
+                            {regLocationSearching
+                              ? <i className="fa-solid fa-spinner animate-spin" />
+                              : <i className="fa-solid fa-magnifying-glass" />
+                            }
                             검색
                           </button>
                         </form>
                         {regLocationResults.length > 0 && (
-                          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <div className="space-y-1.5 max-h-48 overflow-y-auto">
                             {regLocationResults.slice(0, 5).map((r, i) => (
                               <button
                                 key={i}
                                 type="button"
-                                onClick={() => { setRegLocation(r); if (r.telephone && !regPhone) setRegPhone(r.telephone); setRegLocationResults([]); }}
-                                style={{
-                                  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-                                  borderRadius: 12, padding: '11px 13px', textAlign: 'left', cursor: 'pointer',
-                                  display: 'flex', alignItems: 'center', gap: 10, transition: 'background 0.15s'
+                                onClick={() => {
+                                  setRegLocation(r);
+                                  if (r.telephone && !regPhone) setRegPhone(r.telephone);
+                                  setRegLocationResults([]);
                                 }}
-                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(99,102,241,0.15)'}
-                                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                                className="w-full bg-white hover:bg-emerald-50 border border-zinc-200 hover:border-emerald-300 rounded-xl p-2.5 text-left flex items-center gap-2.5 cursor-pointer transition-all group"
                               >
-                                <i className="fa-solid fa-location-dot" style={{ color: '#6366f1', fontSize: 14, flexShrink: 0 }} />
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <p style={{ color: '#e2e8f0', fontWeight: 700, fontSize: 13, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {r.placeName}
-                                  </p>
-                                  <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.address}</p>
+                                <span className="text-sm flex-shrink-0">📍</span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-bold text-zinc-900 group-hover:text-emerald-700 truncate">{r.placeName}</p>
+                                  <p className="text-[11px] text-zinc-400 truncate">{r.address}</p>
                                 </div>
-                                <i className="fa-solid fa-chevron-right" style={{ color: 'rgba(255,255,255,0.2)', fontSize: 10 }} />
+                                <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 group-hover:bg-emerald-600 group-hover:text-white px-2 py-0.5 rounded-md flex-shrink-0 transition-all">선택</span>
                               </button>
                             ))}
                           </div>
@@ -4849,201 +4799,152 @@ export class ErrorBoundary extends React.Component {
                     )}
                   </div>
 
-                  {/* 전화번호 */}
-                  <div>
-                    <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: 700, marginBottom: 7, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-                      <i className="fa-solid fa-phone" style={{ marginRight: 5, color: '#818cf8' }} />전화번호
-                    </label>
-                    <input
-                      type="tel"
-                      value={regPhone}
-                      onChange={e => setRegPhone(e.target.value)}
-                      placeholder="예: 02-1234-5678"
-                      style={{
-                        width: '100%', boxSizing: 'border-box',
-                        background: 'rgba(255,255,255,0.07)', border: '1.5px solid rgba(255,255,255,0.12)',
-                        borderRadius: 14, padding: '13px 15px', color: '#fff', fontSize: 14,
-                        outline: 'none', transition: 'border-color 0.2s'
-                      }}
-                      onFocus={e => e.target.style.borderColor = '#6366f1'}
-                      onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.12)'}
-                    />
-                  </div>
-
-                  {/* 영업시간 */}
-                  <div>
-                    <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: 700, marginBottom: 7, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-                      <i className="fa-solid fa-clock" style={{ marginRight: 5, color: '#818cf8' }} />영업시간
-                    </label>
-                    <input
-                      type="text"
-                      value={regHours}
-                      onChange={e => setRegHours(e.target.value)}
-                      placeholder="예: 월~금 11:00~22:00, 주말 12:00~21:00"
-                      style={{
-                        width: '100%', boxSizing: 'border-box',
-                        background: 'rgba(255,255,255,0.07)', border: '1.5px solid rgba(255,255,255,0.12)',
-                        borderRadius: 14, padding: '13px 15px', color: '#fff', fontSize: 14,
-                        outline: 'none', transition: 'border-color 0.2s'
-                      }}
-                      onFocus={e => e.target.style.borderColor = '#6366f1'}
-                      onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.12)'}
-                    />
+                  {/* 전화번호 + 영업시간 */}
+                  <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm space-y-3">
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-zinc-700 flex items-center gap-1.5">
+                        <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px]"><i className="fa-solid fa-phone" /></span>
+                        전화번호 <span className="text-zinc-400 font-normal text-[10px]">(선택)</span>
+                      </label>
+                      <input
+                        type="tel"
+                        value={regPhone}
+                        onChange={e => setRegPhone(e.target.value)}
+                        placeholder="예: 02-1234-5678"
+                        className="w-full border border-zinc-200 rounded-xl p-2.5 text-xs font-normal outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-zinc-700 flex items-center gap-1.5">
+                        <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px]"><i className="fa-solid fa-clock" /></span>
+                        영업시간 <span className="text-zinc-400 font-normal text-[10px]">(선택)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={regHours}
+                        onChange={e => setRegHours(e.target.value)}
+                        placeholder="예: 월~금 11:00~22:00, 주말 12:00~21:00"
+                        className="w-full border border-zinc-200 rounded-xl p-2.5 text-xs font-normal outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30"
+                      />
+                    </div>
                   </div>
 
                   {/* 한 줄 소개 */}
-                  <div>
-                    <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: 700, marginBottom: 7, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-                      <i className="fa-solid fa-pen-to-square" style={{ marginRight: 5, color: '#818cf8' }} />한 줄 소개
+                  <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm space-y-2">
+                    <label className="block text-xs font-bold text-zinc-700 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px]"><i className="fa-solid fa-pen-to-square" /></span>
+                        한 줄 소개 <span className="text-zinc-400 font-normal text-[10px]">(선택)</span>
+                      </span>
+                      <span className="text-[10px] text-zinc-400 font-normal">{regDesc.length} / 100</span>
                     </label>
                     <textarea
                       value={regDesc}
                       onChange={e => setRegDesc(e.target.value)}
-                      placeholder="이 음식점의 특징이나 추천 이유를 간단히 적어주세요 (최대 100자)"
+                      placeholder="이 음식점의 특징이나 추천 이유를 간단히 적어주세요"
                       maxLength={100}
                       rows={3}
-                      style={{
-                        width: '100%', boxSizing: 'border-box', resize: 'none',
-                        background: 'rgba(255,255,255,0.07)', border: '1.5px solid rgba(255,255,255,0.12)',
-                        borderRadius: 14, padding: '13px 15px', color: '#fff', fontSize: 13, lineHeight: 1.6,
-                        outline: 'none', transition: 'border-color 0.2s', fontFamily: 'inherit'
-                      }}
-                      onFocus={e => e.target.style.borderColor = '#6366f1'}
-                      onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.12)'}
+                      className="w-full border border-zinc-200 rounded-xl p-2.5 text-xs font-normal resize-none outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 leading-relaxed"
                     />
-                    <p style={{ textAlign: 'right', color: 'rgba(255,255,255,0.25)', fontSize: 10, marginTop: 4 }}>{regDesc.length} / 100</p>
                   </div>
 
                   {/* 제출 버튼 */}
                   {!currentUser ? (
-                    <div style={{
-                      background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.25)',
-                      borderRadius: 14, padding: '14px 16px', textAlign: 'center'
-                    }}>
-                      <p style={{ color: '#fca5a5', fontSize: 13, fontWeight: 600 }}>
-                        <i className="fa-solid fa-lock" style={{ marginRight: 6 }} />
-                        로그인 후 음식점을 등록할 수 있습니다.
-                      </p>
+                    <div className="bg-zinc-100 border border-zinc-200 rounded-2xl p-4 text-center">
+                      <i className="fa-solid fa-lock text-zinc-400 text-lg mb-2 block" />
+                      <p className="text-xs text-zinc-500 font-medium">로그인 후 음식점을 등록할 수 있습니다.</p>
                     </div>
                   ) : (
                     <button
                       type="submit"
                       disabled={regSubmitting}
-                      style={{
-                        width: '100%', padding: '15px 0', borderRadius: 16, border: 'none', cursor: regSubmitting ? 'not-allowed' : 'pointer',
-                        background: regSubmitting ? 'rgba(99,102,241,0.4)' : 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #7c3aed 100%)',
-                        color: '#fff', fontSize: 15, fontWeight: 800, letterSpacing: '-0.3px',
-                        boxShadow: regSubmitting ? 'none' : '0 6px 24px rgba(99,102,241,0.45)',
-                        transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
-                      }}
+                      className="primary full w-full text-xs font-bold py-3.5 rounded-xl shadow-md active:scale-98 transition-transform disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       {regSubmitting ? (
-                        <><i className="fa-solid fa-spinner fa-spin" /> 등록 중...</>
+                        <><i className="fa-solid fa-spinner animate-spin" /> 등록 중...</>
                       ) : (
-                        <><i className="fa-solid fa-store" style={{ fontSize: 14 }} /> 음식점 등록 신청하기</>
+                        <><i className="fa-solid fa-store" /> 음식점 등록 신청하기</>
                       )}
                     </button>
                   )}
 
-                  {/* 안내 */}
-                  <div style={{ textAlign: 'center', padding: '4px 0 8px' }}>
-                    <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: 11, lineHeight: 1.6 }}>
-                      <i className="fa-solid fa-circle-info" style={{ marginRight: 4 }} />
-                      등록 신청된 음식점은 운영자 검토 후 지도에 핀으로 표시됩니다.
-                    </p>
-                  </div>
+                  <p className="text-center text-[10px] text-zinc-400">
+                    <i className="fa-solid fa-circle-info mr-1" />
+                    등록 신청된 음식점은 운영자 검토 후 지도에 표시됩니다.
+                  </p>
                 </form>
               )}
 
               {/* ── 내 등록 목록 ── */}
               {regSubView === 'mylist' && (
-                <div style={{ padding: '16px 16px 32px' }}>
+                <div className="px-4 pb-10 space-y-3">
                   {!currentUser ? (
-                    <div style={{
-                      background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.25)',
-                      borderRadius: 16, padding: '24px 16px', textAlign: 'center', marginTop: 8
-                    }}>
-                      <i className="fa-solid fa-lock" style={{ color: '#fca5a5', fontSize: 28, marginBottom: 12, display: 'block' }} />
-                      <p style={{ color: '#fca5a5', fontSize: 14, fontWeight: 700 }}>로그인이 필요합니다</p>
-                      <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, marginTop: 4 }}>로그인 후 내가 등록한 음식점을 확인하세요.</p>
+                    <div className="bg-white border border-zinc-200 rounded-2xl p-8 text-center mt-2">
+                      <i className="fa-solid fa-lock text-zinc-300 text-3xl mb-3 block" />
+                      <p className="text-sm font-bold text-zinc-600 mb-1">로그인이 필요합니다</p>
+                      <p className="text-xs text-zinc-400">로그인 후 내가 등록한 음식점을 확인하세요.</p>
                     </div>
                   ) : loadingMyRest ? (
-                    <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                      <i className="fa-solid fa-spinner fa-spin" style={{ color: '#818cf8', fontSize: 24, marginBottom: 10, display: 'block' }} />
-                      <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 13 }}>불러오는 중...</p>
+                    <div className="py-10 text-center">
+                      <span className="inline-block w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mb-3" />
+                      <p className="text-xs text-zinc-400">불러오는 중...</p>
                     </div>
                   ) : myRestaurants.length === 0 ? (
-                    <div style={{
-                      background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
-                      borderRadius: 20, padding: '40px 16px', textAlign: 'center', marginTop: 8
-                    }}>
-                      <i className="fa-solid fa-store-slash" style={{ color: 'rgba(255,255,255,0.2)', fontSize: 36, marginBottom: 14, display: 'block' }} />
-                      <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 14, fontWeight: 700, marginBottom: 4 }}>등록된 음식점이 없습니다</p>
-                      <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: 12 }}>새 음식점 등록 탭에서 첫 번째 음식점을 등록해보세요!</p>
+                    <div className="bg-white border border-zinc-200 rounded-2xl p-8 text-center mt-2">
+                      <i className="fa-solid fa-store-slash text-zinc-300 text-3xl mb-3 block" />
+                      <p className="text-sm font-bold text-zinc-600 mb-1">등록된 음식점이 없습니다</p>
+                      <p className="text-xs text-zinc-400">새 음식점 등록 탭에서 첫 번째 음식점을 등록해보세요!</p>
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, marginBottom: 4, fontWeight: 600 }}>
-                        <i className="fa-solid fa-store" style={{ marginRight: 5, color: '#818cf8' }} />
-                        내가 등록한 음식점 총 <span style={{ color: '#a5b4fc', fontWeight: 800 }}>{myRestaurants.length}곳</span>
+                    <>
+                      <p className="text-xs text-zinc-500 font-semibold pt-1">
+                        <i className="fa-solid fa-store text-emerald-500 mr-1" />
+                        내가 등록한 음식점 <span className="text-emerald-600 font-bold">{myRestaurants.length}곳</span>
                       </p>
                       {myRestaurants.map(r => (
-                        <div
-                          key={r.id}
-                          style={{
-                            background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.09)',
-                            borderRadius: 18, padding: '15px 16px',
-                            transition: 'background 0.15s'
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                <span style={{
-                                  background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                                  color: '#fff', fontSize: 10, fontWeight: 800,
-                                  padding: '3px 9px', borderRadius: 999, flexShrink: 0
-                                }}>{r.category}</span>
-                                <h4 style={{ color: '#e2e8f0', fontWeight: 800, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</h4>
+                        <div key={r.id} className="bg-white border border-zinc-200 rounded-2xl p-3.5 shadow-sm">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1 min-w-0 pr-2">
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <span className="bg-emerald-100 text-emerald-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded flex-shrink-0">{r.category}</span>
+                                <h4 className="text-xs font-bold text-zinc-950 truncate">{r.name}</h4>
                               </div>
                               {r.location?.address && (
-                                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  <i className="fa-solid fa-location-dot" style={{ color: '#6366f1', fontSize: 10 }} />{r.location.address}
+                                <p className="text-[11px] text-zinc-400 truncate flex items-center gap-1">
+                                  <i className="fa-solid fa-location-dot text-emerald-500 text-[9px]" />{r.location.address}
                                 </p>
                               )}
                             </div>
-                            <span style={{
-                              fontSize: 9, fontWeight: 800, padding: '4px 9px', borderRadius: 999, flexShrink: 0, marginLeft: 8,
-                              background: r.approved ? 'rgba(16,185,129,0.2)' : 'rgba(234,179,8,0.2)',
-                              color: r.approved ? '#34d399' : '#fbbf24',
-                              border: r.approved ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(234,179,8,0.3)'
-                            }}>
+                            <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                              r.approved
+                                ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                : 'bg-amber-100 text-amber-700 border border-amber-200'
+                            }`}>
                               {r.approved ? '✓ 승인됨' : '검토 중'}
                             </span>
                           </div>
                           {(r.phone || r.hours) && (
-                            <div style={{ display: 'flex', gap: 12, marginTop: 6 }}>
-                              {r.phone && <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}><i className="fa-solid fa-phone" style={{ fontSize: 10 }} />{r.phone}</span>}
-                              {r.hours && <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}><i className="fa-solid fa-clock" style={{ fontSize: 10 }} />{r.hours}</span>}
+                            <div className="flex gap-3 mt-1.5 text-[11px] text-zinc-400">
+                              {r.phone && <span className="flex items-center gap-1"><i className="fa-solid fa-phone text-[9px]" />{r.phone}</span>}
+                              {r.hours && <span className="flex items-center gap-1"><i className="fa-solid fa-clock text-[9px]" />{r.hours}</span>}
                             </div>
                           )}
                           {r.description && (
-                            <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11, marginTop: 8, lineHeight: 1.5, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 8 }}>{r.description}</p>
+                            <p className="text-[11px] text-zinc-500 mt-2 pt-2 border-t border-zinc-100 leading-relaxed">{r.description}</p>
                           )}
-                          <p style={{ color: 'rgba(255,255,255,0.2)', fontSize: 10, marginTop: 8, textAlign: 'right' }}>
+                          <p className="text-[10px] text-zinc-300 mt-2 text-right">
                             {r.createdAt ? new Date(r.createdAt).toLocaleDateString('ko-KR') : ''} 등록
                           </p>
                         </div>
                       ))}
-                    </div>
+                    </>
                   )}
                 </div>
               )}
             </div>
           )}
-
           {/* 지도 뷰 래핑 div (서브탭 헤더 아래부터 시작) */}
-          <div style={{ position: 'absolute', top: 50, left: 0, right: 0, bottom: 0, display: mapSubTab === 'map' ? 'block' : 'none' }}>
+          <div style={{ position: 'absolute', top: 46, left: 0, right: 0, bottom: 0, display: mapSubTab === 'map' ? 'block' : 'none' }}>
           {/* 상단 플로팅 음식점 검색바 */}
           <div className="absolute top-4 left-4 right-4 z-20">
             <form onSubmit={handleSearch} className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-zinc-200 p-2 flex items-center gap-2 transition-all hover:shadow-2xl" onReset={() => { setSearchQuery(""); setSearchResultCount(null); searchMarkersRef.current.forEach(m => { try { m.setMap(null); } catch(e) {} }); searchMarkersRef.current = []; setSelectedPlace(null); }}>
