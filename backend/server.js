@@ -16,6 +16,7 @@ const uploadRouter = require("./routes/upload");
 const adminRouter = require("./routes/admin");
 
 const app = express();
+app.set("trust proxy", 1);
 const port = process.env.PORT || 4000;
 
 // Google AdMob 크롤러 최우선 서빙 라우트 (301 리다이렉트 없이 200 OK text/plain 즉시 응답)

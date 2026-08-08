@@ -3,6 +3,7 @@ const router = express.Router();
 const bcrypt = require("bcryptjs");
 const axios = require("axios");
 const qs = require("qs");
+const crypto = require("crypto");
 const { signupLimiter, loginLimiter } = require("../middlewares");
 const { 
   findFirestoreUserByField, 
@@ -66,23 +67,28 @@ async function call(method, uri, param, header) {
 
 // 1. 카카오 로그인 창으로 리다이렉트
 router.get("/authorize", function (req, res) {
-  let { scope } = req.query;
-  var scopeParam = "";
-  if (scope) {
-    scopeParam = "&scope=" + scope;
+  try {
+    let { scope } = req.query;
+    var scopeParam = "";
+    if (scope) {
+      scopeParam = "&scope=" + scope;
+    }
+    const active_redirect_uri = getRedirectUri(req);
+    console.log("[Kakao Authorize] Redirect URI :", active_redirect_uri);
+    const kakaoAuthUrl = `${kauth_host}/oauth/authorize?client_id=${client_id}&redirect_uri=${encodeURIComponent(active_redirect_uri)}&response_type=code${scopeParam}`;
+    return res.redirect(kakaoAuthUrl);
+  } catch (err) {
+    console.error("[Kakao Authorize Error]", err);
+    return res.status(500).json({ success: false, message: "카카오 인증 이동 중 오류가 발생했습니다: " + err.message });
   }
-  const active_redirect_uri = getRedirectUri(req);
-  console.log("Redirect URI :", active_redirect_uri);
-  res.status(302).redirect(
-    `${kauth_host}/oauth/authorize?client_id=${client_id}&redirect_uri=${encodeURIComponent(active_redirect_uri)}&response_type=code${scopeParam}`
-  );
 });
 
 // 2. 카카오 로그인 콜백 핸들러
 router.get("/redirect", async function (req, res) {
-  if (!req.query.code) {
-    return res.status(400).send("인증 코드가 누락되었습니다.");
-  }
+  try {
+    if (!req.query.code) {
+      return res.status(400).send("인증 코드가 누락되었습니다.");
+    }
 
   const active_redirect_uri = getRedirectUri(req);
   const active_frontend = getFrontendUrl(req);
@@ -172,12 +178,16 @@ router.get("/redirect", async function (req, res) {
  
       // Vercel 프론트엔드로 최종 302 리다이렉트
       const active_frontend = getFrontendUrl(req);
-      res.status(302).redirect(`${active_frontend}/index.html?login=success&token=${rtn.access_token}`);
+      return res.redirect(`${active_frontend}/index.html?login=success&token=${rtn.access_token}`);
     } else {
       res.status(500).send("카카오 프로필 정보를 가져오지 못했습니다.");
     }
   } else {
     res.status(400).send("카카오 토큰 발급에 실패했습니다: " + JSON.stringify(rtn));
+  }
+  } catch (err) {
+    console.error("[Kakao Redirect Error]", err);
+    return res.status(500).send("카카오 로그인 도중 오류가 발생했습니다: " + err.message);
   }
 });
 
