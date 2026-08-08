@@ -3681,9 +3681,8 @@ export class ErrorBoundary extends React.Component {
               {/* 카카오톡으로 계속하기 버튼 */}
               <button
                 type="button"
-                onClick={() => agreedToTerms && onLogin("kakao")}
-                disabled={!agreedToTerms}
-                className={`w-full bg-[#FEE500] text-[#191919] font-extrabold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2.5 text-sm shadow-sm active:scale-98 transition-all ${agreedToTerms ? "hover:bg-[#FADA00] cursor-pointer" : "opacity-40 cursor-not-allowed"}`}
+                onClick={() => onLogin("kakao")}
+                className="w-full bg-[#FEE500] text-[#191919] font-extrabold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2.5 text-sm shadow-sm active:scale-98 transition-all hover:bg-[#FADA00] cursor-pointer"
               >
                 <div className="w-5 h-5 rounded-md bg-[#191919] flex items-center justify-center text-[#FEE500] text-[10px]">
                   <i className="fa-solid fa-comment"></i>
