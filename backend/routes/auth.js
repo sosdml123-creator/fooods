@@ -22,7 +22,7 @@ const client_id = process.env.KAKAO_CLIENT_ID || "3c6b9b1d740c3c2cb76369773ea574
 const client_secret = process.env.KAKAO_CLIENT_SECRET || "W4bIVwKsOMri6cIZJaBZuxVFwSR1hMHt";
 
 function getRedirectUri(req) {
-  if (process.env.NODE_ENV === "production") {
+  if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
     return "https://myplating.kr/api/v1/auth/redirect";
   }
   if (process.env.BACKEND_URL) {
@@ -125,8 +125,9 @@ router.get("/redirect", async function (req, res) {
     const kakaoProfile = await call("POST", profileUri, {}, profileHeader);
 
     if (kakaoProfile && kakaoProfile.id) {
-      const users = readUsers();
-      const existingUserIdx = users.findIndex(u => u.kakao_id === kakaoProfile.id);
+      const users = readUsers() || [];
+      const userList = Array.isArray(users) ? users : [];
+      const existingUserIdx = userList.findIndex(u => u && u.kakao_id === kakaoProfile.id);
       
       let isNewUser = false;
       let userNickname = kakaoProfile.properties && kakaoProfile.properties.nickname 
@@ -142,7 +143,7 @@ router.get("/redirect", async function (req, res) {
       if (existingUserIdx === -1) {
         isNewUser = true;
         let uniqueNickname = userNickname;
-        while (users.some(u => u.nickname.toLowerCase() === uniqueNickname.toLowerCase())) {
+        while (userList.some(u => u && u.nickname && typeof u.nickname === "string" && u.nickname.toLowerCase() === uniqueNickname.toLowerCase())) {
           uniqueNickname = `${userNickname}_${Math.floor(100 + Math.random() * 900)}`;
         }
 
@@ -154,17 +155,17 @@ router.get("/redirect", async function (req, res) {
           registered_at: new Date().toISOString(),
           last_login_at: new Date().toISOString()
         };
-        users.push(newUser);
-        writeUsers(users);
+        userList.push(newUser);
+        writeUsers(userList);
         userNickname = uniqueNickname;
         console.log(`[회원가입 완료] 카카오 ID: ${kakaoProfile.id}, 닉네임: ${uniqueNickname}`);
       } else {
         isNewUser = false;
-        users[existingUserIdx].last_login_at = new Date().toISOString();
-        userNickname = users[existingUserIdx].nickname;
-        users[existingUserIdx].profile_image = userProfileImg;
-        users[existingUserIdx].email = userEmail;
-        writeUsers(users);
+        userList[existingUserIdx].last_login_at = new Date().toISOString();
+        userNickname = userList[existingUserIdx].nickname || userNickname;
+        userList[existingUserIdx].profile_image = userProfileImg;
+        userList[existingUserIdx].email = userEmail;
+        writeUsers(userList);
         console.log(`[로그인 완료] 카카오 ID: ${kakaoProfile.id}, 닉네임: ${userNickname}`);
       }
 

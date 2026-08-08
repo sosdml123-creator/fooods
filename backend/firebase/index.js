@@ -43,7 +43,6 @@ if (hasR2Config) {
 function readJsonFile(filePath, defaultVal = []) {
   try {
     if (!fs.existsSync(filePath)) {
-      fs.writeFileSync(filePath, JSON.stringify(defaultVal, null, 2), "utf-8");
       return defaultVal;
     }
     const data = fs.readFileSync(filePath, "utf-8");

@@ -18,10 +18,16 @@ module.exports = (req, res) => {
   try {
     let reqUrl = req.url || "";
     
-    // Vercel Serverless Rewrite 시 원래 요청 URL 추출 (/api/index.js -> /api/v1/auth/authorize 등)
-    if (reqUrl === "/api/index.js" || reqUrl === "/api/index" || reqUrl.startsWith("/api/index.js?")) {
-      const invokePath = req.headers["x-invoke-path"] || req.headers["x-matched-path"];
-      if (invokePath) {
+    // Vercel Serverless Rewrite 시 원래 요청 URL 추출
+    const forwardedUri = req.headers["x-forwarded-uri"] || 
+                         req.headers["x-rewrite-url"] || 
+                         req.headers["x-original-url"];
+
+    if (forwardedUri) {
+      reqUrl = forwardedUri;
+    } else if (reqUrl === "/api/index.js" || reqUrl === "/api/index" || reqUrl.startsWith("/api/index.js?")) {
+      const invokePath = req.headers["x-invoke-path"];
+      if (invokePath && invokePath !== "/api/index" && invokePath !== "/api/index.js") {
         const qIdx = reqUrl.indexOf("?");
         const qStr = qIdx !== -1 ? reqUrl.slice(qIdx) : "";
         reqUrl = invokePath + qStr;

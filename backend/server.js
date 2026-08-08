@@ -746,6 +746,14 @@ app.get("*all", (req, res, next) => {
   });
 });
 
+// API 404 Fallback 처리 (미매칭 API 요청 시 500이 아닌 JSON 404 응답 보장)
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api")) {
+    return res.status(404).json({ success: false, message: `요청하신 API 경로(${req.originalUrl || req.url})를 찾을 수 없습니다.` });
+  }
+  next();
+});
+
 // 에러 처리 미들웨어
 app.use((err, req, res, next) => {
   console.error("Unhandled Error:", err.message);
