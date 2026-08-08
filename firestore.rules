@@ -96,5 +96,13 @@ service cloud.firestore {
       allow read: if true;
       allow write: if true;
     }
+
+    // 13. restaurants (음식점 등록) 컬렉션 보안 규칙
+    match /restaurants/{restaurantId} {
+      allow read: if true;
+      allow create: if request.auth != null && request.resource.data.registeredByUid == request.auth.uid;
+      allow update: if request.auth != null && (resource.data.registeredByUid == request.auth.uid || isAdmin());
+      allow delete: if request.auth != null && (resource.data.registeredByUid == request.auth.uid || isAdmin());
+    }
   }
 }
